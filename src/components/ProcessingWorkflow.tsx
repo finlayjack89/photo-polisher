@@ -19,12 +19,19 @@ interface ProcessedFile {
   data: string;
   size: number;
   format: string;
+  analysis?: {
+    description: string;
+    suggestions: string[];
+    quality_score: number;
+    detected_issues: string[];
+    enhancement_recommendations: string[];
+  };
 }
 
 const processingSteps = [
   { id: 'upload', label: 'Uploading Files', icon: ImageIcon },
+  { id: 'analyze', label: 'AI Analysis', icon: Sparkles },
   { id: 'convert', label: 'Converting Images', icon: Scissors },
-  { id: 'process', label: 'Optimizing Quality', icon: Sparkles },
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
@@ -73,11 +80,26 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         }))
       );
 
-      // Step 2: Processing step
+      // Step 2: AI Analysis
       setCurrentStep(1);
-      setProgress(30);
+      setProgress(25);
 
-      // Call the edge function
+      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-images', {
+        body: {
+          files: filesData,
+          requirements: "Analyze for professional product photography and suggest enhancements"
+        }
+      });
+
+      if (analysisError) {
+        console.warn('AI analysis failed, continuing with processing:', analysisError);
+      }
+
+      // Step 3: Processing step
+      setCurrentStep(2);
+      setProgress(60);
+
+      // Call the CloudConvert edge function
       const { data, error: supabaseError } = await supabase.functions.invoke('process-images', {
         body: {
           files: filesData,
@@ -87,8 +109,8 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         }
       });
 
-      setCurrentStep(2);
-      setProgress(80);
+      setCurrentStep(3);
+      setProgress(90);
 
       if (supabaseError) {
         throw new Error(supabaseError.message);
@@ -98,19 +120,25 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         throw new Error(data.error || 'Processing failed');
       }
 
-      // Step 3: Complete
+      // Merge AI analysis with processed files
+      const processedFilesWithAnalysis = data.processedFiles.map((file: any, index: number) => ({
+        ...file,
+        analysis: analysisData?.success ? analysisData.analyses[index]?.analysis : undefined
+      }));
+
+      // Step 4: Complete
       setCurrentStep(3);
       setProgress(100);
       setCompletedFiles(files.length);
       
       toast({
         title: "Processing Complete",
-        description: `Successfully processed ${data.processedFiles.length} images`,
+        description: `Successfully processed ${data.processedFiles.length} images with AI analysis`,
       });
 
       // Complete the workflow
       setTimeout(() => {
-        onComplete(data.processedFiles);
+        onComplete(processedFilesWithAnalysis);
       }, 1000);
 
     } catch (err) {

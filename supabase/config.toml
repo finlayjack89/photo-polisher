@@ -2,3 +2,6 @@ project_id = "tgmdopzzvhgzzqwdommp"
 
 [functions.process-images]
 verify_jwt = false
+
+[functions.analyze-images]
+verify_jwt = false
