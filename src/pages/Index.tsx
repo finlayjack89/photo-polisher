@@ -9,13 +9,15 @@ import heroImage from "@/assets/hero-studio.jpg";
 const Index = () => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'gallery'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [processedFiles, setProcessedFiles] = useState<any[]>([]);
 
   const handleFilesUploaded = (files: File[]) => {
     setUploadedFiles(files);
     setCurrentStep('processing');
   };
 
-  const handleProcessingComplete = () => {
+  const handleProcessingComplete = (processed: any[]) => {
+    setProcessedFiles(processed);
     setCurrentStep('gallery');
   };
 
@@ -94,7 +96,7 @@ const Index = () => {
         
         {currentStep === 'gallery' && (
           <GalleryPreview 
-            files={uploadedFiles}
+            files={processedFiles}
             onBack={() => setCurrentStep('upload')}
           />
         )}

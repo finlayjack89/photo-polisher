@@ -5,53 +5,128 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProcessingWorkflowProps {
   files: File[];
-  onComplete: () => void;
+  onComplete: (processedFiles: ProcessedFile[]) => void;
+}
+
+interface ProcessedFile {
+  originalName: string;
+  processedName: string;
+  data: string;
+  size: number;
+  format: string;
 }
 
 const processingSteps = [
-  { id: 'convert', label: 'Converting to PNG', icon: ImageIcon },
-  { id: 'mask', label: 'AI Background Detection', icon: Scissors },
-  { id: 'remove', label: 'Background Removal', icon: Sparkles },
-  { id: 'enhance', label: 'Studio Enhancement', icon: Sparkles },
+  { id: 'upload', label: 'Uploading Files', icon: ImageIcon },
+  { id: 'convert', label: 'Converting Images', icon: Scissors },
+  { id: 'process', label: 'Optimizing Quality', icon: Sparkles },
+  { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
 export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [completedFiles, setCompletedFiles] = useState(0);
-  
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // Convert File objects to base64 for API
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix to get just the base64 data
+        resolve(result.split(',')[1]);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          if (currentStep < processingSteps.length - 1) {
-            setCurrentStep(curr => curr + 1);
-            setCompletedFiles(0);
-            return 0;
-          } else {
-            clearInterval(timer);
-            setTimeout(onComplete, 1000);
-            return 100;
+    if (!isProcessing) {
+      processImages();
+    }
+  }, []);
+
+  const processImages = async () => {
+    setIsProcessing(true);
+    setError(null);
+    
+    try {
+      // Step 1: Upload step
+      setCurrentStep(0);
+      setProgress(10);
+      
+      const filesData = await Promise.all(
+        files.map(async (file) => ({
+          data: await fileToBase64(file),
+          name: file.name,
+          type: file.type,
+        }))
+      );
+
+      // Step 2: Processing step
+      setCurrentStep(1);
+      setProgress(30);
+
+      // Call the edge function
+      const { data, error: supabaseError } = await supabase.functions.invoke('process-images', {
+        body: {
+          files: filesData,
+          processingOptions: {
+            quality: 90
           }
         }
-        
-        const increment = Math.random() * 15 + 5;
-        const newProgress = Math.min(prev + increment, 100);
-        
-        // Simulate file completion
-        if (newProgress > (completedFiles + 1) * (100 / files.length)) {
-          setCompletedFiles(curr => Math.min(curr + 1, files.length));
-        }
-        
-        return newProgress;
       });
-    }, 800);
 
-    return () => clearInterval(timer);
-  }, [currentStep, files.length, onComplete, completedFiles]);
+      setCurrentStep(2);
+      setProgress(80);
+
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Processing failed');
+      }
+
+      // Step 3: Complete
+      setCurrentStep(3);
+      setProgress(100);
+      setCompletedFiles(files.length);
+      
+      toast({
+        title: "Processing Complete",
+        description: `Successfully processed ${data.processedFiles.length} images`,
+      });
+
+      // Complete the workflow
+      setTimeout(() => {
+        onComplete(data.processedFiles);
+      }, 1000);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      console.error('Image processing error:', err);
+      
+      toast({
+        title: "Processing Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -183,12 +258,27 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex justify-center">
-        <Button variant="outline" disabled>
-          <Clock className="w-4 h-4 mr-2" />
-          Processing in Progress...
-        </Button>
-      </div>
+      {error && (
+        <div className="text-center">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
+            <p className="text-destructive font-medium">Processing Error</p>
+            <p className="text-sm text-destructive/80 mt-1">{error}</p>
+          </div>
+          <Button onClick={processImages} disabled={isProcessing}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            Retry Processing
+          </Button>
+        </div>
+      )}
+      
+      {!error && (
+        <div className="flex justify-center">
+          <Button variant="outline" disabled>
+            <Clock className="w-4 h-4 mr-2" />
+            {isProcessing ? 'Processing in Progress...' : 'Processing Complete'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
