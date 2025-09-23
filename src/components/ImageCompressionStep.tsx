@@ -9,6 +9,8 @@ interface ImageCompressionStepProps {
   compressionAnalysis: {
     totalSize: number;
     largeFiles: number;
+    needsResize?: boolean;
+    maxDimension?: number;
   };
   onCompress: () => void;
   onSkip: () => void;
@@ -45,7 +47,9 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
             <div className="flex items-center justify-center mb-4">
               <AlertCircle className="h-12 w-12 text-yellow-500" />
             </div>
-            <CardTitle className="text-xl">Large Images Detected</CardTitle>
+            <CardTitle className="text-xl">
+              {compressionAnalysis.needsResize ? 'Large Images Detected' : 'Image Optimization Recommended'}
+            </CardTitle>
           </CardHeader>
           
           <CardContent className="space-y-6">
@@ -61,11 +65,19 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
                 </Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Large Files (&gt;50MB):</span>
+                <span className="text-sm font-medium">Large Files (&gt;5MB):</span>
                 <Badge variant={compressionAnalysis.largeFiles > 0 ? "destructive" : "secondary"}>
                   {compressionAnalysis.largeFiles}
                 </Badge>
               </div>
+              {compressionAnalysis.needsResize && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Max Dimension:</span>
+                  <Badge variant="outline">
+                    {compressionAnalysis.maxDimension}px recommended
+                  </Badge>
+                </div>
+              )}
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -73,10 +85,13 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
                 <Zap className="h-5 w-5 text-blue-500 mt-0.5" />
                 <div>
                   <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                    Recommended: Compress Images
+                    Recommended: Optimize Images
                   </h4>
                   <p className="text-sm text-blue-700 dark:text-blue-200">
-                    Large images can cause memory issues during AI processing. We recommend compressing them for optimal performance.
+                    {compressionAnalysis.needsResize 
+                      ? 'Large image dimensions can cause memory issues during AI processing. We recommend resizing and compressing them.'
+                      : 'Large file sizes can slow down processing. We recommend compressing them for optimal performance.'
+                    }
                   </p>
                 </div>
               </div>
@@ -89,7 +104,7 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
                 disabled={isProcessing}
               >
                 <Zap className="h-4 w-4 mr-2" />
-                {isProcessing ? 'Compressing...' : 'Compress Images'}
+                {isProcessing ? 'Processing...' : 'Optimize Images'}
               </Button>
               <Button 
                 variant="outline" 
@@ -102,7 +117,7 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              Compression uses TinyPNG API to reduce file sizes while maintaining quality
+              Optimization includes resizing to 1024px max dimension and compression for Edge Function compatibility
             </p>
           </CardContent>
         </Card>

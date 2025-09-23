@@ -13,6 +13,7 @@ import {
   fileToDataUrl,
   SubjectPlacement
 } from "@/lib/canvas-utils";
+import { resizeImageFile } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface CommercialEditingWorkflowProps {
@@ -43,7 +44,12 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
   const [needsCompression, setNeedsCompression] = useState(false);
   const [currentFiles, setCurrentFiles] = useState<File[]>(files);
-  const [compressionAnalysis, setCompressionAnalysis] = useState<{totalSize: number, largeFiles: number} | null>(null);
+  const [compressionAnalysis, setCompressionAnalysis] = useState<{
+    totalSize: number, 
+    largeFiles: number,
+    needsResize?: boolean,
+    maxDimension?: number
+  } | null>(null);
   const { toast } = useToast();
 
   // Analyze images on component mount
@@ -52,75 +58,159 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }, []);
 
   const analyzeImages = () => {
-    const maxFileSize = 50 * 1024 * 1024; // 50MB threshold for compression
+    const maxDimension = 1024; // Max width/height for Edge Function processing
+    const maxFileSize = 5 * 1024 * 1024; // 5MB threshold
+    
+    let needsProcessing = false;
+    let largeFiles = 0;
+    
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-    const largeFiles = files.filter(file => file.size > maxFileSize).length;
     
-    setCompressionAnalysis({ totalSize, largeFiles });
+    // Check if any files are too large in file size
+    files.forEach(file => {
+      if (file.size > maxFileSize) {
+        largeFiles++;
+        needsProcessing = true;
+      }
+    });
     
-    if (largeFiles > 0 || totalSize > 200 * 1024 * 1024) { // 200MB total threshold
-      setNeedsCompression(true);
-      setCurrentStep('compression');
-    } else {
-      setCurrentStep('preview');
-    }
+    // For image files, we also need to check dimensions
+    Promise.all(
+      files.map(file => {
+        if (file.type.startsWith('image/')) {
+          return new Promise<boolean>((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const needsResize = img.width > maxDimension || img.height > maxDimension;
+              resolve(needsResize);
+            };
+            img.onerror = () => resolve(false);
+            img.src = URL.createObjectURL(file);
+          });
+        }
+        return Promise.resolve(false);
+      })
+    ).then(results => {
+      const needsResize = results.some(Boolean);
+      if (needsResize || needsProcessing) {
+        needsProcessing = true;
+      }
+      
+      setCompressionAnalysis({ 
+        totalSize, 
+        largeFiles,
+        needsResize,
+        maxDimension 
+      });
+      setNeedsCompression(needsProcessing);
+      setCurrentStep(needsProcessing ? 'compression' : 'preview');
+    });
   };
 
   const handleCompressImages = async () => {
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Compressing images...');
+    setCurrentProcessingStep('Resizing and compressing images...');
 
     try {
-      // Convert files to base64
-      const imageData = await Promise.all(
-        files.map(async (file) => ({
-          data: await fileToDataUrl(file),
-          name: file.name,
-          size: file.size,
-          type: file.type
-        }))
-      );
+      const maxDimension = 1024; // Max dimension for Edge Function compatibility
+      const processedFiles: File[] = [];
 
-      setProgress(20);
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress((i / files.length) * 50);
+        setCurrentProcessingStep(`Processing ${file.name}...`);
 
-      // Compress images
-      const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
-        body: {
-          files: imageData.map(f => ({
-            data: f.data,
-            originalName: f.name,
-            size: f.size,
-            format: f.type.split('/')[1] || 'png'
-          }))
+        if (file.type.startsWith('image/')) {
+          // Check if image needs resizing
+          const img = new Image();
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.src = URL.createObjectURL(file);
+          });
+
+          let processedFile = file;
+          
+          // Resize if needed
+          if (img.naturalWidth > maxDimension || img.naturalHeight > maxDimension) {
+            processedFile = await resizeImageFile(file, maxDimension, maxDimension, 0.8);
+          }
+
+          processedFiles.push(processedFile);
+        } else {
+          processedFiles.push(file);
         }
-      });
+      }
 
-      if (compressError || !compressedData?.success) {
-        throw new Error(`Compression failed: ${compressError?.message || 'Unknown compression error'}`);
+      setProgress(50);
+      setCurrentProcessingStep('Applying compression...');
+
+      // Now compress the resized files if they're still large
+      const filesNeedingCompression = processedFiles.filter(f => f.size > 2 * 1024 * 1024); // 2MB threshold
+      
+      if (filesNeedingCompression.length > 0) {
+        // Convert to base64 for compression API
+        const imageData = await Promise.all(
+          filesNeedingCompression.map(async (file) => ({
+            data: await fileToDataUrl(file),
+            name: file.name,
+            size: file.size,
+            type: file.type
+          }))
+        );
+
+        setProgress(70);
+
+        // Compress via Tinify API
+        const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
+          body: {
+            files: imageData.map(f => ({
+              data: f.data,
+              originalName: f.name,
+              size: f.size,
+              format: f.type.split('/')[1] || 'png'
+            }))
+          }
+        });
+
+        if (compressError || !compressedData?.success) {
+          console.warn('Compression failed, using resized files:', compressError?.message);
+          setCurrentFiles(processedFiles);
+        } else {
+          // Convert compressed data back to File objects
+          const compressedFiles = await Promise.all(
+            compressedData.compressedFiles.map(async (cf: any) => {
+              const byteString = atob(cf.data);
+              const ab = new ArrayBuffer(byteString.length);
+              const ia = new Uint8Array(ab);
+              for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+              }
+              return new File([ab], cf.originalName, { type: `image/${cf.format}` });
+            })
+          );
+
+          // Merge compressed files with non-compressed ones
+          const finalFiles = [...compressedFiles];
+          processedFiles.forEach(file => {
+            if (!filesNeedingCompression.some(f => f.name === file.name)) {
+              finalFiles.push(file);
+            }
+          });
+
+          setCurrentFiles(finalFiles);
+        }
+      } else {
+        setCurrentFiles(processedFiles);
       }
 
       setProgress(100);
-
-      // Convert compressed data back to File objects
-      const compressedFiles = await Promise.all(
-        compressedData.compressedFiles.map(async (cf: any) => {
-          const byteString = atob(cf.data);
-          const ab = new ArrayBuffer(byteString.length);
-          const ia = new Uint8Array(ab);
-          for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i);
-          }
-          return new File([ab], cf.originalName, { type: `image/${cf.format}` });
-        })
-      );
-
-      setCurrentFiles(compressedFiles);
-      setCurrentProcessingStep('Compression complete!');
+      setCurrentProcessingStep('Processing complete!');
       
       toast({
-        title: "Images Compressed",
-        description: `Successfully compressed ${compressedFiles.length} images`
+        title: "Images Optimized",
+        description: `Successfully processed ${processedFiles.length} images for AI processing`
       });
 
       setTimeout(() => {
@@ -129,10 +219,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       }, 1000);
 
     } catch (error) {
-      console.error('Error compressing images:', error);
+      console.error('Error processing images:', error);
       toast({
-        title: "Compression Error",
-        description: "Failed to compress images. You can continue with original images.",
+        title: "Processing Error",
+        description: "Failed to process images. You can continue with original images.",
         variant: "destructive"
       });
       setIsProcessing(false);
@@ -149,39 +239,18 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const startMaskGeneration = async (config: ProductConfig) => {
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Compressing images...');
+    setCurrentProcessingStep('Generating AI masks...');
 
     try {
-      // Convert files to base64
+      // Convert current files to base64 (these are already optimized if needed)
       const imageData = await Promise.all(
-        files.map(async (file) => ({
+        currentFiles.map(async (file) => ({
           data: await fileToDataUrl(file),
-          name: file.name,
-          size: file.size,
-          type: file.type
+          name: file.name
         }))
       );
 
-      setProgress(10);
-
-      // Compress images to stay under Edge Function 256MB memory limit
-      const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
-        body: {
-          files: imageData.map(f => ({
-            data: f.data,
-            originalName: f.name,
-            size: f.size,
-            format: f.type.split('/')[1] || 'png'
-          }))
-        }
-      });
-
-      if (compressError || !compressedData?.success) {
-        throw new Error(`Compression failed: ${compressError?.message || 'Unknown compression error'}`);
-      }
-
       setProgress(20);
-      setCurrentProcessingStep('Generating AI masks...');
       
       // Generate masks using AI
       const { data: maskResult, error } = await supabase.functions.invoke('generate-masks', {
@@ -362,6 +431,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     }
   };
 
+  if (currentStep === 'analysis') {
+    return null; // Auto-analysis in useEffect
+  }
+
   if (currentStep === 'compression') {
     return (
       <ImageCompressionStep
@@ -382,10 +455,6 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         wasCompressed={needsCompression && currentFiles !== files}
       />
     );
-  }
-
-  if (currentStep === 'analysis') {
-    return null; // Auto-analysis in useEffect
   }
 
   if (currentStep === 'config') {
