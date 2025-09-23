@@ -41,7 +41,7 @@ serve(async (req) => {
       try {
         // Use Bria Background Remove model
         const output = await replicate.run(
-          "bria/remove-background:ce41b9f4f35c1c0d8df9bb1825a44fcd2b96a2a6db7b6f3db2b87a5e4efd1f0e",
+          "bria/remove-background",
           {
             input: {
               image: image.data
