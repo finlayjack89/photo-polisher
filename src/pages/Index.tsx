@@ -88,14 +88,21 @@ const Index = () => {
           <UploadZone onFilesUploaded={handleFilesUploaded} />
         )}
         
-        {currentStep === 'processing' && (
+        {currentStep === 'processing' && uploadedFiles.length > 0 && (
           <ProcessingWorkflow 
             files={uploadedFiles}
             onComplete={handleProcessingComplete}
           />
         )}
+
+        {currentStep === 'commercial' && uploadedFiles.length > 0 && (
+          <CommercialEditingWorkflow
+            files={uploadedFiles}
+            onBack={() => setCurrentStep('upload')}
+          />
+        )}
         
-        {currentStep === 'gallery' && (
+        {currentStep === 'gallery' && processedFiles.length > 0 && (
           <GalleryPreview 
             files={processedFiles}
             onBack={() => setCurrentStep('upload')}
