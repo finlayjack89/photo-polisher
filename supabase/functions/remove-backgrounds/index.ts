@@ -58,13 +58,27 @@ serve(async (req) => {
         if (output) {
           let dataUrl;
           
+          // Helper function to convert ArrayBuffer to base64 without stack overflow
+          const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+            
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              const chunk = bytes.subarray(i, i + chunkSize);
+              binary += String.fromCharCode(...chunk);
+            }
+            
+            return btoa(binary);
+          };
+
           // Handle different response formats
           if (typeof output === 'string' && output.startsWith('http')) {
             console.log('Processing URL response');
             // If it's a URL, fetch the image
             const imageResponse = await fetch(output);
             const imageBuffer = await imageResponse.arrayBuffer();
-            const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+            const base64Data = arrayBufferToBase64(imageBuffer);
             dataUrl = `data:image/png;base64,${base64Data}`;
           } else if (typeof output === 'string' && output.startsWith('data:')) {
             console.log('Processing data URL response');
@@ -73,8 +87,8 @@ serve(async (req) => {
           } else if (output instanceof ArrayBuffer || output instanceof Uint8Array) {
             console.log('Processing binary data response');
             // If it's binary data
-            const uint8Array = output instanceof ArrayBuffer ? new Uint8Array(output) : output;
-            const base64Data = btoa(String.fromCharCode(...uint8Array));
+            const buffer = output instanceof ArrayBuffer ? output : output.buffer;
+            const base64Data = arrayBufferToBase64(buffer);
             dataUrl = `data:image/png;base64,${base64Data}`;
           } else if (Array.isArray(output) && output.length > 0) {
             console.log('Processing array response, using first item');
@@ -83,7 +97,7 @@ serve(async (req) => {
             if (typeof firstOutput === 'string' && firstOutput.startsWith('http')) {
               const imageResponse = await fetch(firstOutput);
               const imageBuffer = await imageResponse.arrayBuffer();
-              const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+              const base64Data = arrayBufferToBase64(imageBuffer);
               dataUrl = `data:image/png;base64,${base64Data}`;
             } else {
               dataUrl = firstOutput;
