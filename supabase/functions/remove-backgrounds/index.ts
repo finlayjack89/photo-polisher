@@ -39,6 +39,8 @@ serve(async (req) => {
       console.log(`Processing image ${i + 1}/${images.length}: ${image.name}`);
 
       try {
+        console.log(`Image data length: ${image.data.length}`);
+        
         // Use Bria Background Remove model
         const output = await replicate.run(
           "bria/remove-background",
@@ -49,26 +51,45 @@ serve(async (req) => {
           }
         );
 
+        console.log(`Replicate output type: ${typeof output}`);
+        console.log(`Replicate output:`, output);
+
         // The output should be the processed image data
         if (output) {
           let dataUrl;
           
           // Handle different response formats
           if (typeof output === 'string' && output.startsWith('http')) {
+            console.log('Processing URL response');
             // If it's a URL, fetch the image
             const imageResponse = await fetch(output);
             const imageBuffer = await imageResponse.arrayBuffer();
             const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
             dataUrl = `data:image/png;base64,${base64Data}`;
           } else if (typeof output === 'string' && output.startsWith('data:')) {
+            console.log('Processing data URL response');
             // If it's already a data URL
             dataUrl = output;
           } else if (output instanceof ArrayBuffer || output instanceof Uint8Array) {
+            console.log('Processing binary data response');
             // If it's binary data
             const uint8Array = output instanceof ArrayBuffer ? new Uint8Array(output) : output;
             const base64Data = btoa(String.fromCharCode(...uint8Array));
             dataUrl = `data:image/png;base64,${base64Data}`;
+          } else if (Array.isArray(output) && output.length > 0) {
+            console.log('Processing array response, using first item');
+            // Some models return an array with the first item being the URL
+            const firstOutput = output[0];
+            if (typeof firstOutput === 'string' && firstOutput.startsWith('http')) {
+              const imageResponse = await fetch(firstOutput);
+              const imageBuffer = await imageResponse.arrayBuffer();
+              const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+              dataUrl = `data:image/png;base64,${base64Data}`;
+            } else {
+              dataUrl = firstOutput;
+            }
           } else {
+            console.error(`Unexpected output format: ${typeof output}`, output);
             throw new Error(`Unexpected output format: ${typeof output}`);
           }
 
