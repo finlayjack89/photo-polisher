@@ -49,24 +49,44 @@ serve(async (req) => {
           }
         );
 
-        // The output should be a URL to the processed image
-        if (output && typeof output === 'string') {
-          // Download the image from the URL and convert to base64
-          const imageResponse = await fetch(output);
-          const imageBuffer = await imageResponse.arrayBuffer();
-          const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-          const dataUrl = `data:image/png;base64,${base64Data}`;
+        // The output should be the processed image data
+        if (output) {
+          let dataUrl;
+          
+          // Handle different response formats
+          if (typeof output === 'string' && output.startsWith('http')) {
+            // If it's a URL, fetch the image
+            const imageResponse = await fetch(output);
+            const imageBuffer = await imageResponse.arrayBuffer();
+            const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+            dataUrl = `data:image/png;base64,${base64Data}`;
+          } else if (typeof output === 'string' && output.startsWith('data:')) {
+            // If it's already a data URL
+            dataUrl = output;
+          } else if (output instanceof ArrayBuffer || output instanceof Uint8Array) {
+            // If it's binary data
+            const uint8Array = output instanceof ArrayBuffer ? new Uint8Array(output) : output;
+            const base64Data = btoa(String.fromCharCode(...uint8Array));
+            dataUrl = `data:image/png;base64,${base64Data}`;
+          } else {
+            throw new Error(`Unexpected output format: ${typeof output}`);
+          }
+
+          // Calculate size for data URLs
+          const base64Part = dataUrl.split(',')[1];
+          const size = base64Part ? Math.floor((base64Part.length * 3) / 4) : 0;
 
           results.push({
             name: image.name,
             originalData: image.data,
             backgroundRemovedData: dataUrl,
-            size: imageBuffer.byteLength
+            size: size
           });
           
-          console.log(`Successfully removed background for ${image.name}, size: ${Math.round(imageBuffer.byteLength / 1024)}KB`);
+          console.log(`Successfully removed background for ${image.name}, size: ${Math.round(size / 1024)}KB`);
         } else {
-          throw new Error('Invalid response from Replicate API');
+          console.error('No output received from Replicate API');
+          throw new Error('No output received from Replicate API');
         }
       } catch (error) {
         console.error(`Error processing ${image.name}:`, error);
