@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.analyze-images]
 verify_jwt = false
+
+[functions.upscale-images]
+verify_jwt = false
+
+[functions.compress-images]
+verify_jwt = false

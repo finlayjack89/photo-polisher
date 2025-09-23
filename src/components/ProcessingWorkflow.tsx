@@ -31,7 +31,9 @@ interface ProcessedFile {
 const processingSteps = [
   { id: 'upload', label: 'Uploading Files', icon: ImageIcon },
   { id: 'analyze', label: 'AI Analysis', icon: Sparkles },
+  { id: 'upscale', label: 'AI Upscaling', icon: Sparkles },
   { id: 'convert', label: 'Converting Images', icon: Scissors },
+  { id: 'compress', label: 'Smart Compression', icon: Scissors },
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
@@ -82,7 +84,7 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
 
       // Step 2: AI Analysis
       setCurrentStep(1);
-      setProgress(25);
+      setProgress(20);
 
       const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-images', {
         body: {
@@ -95,22 +97,38 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         console.warn('AI analysis failed, continuing with processing:', analysisError);
       }
 
-      // Step 3: Processing step
+      // Step 3: AI Upscaling
       setCurrentStep(2);
-      setProgress(60);
+      setProgress(35);
+
+      const { data: upscaleData, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
+        body: { files: filesData }
+      });
+
+      if (upscaleError) {
+        console.warn('Upscaling failed, continuing with original images:', upscaleError);
+      }
+
+      // Use upscaled images if available, otherwise use original
+      const imagesToProcess = upscaleData?.success ? upscaleData.upscaledFiles : filesData;
+
+      // Step 4: Converting step
+      setCurrentStep(3);
+      setProgress(55);
 
       // Call the CloudConvert edge function
       const { data, error: supabaseError } = await supabase.functions.invoke('process-images', {
         body: {
-          files: filesData,
+          files: imagesToProcess.map(file => ({
+            data: file.data,
+            name: file.originalName || file.name,
+            type: file.type || `image/${file.format}`
+          })),
           processingOptions: {
             quality: 90
           }
         }
       });
-
-      setCurrentStep(3);
-      setProgress(90);
 
       if (supabaseError) {
         throw new Error(supabaseError.message);
@@ -120,20 +138,37 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         throw new Error(data.error || 'Processing failed');
       }
 
-      // Merge AI analysis with processed files
-      const processedFilesWithAnalysis = data.processedFiles.map((file: any, index: number) => ({
+      // Step 5: Smart Compression
+      setCurrentStep(4);
+      setProgress(75);
+
+      const { data: compressData, error: compressError } = await supabase.functions.invoke('compress-images', {
+        body: { files: data.processedFiles }
+      });
+
+      if (compressError) {
+        console.warn('Compression failed, using uncompressed images:', compressError);
+      }
+
+      // Use compressed images if available, otherwise use processed images
+      const finalFiles = compressData?.success ? compressData.compressedFiles : data.processedFiles;
+
+      // Step 6: Complete
+      setCurrentStep(5);
+      setProgress(90);
+
+      // Merge AI analysis with final processed files
+      const processedFilesWithAnalysis = finalFiles.map((file: any, index: number) => ({
         ...file,
         analysis: analysisData?.success ? analysisData.analyses[index]?.analysis : undefined
       }));
 
-      // Step 4: Complete
-      setCurrentStep(3);
       setProgress(100);
       setCompletedFiles(files.length);
       
       toast({
         title: "Processing Complete",
-        description: `Successfully processed ${data.processedFiles.length} images with AI analysis`,
+        description: `Successfully processed ${finalFiles.length} images with AI upscaling, conversion, and compression`,
       });
 
       // Complete the workflow
@@ -180,7 +215,7 @@ export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProp
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Step Indicators */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-6 gap-2 md:gap-4">
             {processingSteps.map((step, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
