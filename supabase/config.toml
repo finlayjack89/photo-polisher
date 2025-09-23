@@ -22,6 +22,9 @@ verify_jwt = false
 [functions.generate-masks]
 verify_jwt = false
 
+[functions.remove-backgrounds]
+verify_jwt = false
+
 [functions.composite-images]
 verify_jwt = false
 

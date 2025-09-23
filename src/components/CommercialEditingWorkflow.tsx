@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-import { ProductConfiguration, ProductConfig } from './ProductConfiguration';
 import { BackdropPositioning } from './BackdropPositioning';
 import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
 import { ImageCompressionStep } from './ImageCompressionStep';
 import { ImagePreviewStep } from './ImagePreviewStep';
+import { BackgroundRemovalStep } from './BackgroundRemovalStep';
 import { supabase } from "@/integrations/supabase/client";
 import { 
-  convertBlackToTransparent, 
-  applyMaskToImage, 
   positionSubjectOnCanvas,
   fileToDataUrl,
   SubjectPlacement
@@ -21,10 +19,10 @@ interface CommercialEditingWorkflowProps {
   onBack: () => void;
 }
 
-type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'config' | 'processing' | 'positioning' | 'compositing' | 'finalizing' | 'complete';
+type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'compositing' | 'finalizing' | 'complete';
 
 interface ProcessedImages {
-  masks: Array<{ name: string; originalData: string; maskData: string; correctedMaskData: string; cutoutData: string; }>;
+  backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
   backdrop?: string;
   placement?: SubjectPlacement;
   addBlur?: boolean;
@@ -37,8 +35,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   onBack
 }) => {
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('analysis');
-  const [productConfig, setProductConfig] = useState<ProductConfig | null>(null);
-  const [processedImages, setProcessedImages] = useState<ProcessedImages>({ masks: [] });
+  const [processedImages, setProcessedImages] = useState<ProcessedImages>({ backgroundRemoved: [] });
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
@@ -103,7 +100,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         maxDimension 
       });
       setNeedsCompression(needsProcessing);
-      setCurrentStep(needsProcessing ? 'compression' : 'preview');
+      setCurrentStep(needsProcessing ? 'compression' : 'background-removal');
     });
   };
 
@@ -215,7 +212,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
       setTimeout(() => {
         setIsProcessing(false);
-        setCurrentStep('preview');
+        setCurrentStep('background-removal');
       }, 1000);
 
     } catch (error) {
@@ -226,92 +223,18 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         variant: "destructive"
       });
       setIsProcessing(false);
-      setCurrentStep('preview');
+      setCurrentStep('background-removal');
     }
   };
 
-  const handleConfigurationComplete = async (config: ProductConfig) => {
-    setProductConfig(config);
-    setCurrentStep('processing');
-    await startMaskGeneration(config);
-  };
-
-  const startMaskGeneration = async (config: ProductConfig) => {
-    setIsProcessing(true);
-    setProgress(0);
-    setCurrentProcessingStep('Generating AI masks...');
-
-    try {
-      // Convert current files to base64 (these are already optimized if needed)
-      const imageData = await Promise.all(
-        currentFiles.map(async (file) => ({
-          data: await fileToDataUrl(file),
-          name: file.name
-        }))
-      );
-
-      setProgress(20);
-      
-      // Generate masks using AI
-      const { data: maskResult, error } = await supabase.functions.invoke('generate-masks', {
-        body: {
-          images: imageData,
-          productType: config.productType,
-          features: config.features
-        }
-      });
-
-      if (error) throw error;
-
-      setProgress(40);
-      setCurrentProcessingStep('Correcting masks...');
-
-      // Correct masks and apply to images
-      const correctedMasks = [];
-      for (let i = 0; i < maskResult.results.length; i++) {
-        const result = maskResult.results[i];
-        
-        // Step 3: Correct the mask
-        const correctedMaskData = await convertBlackToTransparent(result.maskData);
-        
-        setProgress(40 + (i / maskResult.results.length) * 30);
-        
-        // Step 4: Apply mask to remove background
-        const cutoutData = await applyMaskToImage(result.originalData, correctedMaskData);
-        
-        correctedMasks.push({
-          name: result.name,
-          originalData: result.originalData,
-          maskData: result.maskData,
-          correctedMaskData,
-          cutoutData
-        });
-      }
-
-      setProcessedImages({ masks: correctedMasks });
-      setProgress(100);
-      setCurrentProcessingStep('Complete!');
-      
-      toast({
-        title: "Masks Generated",
-        description: `Successfully processed ${correctedMasks.length} images`
-      });
-
-      setTimeout(() => {
-        setIsProcessing(false);
-        setCurrentStep('positioning');
-      }, 1000);
-
-    } catch (error) {
-      console.error('Error in mask generation:', error);
-      toast({
-        title: "Error",
-        description: "Failed to generate masks. Please try again.",
-        variant: "destructive"
-      });
-      setIsProcessing(false);
-      setCurrentStep('config');
-    }
+  const handleBackgroundRemovalComplete = async (backgroundRemovedImages: Array<{
+    name: string;
+    originalData: string;
+    backgroundRemovedData: string;
+    size: number;
+  }>) => {
+    setProcessedImages({ backgroundRemoved: backgroundRemovedImages });
+    setCurrentStep('positioning');
   };
 
   const handlePositioningComplete = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
@@ -335,19 +258,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
       // Position all subjects on canvases matching backdrop dimensions
       const positionedSubjects = [];
-      for (let i = 0; i < processedImages.masks.length; i++) {
-        const mask = processedImages.masks[i];
-        setProgress((i / processedImages.masks.length) * 30);
+      for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
+        const subject = processedImages.backgroundRemoved[i];
+        setProgress((i / processedImages.backgroundRemoved.length) * 30);
         
         const positionedData = await positionSubjectOnCanvas(
-          mask.cutoutData,
+          subject.backgroundRemovedData,
           backdropImg.naturalWidth,
           backdropImg.naturalHeight,
           placement
         );
         
         positionedSubjects.push({
-          name: mask.name,
+          name: subject.name,
           data: positionedData
         });
       }
@@ -391,9 +314,9 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setProgress(0);
 
     try {
-      const originalMasks = processedImages.masks.map(mask => ({
-        name: mask.name,
-        data: mask.correctedMaskData
+      const originalMasks = processedImages.backgroundRemoved.map(subject => ({
+        name: subject.name,
+        data: subject.backgroundRemovedData
       }));
 
       const { data: finalResult, error } = await supabase.functions.invoke('finalize-images', {
@@ -451,40 +374,29 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     return (
       <ImagePreviewStep
         files={currentFiles}
-        onContinue={() => setCurrentStep('config')}
+        onContinue={() => setCurrentStep('background-removal')}
         wasCompressed={needsCompression && currentFiles !== files}
       />
     );
   }
 
-  if (currentStep === 'config') {
+  if (currentStep === 'background-removal') {
     return (
-      <ProductConfiguration
+      <BackgroundRemovalStep
         files={currentFiles}
-        onConfigurationComplete={handleConfigurationComplete}
+        onContinue={handleBackgroundRemovalComplete}
         onBack={() => setCurrentStep('preview')}
       />
     );
   }
 
-  if (currentStep === 'processing' && isProcessing) {
-    return (
-      <ProcessingStep
-        title="AI Mask Generation"
-        description="Creating precision masks for your products..."
-        progress={progress}
-        currentStep={currentProcessingStep}
-        files={currentFiles}
-      />
-    );
-  }
 
   if (currentStep === 'positioning') {
     return (
       <BackdropPositioning
-        cutoutImages={processedImages.masks.map(mask => mask.cutoutData)}
+        cutoutImages={processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)}
         onPositioningComplete={handlePositioningComplete}
-        onBack={() => setCurrentStep('config')}
+        onBack={() => setCurrentStep('background-removal')}
       />
     );
   }
