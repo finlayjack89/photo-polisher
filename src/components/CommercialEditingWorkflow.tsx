@@ -50,23 +50,49 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const startMaskGeneration = async (config: ProductConfig) => {
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Generating AI masks...');
+    setCurrentProcessingStep('Compressing images...');
 
     try {
       // Convert files to base64
       const imageData = await Promise.all(
         files.map(async (file) => ({
           data: await fileToDataUrl(file),
-          name: file.name
+          name: file.name,
+          size: file.size,
+          type: file.type
         }))
       );
 
+      setProgress(10);
+
+      // Compress images to stay under Edge Function 256MB memory limit
+      const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
+        body: {
+          files: imageData.map(f => ({
+            data: f.data,
+            originalName: f.name,
+            size: f.size,
+            format: f.type.split('/')[1] || 'png'
+          }))
+        }
+      });
+
+      if (compressError || !compressedData?.success) {
+        throw new Error(`Compression failed: ${compressError?.message || 'Unknown compression error'}`);
+      }
+
       setProgress(20);
+      setCurrentProcessingStep('Generating AI masks...');
       
-      // Generate masks using AI
+      // Generate masks using AI with compressed images
+      const compressedImages = compressedData.compressedFiles.map((cf: any) => ({
+        data: cf.data,
+        name: cf.originalName
+      }));
+
       const { data: maskResult, error } = await supabase.functions.invoke('generate-masks', {
         body: {
-          images: imageData,
+          images: compressedImages,
           productType: config.productType,
           features: config.features
         }
