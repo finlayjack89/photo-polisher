@@ -1,5 +1,12 @@
 project_id = "tgmdopzzvhgzzqwdommp"
 
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
 [functions.process-images]
 verify_jwt = false
 
@@ -10,4 +17,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.compress-images]
+verify_jwt = false
+
+[functions.generate-masks]
+verify_jwt = false
+
+[functions.composite-images]
+verify_jwt = false
+
+[functions.finalize-images]
 verify_jwt = false

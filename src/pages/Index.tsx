@@ -3,17 +3,18 @@ import { Upload, Sparkles, Image as ImageIcon, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { ProcessingWorkflow } from "@/components/ProcessingWorkflow";
+import { CommercialEditingWorkflow } from "@/components/CommercialEditingWorkflow";
 import { GalleryPreview } from "@/components/GalleryPreview";
 import heroImage from "@/assets/hero-studio.jpg";
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'gallery'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'commercial' | 'gallery'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [processedFiles, setProcessedFiles] = useState<any[]>([]);
 
   const handleFilesUploaded = (files: File[]) => {
     setUploadedFiles(files);
-    setCurrentStep('processing');
+    setCurrentStep('commercial');
   };
 
   const handleProcessingComplete = (processed: any[]) => {
