@@ -3,6 +3,8 @@ import { ProductConfiguration, ProductConfig } from './ProductConfiguration';
 import { BackdropPositioning } from './BackdropPositioning';
 import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
+import { ImageCompressionStep } from './ImageCompressionStep';
+import { ImagePreviewStep } from './ImagePreviewStep';
 import { supabase } from "@/integrations/supabase/client";
 import { 
   convertBlackToTransparent, 
@@ -18,7 +20,7 @@ interface CommercialEditingWorkflowProps {
   onBack: () => void;
 }
 
-type WorkflowStep = 'config' | 'processing' | 'positioning' | 'compositing' | 'finalizing' | 'complete';
+type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'config' | 'processing' | 'positioning' | 'compositing' | 'finalizing' | 'complete';
 
 interface ProcessedImages {
   masks: Array<{ name: string; originalData: string; maskData: string; correctedMaskData: string; cutoutData: string; }>;
@@ -33,13 +35,110 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   files,
   onBack
 }) => {
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>('config');
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>('analysis');
   const [productConfig, setProductConfig] = useState<ProductConfig | null>(null);
   const [processedImages, setProcessedImages] = useState<ProcessedImages>({ masks: [] });
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
+  const [needsCompression, setNeedsCompression] = useState(false);
+  const [currentFiles, setCurrentFiles] = useState<File[]>(files);
+  const [compressionAnalysis, setCompressionAnalysis] = useState<{totalSize: number, largeFiles: number} | null>(null);
   const { toast } = useToast();
+
+  // Analyze images on component mount
+  React.useEffect(() => {
+    analyzeImages();
+  }, []);
+
+  const analyzeImages = () => {
+    const maxFileSize = 50 * 1024 * 1024; // 50MB threshold for compression
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const largeFiles = files.filter(file => file.size > maxFileSize).length;
+    
+    setCompressionAnalysis({ totalSize, largeFiles });
+    
+    if (largeFiles > 0 || totalSize > 200 * 1024 * 1024) { // 200MB total threshold
+      setNeedsCompression(true);
+      setCurrentStep('compression');
+    } else {
+      setCurrentStep('preview');
+    }
+  };
+
+  const handleCompressImages = async () => {
+    setIsProcessing(true);
+    setProgress(0);
+    setCurrentProcessingStep('Compressing images...');
+
+    try {
+      // Convert files to base64
+      const imageData = await Promise.all(
+        files.map(async (file) => ({
+          data: await fileToDataUrl(file),
+          name: file.name,
+          size: file.size,
+          type: file.type
+        }))
+      );
+
+      setProgress(20);
+
+      // Compress images
+      const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
+        body: {
+          files: imageData.map(f => ({
+            data: f.data,
+            originalName: f.name,
+            size: f.size,
+            format: f.type.split('/')[1] || 'png'
+          }))
+        }
+      });
+
+      if (compressError || !compressedData?.success) {
+        throw new Error(`Compression failed: ${compressError?.message || 'Unknown compression error'}`);
+      }
+
+      setProgress(100);
+
+      // Convert compressed data back to File objects
+      const compressedFiles = await Promise.all(
+        compressedData.compressedFiles.map(async (cf: any) => {
+          const byteString = atob(cf.data);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          return new File([ab], cf.originalName, { type: `image/${cf.format}` });
+        })
+      );
+
+      setCurrentFiles(compressedFiles);
+      setCurrentProcessingStep('Compression complete!');
+      
+      toast({
+        title: "Images Compressed",
+        description: `Successfully compressed ${compressedFiles.length} images`
+      });
+
+      setTimeout(() => {
+        setIsProcessing(false);
+        setCurrentStep('preview');
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error compressing images:', error);
+      toast({
+        title: "Compression Error",
+        description: "Failed to compress images. You can continue with original images.",
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+      setCurrentStep('preview');
+    }
+  };
 
   const handleConfigurationComplete = async (config: ProductConfig) => {
     setProductConfig(config);
@@ -84,15 +183,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       setProgress(20);
       setCurrentProcessingStep('Generating AI masks...');
       
-      // Generate masks using AI with compressed images
-      const compressedImages = compressedData.compressedFiles.map((cf: any) => ({
-        data: cf.data,
-        name: cf.originalName
-      }));
-
+      // Generate masks using AI
       const { data: maskResult, error } = await supabase.functions.invoke('generate-masks', {
         body: {
-          images: compressedImages,
+          images: imageData,
           productType: config.productType,
           features: config.features
         }
@@ -268,12 +362,38 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     }
   };
 
+  if (currentStep === 'compression') {
+    return (
+      <ImageCompressionStep
+        files={files}
+        compressionAnalysis={compressionAnalysis!}
+        onCompress={handleCompressImages}
+        onSkip={() => setCurrentStep('preview')}
+        isProcessing={isProcessing}
+      />
+    );
+  }
+
+  if (currentStep === 'preview') {
+    return (
+      <ImagePreviewStep
+        files={currentFiles}
+        onContinue={() => setCurrentStep('config')}
+        wasCompressed={needsCompression && currentFiles !== files}
+      />
+    );
+  }
+
+  if (currentStep === 'analysis') {
+    return null; // Auto-analysis in useEffect
+  }
+
   if (currentStep === 'config') {
     return (
       <ProductConfiguration
-        files={files}
+        files={currentFiles}
         onConfigurationComplete={handleConfigurationComplete}
-        onBack={onBack}
+        onBack={() => setCurrentStep('preview')}
       />
     );
   }
@@ -285,7 +405,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         description="Creating precision masks for your products..."
         progress={progress}
         currentStep={currentProcessingStep}
-        files={files}
+        files={currentFiles}
       />
     );
   }
@@ -307,7 +427,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         description={currentStep === 'compositing' ? "Adding shadows and effects..." : "Applying final touches..."}
         progress={progress}
         currentStep={currentProcessingStep}
-        files={files}
+        files={currentFiles}
       />
     );
   }
