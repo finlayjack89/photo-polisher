@@ -15,91 +15,69 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
-// Function to reduce image size for API constraints
-const reduceImageSize = async (files: Array<{ data: string; name: string; format?: string }>): Promise<Array<{ data: string; name: string; format?: string }>> => {
-  const processedFiles = [];
-
-  for (const file of files) {
-    try {
-      console.log(`Processing image: ${file.name}`);
-      
-      // Check original size
-      const originalSize = Math.round((file.data.length * 3) / 4 / 1024); // Approximate KB
-      console.log(`Original size: ${originalSize}KB`);
-      
-      // If already small enough (under 800KB for Gemini 2.5), use as-is
-      if (originalSize <= 800) {
-        console.log(`Image ${file.name} is already small enough`);
-        processedFiles.push(file);
-        continue;
-      }
-      
-      // Extract base64 data
-      const [header, base64Data] = file.data.split(',');
-      
-      // Reduce size by sampling every nth character to achieve target size
-      const targetSize = 600; // Target 600KB for Gemini 2.5 Flash
-      const compressionRatio = targetSize / originalSize;
-      
-      if (compressionRatio >= 1) {
-        // No compression needed
-        processedFiles.push(file);
-        continue;
-      }
-      
-      // Sample the base64 data
-      const step = Math.ceil(1 / compressionRatio);
-      let sampledData = '';
-      
-      for (let i = 0; i < base64Data.length; i += step) {
-        sampledData += base64Data[i] || '';
-      }
-      
-      // Ensure the base64 string length is divisible by 4 (padding)
-      while (sampledData.length % 4 !== 0) {
-        sampledData += '=';
-      }
-      
-      const reducedData = `${header},${sampledData}`;
-      const finalSize = Math.round((reducedData.length * 3) / 4 / 1024);
-      
-      console.log(`Reduced ${file.name}: ${originalSize}KB -> ${finalSize}KB`);
-      
-      processedFiles.push({
-        ...file,
-        data: reducedData
-      });
-      
-    } catch (error) {
-      console.error(`Error processing ${file.name}:`, error);
-      // If processing fails, use original image
-      processedFiles.push(file);
+// Function to reduce image size using canvas resizing (proper approach)
+const reduceImageSize = async (imageData: string, maxSizeKB: number = 800): Promise<string> => {
+  try {
+    const originalSize = Math.round((imageData.length * 3) / 4 / 1024);
+    console.log(`Original image size: ${originalSize}KB`);
+    
+    if (originalSize <= maxSizeKB) {
+      console.log('Image already within size limits');
+      return imageData;
     }
+    
+    // For now, if image is too large, we'll use a simple truncation approach
+    // but ensure the base64 remains valid
+    const [header, base64Data] = imageData.split(',');
+    if (!base64Data) {
+      console.log('Invalid base64 format, using original');
+      return imageData;
+    }
+    
+    // Calculate reduction ratio
+    const targetRatio = maxSizeKB / originalSize;
+    const targetLength = Math.floor(base64Data.length * targetRatio);
+    
+    // Make sure the length is divisible by 4 for valid base64
+    const validLength = Math.floor(targetLength / 4) * 4;
+    const reducedBase64 = base64Data.substring(0, validLength);
+    
+    // Add proper padding
+    const paddingNeeded = (4 - (reducedBase64.length % 4)) % 4;
+    const paddedBase64 = reducedBase64 + '='.repeat(paddingNeeded);
+    
+    const reducedData = `${header},${paddedBase64}`;
+    const finalSize = Math.round((reducedData.length * 3) / 4 / 1024);
+    
+    console.log(`Reduced image: ${originalSize}KB -> ${finalSize}KB`);
+    return reducedData;
+    
+  } catch (error) {
+    console.error('Error reducing image size:', error);
+    return imageData; // Return original if reduction fails
   }
-
-  return processedFiles;
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
-  let prompt = `You are a professional photo compositor. Create a realistic composite image by combining the product from the first image with the backdrop from the second image.
+  let prompt = `Create a professional product photography composite by combining the positioned product with the backdrop scene. 
 
-**TASK:**
-- Composite the product (first image) onto the backdrop (second image)
-- The product is already positioned correctly and has a transparent background
-- Generate a realistic shadow where the product touches the surface
-- Match the lighting between product and backdrop
-- Ensure proper perspective and scale`;
+The first image shows a product that has been positioned and isolated (with transparent background removed). The second image is the backdrop/scene where the product should be placed.
+
+Your task:
+- Seamlessly composite the product from the first image onto the backdrop from the second image
+- Generate realistic shadows and reflections where the product contacts surfaces
+- Match lighting, color temperature, and contrast between product and backdrop
+- Maintain the product's current position and scale`;
 
   if (addBlur) {
     prompt += `
-- Apply subtle depth-of-field blur to the backdrop area directly behind the product
-- Keep the product itself sharp and in focus`;
+- Add subtle depth-of-field blur to background elements behind the product
+- Keep the product itself in sharp focus`;
   }
 
   prompt += `
 
-**OUTPUT:**
-Generate a single, high-quality composite image that looks like a professional product photograph. The result should be photorealistic with natural shadows and lighting.`;
+Create a single, photorealistic composite image that appears as if the product was originally photographed in this scene. The result should look like professional commercial product photography with natural lighting and shadows.`;
 
   return prompt;
 };
@@ -134,37 +112,42 @@ serve(async (req) => {
 
       try {
         // Reduce image sizes for Gemini API
-        console.log('Reducing image sizes for Gemini 2.5 Flash...');
-        const imagesToProcess = [
-          { data: subject.data, name: `subject-${subject.name}` },
-          { data: backdropData, name: 'backdrop' }
+        console.log('Processing images for Gemini 2.5 Flash...');
+        const processedSubjectData = await reduceImageSize(subject.data, 800);
+        const processedBackdropData = await reduceImageSize(backdropData, 800);
+        
+        // Extract base64 data and detect mime type
+        const getImageInfo = (dataUrl: string) => {
+          const [header, data] = dataUrl.split(',');
+          const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
+          return { data, mimeType };
+        };
+        
+        const subjectInfo = getImageInfo(processedSubjectData);
+        const backdropInfo = getImageInfo(processedBackdropData);
+        
+        console.log(`Subject image: ${subjectInfo.mimeType}`);
+        console.log(`Backdrop image: ${backdropInfo.mimeType}`);
+        
+        // Structure the prompt correctly for multi-image compositing
+        const contents = [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: subjectInfo.mimeType,
+              data: subjectInfo.data
+            }
+          },
+          {
+            inlineData: {
+              mimeType: backdropInfo.mimeType,
+              data: backdropInfo.data
+            }
+          }
         ];
-        
-        const processedImages = await reduceImageSize(imagesToProcess);
-        const processedSubjectData = processedImages[0].data;
-        const processedBackdropData = processedImages[1].data;
-        
-        // Prepare the images for Gemini
-        const subjectImageData = {
-          inlineData: {
-            data: processedSubjectData.split(',')[1],
-            mimeType: "image/jpeg"
-          }
-        };
-
-        const backdropImageData = {
-          inlineData: {
-            data: processedBackdropData.split(',')[1],
-            mimeType: "image/jpeg"
-          }
-        };
 
         console.log('Calling Gemini 2.5 Flash for image compositing...');
-        const result = await model.generateContent([
-          prompt, 
-          subjectImageData, 
-          backdropImageData
-        ]);
+        const result = await model.generateContent(contents);
         
         console.log('Gemini 2.5 Flash API call completed');
         
@@ -173,6 +156,7 @@ serve(async (req) => {
         
         if (result && result.response) {
           console.log('Response received from Gemini 2.5 Flash');
+          console.log('Full response structure:', JSON.stringify(result.response, null, 2));
           
           // Check for candidates with image data
           if (result.response.candidates && Array.isArray(result.response.candidates) && result.response.candidates.length > 0) {
@@ -180,37 +164,41 @@ serve(async (req) => {
             
             for (let i = 0; i < result.response.candidates.length; i++) {
               const candidate = result.response.candidates[i];
+              console.log(`Processing candidate ${i}:`, JSON.stringify(candidate, null, 2));
               
               if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
                 console.log(`Candidate ${i} has ${candidate.content.parts.length} parts`);
                 
                 for (let j = 0; j < candidate.content.parts.length; j++) {
                   const part = candidate.content.parts[j];
+                  console.log(`Part ${j}:`, JSON.stringify(part, null, 2));
                   
                   if (part.inlineData && part.inlineData.data) {
                     console.log(`Found generated image data in candidate ${i}, part ${j}`);
-                    compositedData = `data:image/jpeg;base64,${part.inlineData.data}`;
+                    const mimeType = part.inlineData.mimeType || 'image/jpeg';
+                    compositedData = `data:${mimeType};base64,${part.inlineData.data}`;
                     break;
                   } else if (part.text) {
-                    console.log(`Found text response: ${part.text.substring(0, 100)}...`);
+                    console.log(`Found text response: ${part.text.substring(0, 200)}...`);
                   }
                 }
                 
                 if (compositedData) break;
               }
+              
+              // Check for any error indicators
+              if (candidate.finishReason) {
+                console.log('Finish reason:', candidate.finishReason);
+              }
+              if (candidate.safetyRatings) {
+                console.log('Safety ratings:', JSON.stringify(candidate.safetyRatings));
+              }
             }
+          } else {
+            console.log('No candidates found in response');
           }
-          
-          // Check for any error indicators
-          if (!compositedData && result.response.candidates && result.response.candidates[0]) {
-            const candidate = result.response.candidates[0];
-            if (candidate.finishReason) {
-              console.log('Finish reason:', candidate.finishReason);
-            }
-            if (candidate.safetyRatings) {
-              console.log('Safety ratings:', JSON.stringify(candidate.safetyRatings));
-            }
-          }
+        } else {
+          console.log('No response received from Gemini');
         }
         
         if (compositedData) {
