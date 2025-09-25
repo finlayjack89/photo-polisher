@@ -184,28 +184,40 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     const onLoad = () => {
       loadedCount++;
       if (loadedCount === 2) {
-        // Set canvas dimensions to match backdrop
-        canvas.width = backdropImg.naturalWidth;
-        canvas.height = backdropImg.naturalHeight;
+        // Use consistent canvas dimensions for preview (normalize to max 800px)
+        const maxCanvasSize = 800;
+        const backdropAspectRatio = backdropImg.naturalWidth / backdropImg.naturalHeight;
         
-        // Scale canvas display size for UI
+        let canvasWidth, canvasHeight;
+        if (backdropAspectRatio > 1) {
+          canvasWidth = Math.min(maxCanvasSize, backdropImg.naturalWidth);
+          canvasHeight = canvasWidth / backdropAspectRatio;
+        } else {
+          canvasHeight = Math.min(maxCanvasSize, backdropImg.naturalHeight);
+          canvasWidth = canvasHeight * backdropAspectRatio;
+        }
+        
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        
+        // Set display size to fit in container (max 600x400)
         const maxDisplayWidth = 600;
         const maxDisplayHeight = 400;
-        const displayAspectRatio = backdropImg.naturalWidth / backdropImg.naturalHeight;
         
-        let displayWidth = maxDisplayWidth;
-        let displayHeight = displayWidth / displayAspectRatio;
+        let displayWidth = Math.min(maxDisplayWidth, canvasWidth);
+        let displayHeight = displayWidth / backdropAspectRatio;
         
         if (displayHeight > maxDisplayHeight) {
           displayHeight = maxDisplayHeight;
-          displayWidth = displayHeight * displayAspectRatio;
+          displayWidth = displayHeight * backdropAspectRatio;
         }
         
         canvas.style.width = `${displayWidth}px`;
         canvas.style.height = `${displayHeight}px`;
 
-        // Draw backdrop
-        ctx.drawImage(backdropImg, 0, 0);
+        // Clear canvas and draw backdrop
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(backdropImg, 0, 0, canvas.width, canvas.height);
 
         // Draw subject at specified position
         const subjectAspectRatio = subjectImg.naturalWidth / subjectImg.naturalHeight;
@@ -471,10 +483,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             <CardContent>
               {backdrop && firstSubject ? (
                 <div className="space-y-4">
-                  <div className="border rounded-lg overflow-hidden bg-checkered">
+                  <div className="flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 p-4" style={{ minHeight: '300px' }}>
                     <canvas
                       ref={canvasRef}
-                      className="w-full h-auto cursor-move"
+                      className="max-w-full max-h-full object-contain cursor-move border border-muted-foreground/20 rounded shadow-sm"
                       onMouseDown={handleCanvasMouseDown}
                       onMouseMove={handleCanvasMouseMove}
                       onMouseUp={handleCanvasMouseUp}
