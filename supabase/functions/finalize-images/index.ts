@@ -56,7 +56,8 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    // Use the correct Gemini 2.5 Flash Image Preview model for image editing
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
 
     const prompt = buildFinalizationPrompt();
     const results = [];
@@ -74,42 +75,101 @@ serve(async (req) => {
       console.log(`Finalizing image ${i + 1}/${compositedImages.length}: ${compositedImage.name}`);
 
       try {
-        // Prepare the images for Gemini
-        const compositedImageData = {
-          inlineData: {
-            data: compositedImage.data.split(',')[1], // Remove data:image/...;base64, prefix
-            mimeType: "image/jpeg"
-          }
+        // Extract base64 data and detect mime types
+        const getImageInfo = (dataUrl: string) => {
+          const [header, data] = dataUrl.split(',');
+          const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
+          return { data, mimeType };
         };
-
-        const maskImageData = {
-          inlineData: {
-            data: correspondingMask.data.split(',')[1], // Remove data:image/...;base64, prefix
-            mimeType: "image/png"
-          }
-        };
-
-        const result = await model.generateContent([
-          prompt, 
-          compositedImageData, 
-          maskImageData
-        ]);
         
-        // Extract the image from the response
-        if (result.response.candidates && result.response.candidates[0].content.parts) {
-          const part = result.response.candidates[0].content.parts[0];
-          if (part.inlineData) {
-            const finalizedData = `data:image/jpeg;base64,${part.inlineData.data}`;
-            results.push({
-              name: compositedImage.name,
-              finalizedData: finalizedData
-            });
-            console.log(`Successfully finalized ${compositedImage.name}`);
+        const compositedInfo = getImageInfo(compositedImage.data);
+        const maskInfo = getImageInfo(correspondingMask.data);
+        
+        console.log(`Composited image: ${compositedInfo.mimeType}`);
+        console.log(`Mask image: ${maskInfo.mimeType}`);
+        
+        // Structure the content correctly for Gemini 2.5 Flash Image Preview
+        const contents = [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: compositedInfo.mimeType,
+              data: compositedInfo.data
+            }
+          },
+          {
+            inlineData: {
+              mimeType: maskInfo.mimeType,
+              data: maskInfo.data
+            }
+          }
+        ];
+
+        console.log('Calling Gemini 2.5 Flash for image finalization...');
+        const result = await model.generateContent(contents);
+        
+        console.log('Gemini 2.5 Flash finalization completed');
+        
+        // Parse response for generated image
+        let finalizedData = null;
+        
+        if (result && result.response) {
+          console.log('Response received from Gemini 2.5 Flash');
+          console.log('Full response structure:', JSON.stringify(result.response, null, 2));
+          
+          // Check for candidates with image data
+          if (result.response.candidates && Array.isArray(result.response.candidates) && result.response.candidates.length > 0) {
+            console.log('Candidates array exists with length:', result.response.candidates.length);
+            
+            for (let i = 0; i < result.response.candidates.length; i++) {
+              const candidate = result.response.candidates[i];
+              console.log(`Processing candidate ${i}:`, JSON.stringify(candidate, null, 2));
+              
+              if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
+                console.log(`Candidate ${i} has ${candidate.content.parts.length} parts`);
+                
+                for (let j = 0; j < candidate.content.parts.length; j++) {
+                  const part = candidate.content.parts[j];
+                  console.log(`Part ${j}:`, JSON.stringify(part, null, 2));
+                  
+                  if (part.inlineData && part.inlineData.data) {
+                    console.log(`Found generated image data in candidate ${i}, part ${j}`);
+                    const mimeType = part.inlineData.mimeType || 'image/jpeg';
+                    finalizedData = `data:${mimeType};base64,${part.inlineData.data}`;
+                    break;
+                  } else if (part.text) {
+                    console.log(`Found text response: ${part.text.substring(0, 200)}...`);
+                  }
+                }
+                
+                if (finalizedData) break;
+              }
+              
+              // Check for any error indicators
+              if (candidate.finishReason) {
+                console.log('Finish reason:', candidate.finishReason);
+              }
+              if (candidate.safetyRatings) {
+                console.log('Safety ratings:', JSON.stringify(candidate.safetyRatings));
+              }
+            }
           } else {
-            throw new Error('No image data in response');
+            console.log('No candidates found in response');
           }
         } else {
-          throw new Error('Invalid response format from Gemini');
+          console.log('No response received from Gemini');
+        }
+        
+        if (finalizedData) {
+          results.push({
+            name: compositedImage.name,
+            finalizedData: finalizedData
+          });
+          console.log(`Successfully finalized ${compositedImage.name} using Gemini 2.5 Flash`);
+        } else {
+          console.error('No image data generated by Gemini 2.5 Flash');
+          console.log('Full response structure:', JSON.stringify(result, null, 2));
+          throw new Error('Gemini 2.5 Flash did not generate finalized image');
         }
       } catch (error) {
         console.error(`Error finalizing ${compositedImage.name}:`, error);
