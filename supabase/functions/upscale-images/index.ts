@@ -26,23 +26,30 @@ serve(async (req) => {
       console.log(`Upscaling image: ${file.name}`);
       
       try {
-        // Call SwinIR API for upscaling
-        const response = await fetch('https://api.swinir.ai/v1/upscale', {
+        // Use Replicate API for upscaling (more reliable than SwinIR)
+        const REPLICATE_API_KEY = Deno.env.get('REPLICATE_API_KEY');
+        if (!REPLICATE_API_KEY) {
+          throw new Error('REPLICATE_API_KEY is not configured');
+        }
+
+        const response = await fetch('https://api.replicate.com/v1/predictions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${SWINIR_API_KEY}`,
+            'Authorization': `Token ${REPLICATE_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            image: file.data,
-            scale: 2, // 2x upscaling
-            model: 'real-world', // Use real-world model for photos
+            version: "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc972f6b04b84f6a74747a89a", // Real-ESRGAN upscaler
+            input: {
+              image: `data:image/png;base64,${file.data}`,
+              scale: 2
+            }
           }),
         });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`SwinIR API error for ${file.name}:`, response.status, errorText);
+          console.error(`Replicate API error for ${file.name}:`, response.status, errorText);
           // If upscaling fails, use original image
           upscaledFiles.push({
             originalName: file.name,
@@ -54,15 +61,51 @@ serve(async (req) => {
           continue;
         }
 
-        const result = await response.json();
+        const prediction = await response.json();
         
-        upscaledFiles.push({
-          originalName: file.name,
-          processedName: `upscaled_${file.name}`,
-          data: result.upscaled_image,
-          size: result.size || file.size || 0,
-          format: file.type?.split('/')[1] || 'png'
-        });
+        // Wait for completion
+        let status = prediction.status;
+        let predictionId = prediction.id;
+        
+        while (status === 'starting' || status === 'processing') {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+            headers: {
+              'Authorization': `Token ${REPLICATE_API_KEY}`,
+            },
+          });
+          
+          const statusResult = await statusResponse.json();
+          status = statusResult.status;
+          
+          if (status === 'succeeded' && statusResult.output) {
+            // Fetch the upscaled image
+            const imageResponse = await fetch(statusResult.output);
+            const imageBuffer = await imageResponse.arrayBuffer();
+            const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+            
+            upscaledFiles.push({
+              originalName: file.name,
+              processedName: `upscaled_${file.name}`,
+              data: base64Data,
+              size: imageBuffer.byteLength,
+              format: 'png'
+            });
+            break;
+          } else if (status === 'failed' || status === 'canceled') {
+            console.error(`Upscaling failed for ${file.name}:`, statusResult.error);
+            // Use original image as fallback
+            upscaledFiles.push({
+              originalName: file.name,
+              processedName: `upscaled_${file.name}`,
+              data: file.data,
+              size: file.size || 0,
+              format: file.type?.split('/')[1] || 'png'
+            });
+            break;
+          }
+        }
 
         console.log(`Successfully upscaled: ${file.name}`);
       } catch (error) {

@@ -26,8 +26,9 @@ serve(async (req) => {
       console.log(`Compressing image: ${file.originalName || file.name}`);
       
       try {
-        // Convert base64 to buffer for Tinify API
-        const imageBuffer = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
+        // Clean base64 data and convert to buffer for Tinify API
+        const base64Data = file.data.replace(/^data:image\/[a-z]+;base64,/, '');
+        const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
         
         // Call Tinify API for compression
         const response = await fetch('https://api.tinify.com/shrink', {

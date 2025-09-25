@@ -39,50 +39,37 @@ const checkImageSize = async (imageData: string, maxSizeKB: number = 4096): Prom
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
-  let prompt = `You are a master AI photo compositor specializing in hyper-realistic commercial product photography. Your task is to integrate a product seamlessly onto a new backdrop and add a realistic shadow. Adhere strictly to the following rules.
+  return `🚨 CRITICAL COMPOSITING TASK - SUBJECT PRESERVATION IS MANDATORY 🚨
 
-**Inputs:**
-1. A product image with a transparent background (the subject). This image is the same size as the backdrop, and the subject is already placed where it needs to be.
-2. A backdrop image.
+You are a photo background replacement specialist. Your ONLY task is background replacement while maintaining ABSOLUTE SUBJECT INTEGRITY.
 
-**CRITICAL INSTRUCTIONS - POSITIONING IS ABSOLUTELY SACRED:**
+⛔ FORBIDDEN ALTERATIONS - YOU MUST NOT:
+- Change the subject's appearance, color, texture, material, or finish in ANY way
+- Modify the subject's shape, size, form, proportions, or any physical aspects
+- Add, remove, or alter any details, patterns, logos, markings, or features on the subject
+- Change the subject's lighting, reflections, shine, or surface properties
+- Reposition, move, rotate, scale, resize, or transform the subject spatially
+- Apply any filters, effects, adjustments, enhancements, or modifications to the subject
+- Modify the subject's shadows, highlights, or contrast
+- Change the subject's perspective, angle, or orientation
+- Make the subject look different in ANY visual aspect
 
-**1. ZERO REPOSITIONING RULE:**
-- FORBIDDEN: Do NOT move, resize, scale, rotate, or reposition the subject in ANY way whatsoever.
-- FORBIDDEN: Do NOT make the subject smaller or larger than it appears in the first image.
-- FORBIDDEN: Do NOT center the subject or adjust its placement based on your aesthetic judgment.
-- REQUIRED: The subject must appear in the EXACT same pixel locations as in the first input image.
-- REQUIRED: The subject must maintain its EXACT same size as shown in the first input image.
-- REQUIRED: Simply overlay/composite the subject from the first image onto the backdrop without ANY spatial modifications.
+✅ REQUIRED ACTIONS - YOU MUST:
+- Keep the subject EXACTLY as it appears in the input image - pixel-perfect preservation
+- Replace ONLY the background/backdrop pixels around the subject
+- Preserve every single detail of the subject's original appearance and characteristics
+- Maintain the subject's exact position, scale, and orientation
+- Create realistic contact shadows beneath the subject on the new backdrop surface
+- ${addBlur ? 'Apply subtle background blur ONLY to backdrop areas behind the subject (keep subject sharp)' : 'Keep the backdrop sharp and detailed'}
+- Ensure natural lighting integration between unchanged subject and new background
+- Make the composition look photorealistic while keeping subject identical
 
-**2. Pixel-Perfect Preservation:**
-- Every pixel of the subject must remain in its exact X,Y coordinate position.
-- The subject's scale, rotation, and positioning have been precisely set by the user and are FINAL.
-- Your role is ONLY to blend the existing subject with the backdrop and add realistic shadows.
-- Think of this as a simple layer overlay operation - no geometric transformations allowed.
+🎯 TASK FORMULA: 
+UNCHANGED SUBJECT (from image 1) + NEW BACKGROUND (from image 2) = FINAL COMPOSITE
 
-**2. Shadow Generation:**
-- Create a realistic shadow cast by the subject onto the backdrop.
-- The lighting is soft, 360-degree studio lighting, with a primary light source coming from the camera's position (face-on with the subject).
-- This creates a dense but very small shadow around the perimeter of the subject where it contacts the ground. The shadow should be compact, suggesting encompassing light that prevents large shadows from being cast.
-- IMPORTANT: Base the shadow on the subject's CURRENT position in the first image - do not reposition the subject to create the shadow.`;
+⚠️ ABSOLUTE RULE: The subject must remain visually IDENTICAL to the original. Any alteration = TASK FAILURE.
 
-  if (addBlur) {
-    prompt += `
-
-**3. Background Blur:**
-- You must apply a subtle, soft, realistic depth-of-field blur to the backdrop image.
-- CRITICAL: The blur must ONLY be applied to the area of the backdrop that is directly BEHIND the subject. The subject's position is defined by its placement in the first input image.
-- Any part of the backdrop visible to the sides of, above, or below the subject must remain perfectly sharp and in focus. The subject itself must also remain perfectly sharp. This simulates a realistic camera depth of field where the focus plane is on the subject.`;
-  }
-
-  prompt += `
-
-**Output:**
-- A single, high-quality, edited image with the exact same dimensions as the backdrop image. The image should contain ONLY the composited subject and its shadow on the backdrop. Do not perform other adjustments yet.
-- Your response MUST ONLY contain the final image data. No text.`;
-
-  return prompt;
+Output only the final composited image - no text or explanations.`;
 };
 
 serve(async (req) => {
