@@ -59,25 +59,39 @@ const reduceImageSize = async (imageData: string, maxSizeKB: number = 800): Prom
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
-  let prompt = `Create a professional product photography composite by combining the positioned product with the backdrop scene. 
+  let prompt = `You are a master AI photo compositor specializing in hyper-realistic commercial product photography. Your task is to integrate a product seamlessly onto a new backdrop and add a realistic shadow. Adhere strictly to the following rules.
 
-The first image shows a product that has been positioned and isolated (with transparent background removed). The second image is the backdrop/scene where the product should be placed.
+**Inputs:**
+1. A product image with a transparent background (the subject). This image is the same size as the backdrop, and the subject is already placed where it needs to be.
+2. A backdrop image.
 
-Your task:
-- Seamlessly composite the product from the first image onto the backdrop from the second image
-- Generate realistic shadows and reflections where the product contacts surfaces
-- Match lighting, color temperature, and contrast between product and backdrop
-- Maintain the product's current position and scale`;
+**CRITICAL INSTRUCTIONS:**
+
+**1. Compositing:**
+- Composite the subject from the first input onto the backdrop. The subject is already positioned and scaled correctly within its transparent canvas. You must composite it as-is.
+- The subject's base should appear to be making solid contact with the 'floor' of the backdrop.
+- The perspective of the placed product must perfectly match the perspective of the backdrop.
+- CRITICAL: Do not alter the structure, shape, or physical characteristics of the subject. Only blend it with the background and add shadows.
+
+**2. Shadow Generation:**
+- Create a realistic shadow cast by the subject onto the backdrop.
+- The lighting is soft, 360-degree studio lighting, with a primary light source coming from the camera's position (face-on with the subject).
+- This creates a dense but very small shadow around the perimeter of the subject where it contacts the ground. The shadow should be compact, suggesting encompassing light that prevents large shadows from being cast.`;
 
   if (addBlur) {
     prompt += `
-- Add subtle depth-of-field blur to background elements behind the product
-- Keep the product itself in sharp focus`;
+
+**3. Background Blur:**
+- You must apply a subtle, soft, realistic depth-of-field blur to the backdrop image.
+- CRITICAL: The blur must ONLY be applied to the area of the backdrop that is directly BEHIND the subject. The subject's position is defined by its placement in the first input image.
+- Any part of the backdrop visible to the sides of, above, or below the subject must remain perfectly sharp and in focus. The subject itself must also remain perfectly sharp. This simulates a realistic camera depth of field where the focus plane is on the subject.`;
   }
 
   prompt += `
 
-Create a single, photorealistic composite image that appears as if the product was originally photographed in this scene. The result should look like professional commercial product photography with natural lighting and shadows.`;
+**Output:**
+- A single, high-quality, edited image with the exact same dimensions as the backdrop image. The image should contain ONLY the composited subject and its shadow on the backdrop. Do not perform other adjustments yet.
+- Your response MUST ONLY contain the final image data. No text.`;
 
   return prompt;
 };

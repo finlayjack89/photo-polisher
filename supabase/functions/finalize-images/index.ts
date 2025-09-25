@@ -11,35 +11,32 @@ interface FinalizeRequest {
     name: string;
     data: string; // base64 composited image
   }>;
-  originalMasks: Array<{
+  guidanceImages: Array<{
     name: string;
-    data: string; // base64 mask for shadow guidance
+    data: string; // base64 positioned subject for guidance
   }>;
 }
 
 const buildFinalizationPrompt = (): string => {
-  return `You are an expert AI photo editor performing shadow and reflection refinements on a commercial product shot.
+  return `You are an expert AI photo editor performing the final touches on a commercial product shot.
     
 **Inputs:**
 1. A composited image containing a product on a backdrop with a preliminary shadow.
-2. A shadow guidance mask. The white area indicates where the final shadow should be.
+2. A guidance image. The opaque area of this image indicates the subject's location for shadow and reflection grounding.
 
 **CRITICAL INSTRUCTIONS:**
 
-**1. Refine Shadow Only:**
-- Adjust the shadow in the composited image to perfectly match the mask. Keep shadow where the mask is white, remove it where it's not. 
-- Ensure the final shadow has soft, realistic edges that look natural.
-- Make the shadow subtle and appropriate for the lighting conditions already present.
+**1. Refine Shadow:**
+- Analyze the input guidance image. Adjust the shadow in the composited image to perfectly match the subject's position. Ensure the final shadow has soft, realistic edges.
 
-**2. Add Subtle Reflection:**
-- Create a realistic, low-opacity reflection of the subject's base onto the surface it's resting on. 
-- The reflection should be very subtle and geometrically accurate.
-- Match the existing lighting conditions - do not alter them.
+**2. Add Reflection:**
+- Create a realistic, low-opacity reflection of the subject's base onto the surface it's resting on. The reflection should be subtle and geometrically accurate based on the subject's position in the guidance image.
 
-**3. PRESERVE BACKDROP:**
-- DO NOT alter the backdrop, lighting, or color grading in any way.
-- Keep the existing backdrop texture, color, and lighting exactly as they are.
-- Only modify shadows and reflections - leave everything else untouched.
+**3. Final Lighting & Color Grade:**
+- Perform final lighting adjustments to unify the scene completely. The subject, shadow, reflection, and backdrop must look like they belong in the same environment.
+- The overall lighting style is soft, multi-directional studio lighting.
+- Apply a final color grade for a professional, clean, commercial look with a neutral-to-cool white balance.
+- CRITICAL: Do not alter the structure, shape, or physical characteristics of the subject. Only adjust lighting, color, and reflections to match the scene.
 
 **Output:**
 - A single, high-quality, final edited image with the exact same dimensions as the input image.
@@ -52,7 +49,7 @@ serve(async (req) => {
   }
 
   try {
-    const { compositedImages, originalMasks }: FinalizeRequest = await req.json();
+    const { compositedImages, guidanceImages }: FinalizeRequest = await req.json();
     
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) {
@@ -70,10 +67,10 @@ serve(async (req) => {
 
     for (let i = 0; i < compositedImages.length; i++) {
       const compositedImage = compositedImages[i];
-      const correspondingMask = originalMasks.find(mask => mask.name === compositedImage.name);
+      const correspondingGuidance = guidanceImages.find(guidance => guidance.name === compositedImage.name);
       
-      if (!correspondingMask) {
-        throw new Error(`No corresponding mask found for ${compositedImage.name}`);
+      if (!correspondingGuidance) {
+        throw new Error(`No corresponding guidance image found for ${compositedImage.name}`);
       }
 
       console.log(`Finalizing image ${i + 1}/${compositedImages.length}: ${compositedImage.name}`);
@@ -83,8 +80,8 @@ serve(async (req) => {
         if (!compositedImage.data) {
           throw new Error(`Composited image data is missing for ${compositedImage.name}`);
         }
-        if (!correspondingMask.data) {
-          throw new Error(`Mask data is missing for ${correspondingMask.name}`);
+        if (!correspondingGuidance.data) {
+          throw new Error(`Guidance image data is missing for ${correspondingGuidance.name}`);
         }
 
         // Extract base64 data and detect mime types
@@ -102,10 +99,10 @@ serve(async (req) => {
         };
         
         const compositedInfo = getImageInfo(compositedImage.data);
-        const maskInfo = getImageInfo(correspondingMask.data);
+        const guidanceInfo = getImageInfo(correspondingGuidance.data);
         
         console.log(`Composited image: ${compositedInfo.mimeType}`);
-        console.log(`Mask image: ${maskInfo.mimeType}`);
+        console.log(`Guidance image: ${guidanceInfo.mimeType}`);
         
         // Structure the content correctly for Gemini 2.5 Flash Image Preview
         const contents = [
@@ -118,8 +115,8 @@ serve(async (req) => {
           },
           {
             inlineData: {
-              mimeType: maskInfo.mimeType,
-              data: maskInfo.data
+              mimeType: guidanceInfo.mimeType,
+              data: guidanceInfo.data
             }
           }
         ];

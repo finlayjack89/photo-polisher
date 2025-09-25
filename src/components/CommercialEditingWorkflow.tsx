@@ -314,10 +314,30 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setProgress(0);
 
     try {
-      const originalMasks = processedImages.backgroundRemoved.map(subject => ({
-        name: subject.name,
-        data: subject.backgroundRemovedData
-      }));
+      // Use the positioned subjects as guidance images for finalization
+      const guidanceImages = [];
+      for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
+        const subject = processedImages.backgroundRemoved[i];
+        
+        // Re-create the positioned subject data as guidance for finalization
+        const backdropImg = new Image();
+        await new Promise((resolve) => {
+          backdropImg.onload = resolve;
+          backdropImg.src = processedImages.backdrop;
+        });
+
+        const guidanceData = await positionSubjectOnCanvas(
+          subject.backgroundRemovedData,
+          backdropImg.naturalWidth,
+          backdropImg.naturalHeight,
+          processedImages.placement
+        );
+        
+        guidanceImages.push({
+          name: subject.name,
+          data: guidanceData
+        });
+      }
 
       const { data: finalResult, error } = await supabase.functions.invoke('finalize-images', {
         body: {
@@ -325,7 +345,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             name: img.name,
             data: img.compositedData
           })),
-          originalMasks
+          guidanceImages
         }
       });
 
