@@ -98,25 +98,58 @@ serve(async (req) => {
           backdropImageData
         ]);
         
-        // Extract the image from the response
-        if (result.response.candidates && result.response.candidates[0].content.parts) {
-          const part = result.response.candidates[0].content.parts[0];
-          if (part.inlineData) {
-            const compositedData = `data:image/jpeg;base64,${part.inlineData.data}`;
-            results.push({
-              name: subject.name,
-              compositedData: compositedData
-            });
-            console.log(`Successfully composited ${subject.name}`);
-          } else {
-            throw new Error('No image data in response');
+        console.log('Full Gemini response structure:', JSON.stringify(result, null, 2));
+        
+        // Extract the image from the response with more robust parsing
+        let compositedData = null;
+        
+        // Try different response structure patterns
+        if (result.response) {
+          console.log('Response object exists');
+          
+          if (result.response.candidates && result.response.candidates.length > 0) {
+            console.log('Candidates array exists with length:', result.response.candidates.length);
+            const candidate = result.response.candidates[0];
+            
+            if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+              console.log('Content parts exist with length:', candidate.content.parts.length);
+              
+              for (const part of candidate.content.parts) {
+                console.log('Part structure:', JSON.stringify(part, null, 2));
+                
+                if (part.inlineData && part.inlineData.data) {
+                  console.log('Found inline data in part');
+                  compositedData = `data:image/jpeg;base64,${part.inlineData.data}`;
+                  break;
+                } else if (part.text) {
+                  console.log('Found text in part:', part.text.substring(0, 100));
+                }
+              }
+            }
           }
+          
+          // Try alternative response structure
+          if (!compositedData && result.response.text) {
+            console.log('Trying response.text format');
+            const responseText = await result.response.text();
+            console.log('Response text length:', responseText?.length || 0);
+          }
+        }
+        
+        if (compositedData) {
+          results.push({
+            name: subject.name,
+            compositedData: compositedData
+          });
+          console.log(`Successfully composited ${subject.name}`);
         } else {
-          throw new Error('Invalid response format from Gemini');
+          console.error('Could not extract image data from response');
+          console.error('Full response:', JSON.stringify(result, null, 2));
+          throw new Error('No image data found in Gemini response');
         }
       } catch (error) {
         console.error(`Error compositing ${subject.name}:`, error);
-        throw new Error(`Failed to composite ${subject.name}: ${error.message}`);
+        throw new Error(`Failed to composite ${subject.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -131,7 +164,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to composite images', 
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error)
       }),
       { 
         status: 500, 

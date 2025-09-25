@@ -143,7 +143,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Error processing ${image.name}:`, error);
-        throw new Error(`Failed to generate mask for ${image.name}: ${error.message}`);
+        throw new Error(`Failed to generate mask for ${image.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -158,7 +158,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate masks', 
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error) 
       }),
       { 
         status: 500, 

@@ -87,8 +87,8 @@ serve(async (req) => {
           } else if (output instanceof ArrayBuffer || output instanceof Uint8Array) {
             console.log('Processing binary data response');
             // If it's binary data
-            const buffer = output instanceof ArrayBuffer ? output : output.buffer;
-            const base64Data = arrayBufferToBase64(buffer);
+            const buffer = output instanceof ArrayBuffer ? output : (output as Uint8Array).buffer;
+            const base64Data = arrayBufferToBase64(buffer as ArrayBuffer);
             dataUrl = `data:image/png;base64,${base64Data}`;
           } else if (Array.isArray(output) && output.length > 0) {
             console.log('Processing array response, using first item');
@@ -125,7 +125,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Error processing ${image.name}:`, error);
-        throw new Error(`Failed to remove background for ${image.name}: ${error.message}`);
+        throw new Error(`Failed to remove background for ${image.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -140,7 +140,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to remove backgrounds', 
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error) 
       }),
       { 
         status: 500, 

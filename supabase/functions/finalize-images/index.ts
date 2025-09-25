@@ -113,7 +113,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Error finalizing ${compositedImage.name}:`, error);
-        throw new Error(`Failed to finalize ${compositedImage.name}: ${error.message}`);
+        throw new Error(`Failed to finalize ${compositedImage.name}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -128,7 +128,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to finalize images', 
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error) 
       }),
       { 
         status: 500, 

@@ -189,7 +189,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message || 'Analysis failed',
+        error: error instanceof Error ? error.message : 'Analysis failed',
         details: 'Please check your Gemini API key configuration'
       }),
       { 
