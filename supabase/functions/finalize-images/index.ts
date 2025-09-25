@@ -18,7 +18,7 @@ interface FinalizeRequest {
 }
 
 const buildFinalizationPrompt = (): string => {
-  return `You are an expert AI photo editor performing the final touches on a commercial product shot.
+  return `You are an expert AI photo editor performing shadow and reflection refinements on a commercial product shot.
     
 **Inputs:**
 1. A composited image containing a product on a backdrop with a preliminary shadow.
@@ -26,16 +26,20 @@ const buildFinalizationPrompt = (): string => {
 
 **CRITICAL INSTRUCTIONS:**
 
-**1. Refine Shadow:**
-- Adjust the shadow in the composited image to perfectly match the mask. Keep shadow where the mask is white, remove it where it's not. Ensure the final shadow has soft, realistic edges.
+**1. Refine Shadow Only:**
+- Adjust the shadow in the composited image to perfectly match the mask. Keep shadow where the mask is white, remove it where it's not. 
+- Ensure the final shadow has soft, realistic edges that look natural.
+- Make the shadow subtle and appropriate for the lighting conditions already present.
 
-**2. Add Reflection:**
-- Create a realistic, low-opacity reflection of the subject's base onto the surface it's resting on. The reflection should be subtle and geometrically accurate.
+**2. Add Subtle Reflection:**
+- Create a realistic, low-opacity reflection of the subject's base onto the surface it's resting on. 
+- The reflection should be very subtle and geometrically accurate.
+- Match the existing lighting conditions - do not alter them.
 
-**3. Final Lighting & Color Grade:**
-- Perform final lighting adjustments to unify the scene completely. The subject, shadow, reflection, and backdrop must look like they belong in the same environment.
-- The overall lighting style is soft, multi-directional studio lighting.
-- Apply a final color grade for a professional, clean, commercial look with a neutral-to-cool white balance.
+**3. PRESERVE BACKDROP:**
+- DO NOT alter the backdrop, lighting, or color grading in any way.
+- Keep the existing backdrop texture, color, and lighting exactly as they are.
+- Only modify shadows and reflections - leave everything else untouched.
 
 **Output:**
 - A single, high-quality, final edited image with the exact same dimensions as the input image.
