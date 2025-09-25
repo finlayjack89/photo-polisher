@@ -462,21 +462,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }
 
   if (currentStep === 'complete' && processedImages.finalized) {
-    // Convert processed results to File objects for GalleryPreview
-    const processedFiles = processedImages.finalized.map((result, index) => {
-      const byteString = atob(result.finalizedData.split(',')[1]);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      return new File([ab], `processed_${result.name}`, { type: 'image/jpeg' });
-    });
+    // Prepare processed images data for GalleryPreview
+    const galleryImages = processedImages.finalized.map((result, index) => ({
+      name: result.name,
+      originalData: files[index] ? URL.createObjectURL(files[index]) : '',
+      processedData: result.finalizedData,
+      size: result.finalizedData.length * 0.75 // Rough estimate of base64 to bytes
+    }));
 
     return (
       <GalleryPreview
-        files={processedFiles}
+        processedImages={galleryImages}
         onBack={onBack}
+        onRetry={() => setCurrentStep('compression')}
       />
     );
   }

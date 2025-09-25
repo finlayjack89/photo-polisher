@@ -4,22 +4,15 @@ import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { ProcessingWorkflow } from "@/components/ProcessingWorkflow";
 import { CommercialEditingWorkflow } from "@/components/CommercialEditingWorkflow";
-import { GalleryPreview } from "@/components/GalleryPreview";
 import heroImage from "@/assets/hero-studio.jpg";
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'commercial' | 'gallery'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'commercial'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [processedFiles, setProcessedFiles] = useState<any[]>([]);
 
   const handleFilesUploaded = (files: File[]) => {
     setUploadedFiles(files);
     setCurrentStep('commercial');
-  };
-
-  const handleProcessingComplete = (processed: any[]) => {
-    setProcessedFiles(processed);
-    setCurrentStep('gallery');
   };
 
   return (
@@ -91,20 +84,13 @@ const Index = () => {
         {currentStep === 'processing' && uploadedFiles.length > 0 && (
           <ProcessingWorkflow 
             files={uploadedFiles}
-            onComplete={handleProcessingComplete}
+            onComplete={() => {}} // Not used in current workflow
           />
         )}
 
         {currentStep === 'commercial' && uploadedFiles.length > 0 && (
           <CommercialEditingWorkflow
             files={uploadedFiles}
-            onBack={() => setCurrentStep('upload')}
-          />
-        )}
-        
-        {currentStep === 'gallery' && processedFiles.length > 0 && (
-          <GalleryPreview 
-            files={processedFiles}
             onBack={() => setCurrentStep('upload')}
           />
         )}

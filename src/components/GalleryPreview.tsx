@@ -5,36 +5,131 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import JSZip from "jszip";
 
-interface GalleryPreviewProps {
-  files: File[];
-  onBack: () => void;
+interface ProcessedImage {
+  name: string;
+  originalData: string; // base64
+  processedData: string; // base64
+  size: number;
 }
 
-export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
+interface GalleryPreviewProps {
+  processedImages: ProcessedImage[];
+  onBack: () => void;
+  onRetry: () => void;
+}
+
+export const GalleryPreview = ({ processedImages, onBack, onRetry }: GalleryPreviewProps) => {
   const [selectedView, setSelectedView] = useState<'grid' | 'comparison'>('grid');
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  const [isUpscaling, setIsUpscaling] = useState(false);
+  const [upscaledImages, setUpscaledImages] = useState<ProcessedImage[]>([]);
+  const { toast } = useToast();
 
-  // Mock processed versions for demo
-  const processedImages = files.map((file, index) => ({
-    original: URL.createObjectURL(file),
-    processed: URL.createObjectURL(file), // In real app, this would be the processed version
-    name: file.name,
-    size: file.size,
-    status: 'completed' as const
-  }));
+  // Use upscaled images if available, otherwise use original processed images
+  const displayImages = upscaledImages.length > 0 ? upscaledImages : processedImages;
 
-  const handleDownloadAll = () => {
-    // Mock download functionality
-    console.log('Downloading all processed images...');
+  const handleUpscaleAndCompress = async () => {
+    setIsUpscaling(true);
+    try {
+      // Prepare data for upscaling
+      const upscaleData = processedImages.map(img => ({
+        name: img.name,
+        data: img.processedData,
+        size: img.size,
+        type: 'image/png'
+      }));
+
+      // Call upscale function
+      const { data: upscaleResult, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
+        body: { files: upscaleData }
+      });
+
+      if (upscaleError) throw upscaleError;
+
+      // Then compress the upscaled images
+      const { data: compressResult, error: compressError } = await supabase.functions.invoke('compress-images', {
+        body: { files: upscaleResult.upscaledFiles }
+      });
+
+      if (compressError) throw compressError;
+
+      // Update displayed images with upscaled and compressed versions
+      const enhanced = compressResult.compressedFiles.map((file: any) => ({
+        name: file.originalName,
+        originalData: processedImages.find(img => img.name === file.originalName)?.originalData || '',
+        processedData: `data:image/png;base64,${file.data}`,
+        size: file.size
+      }));
+
+      setUpscaledImages(enhanced);
+      toast({
+        title: "Enhancement Complete",
+        description: "Images have been upscaled and compressed successfully!"
+      });
+    } catch (error) {
+      console.error('Upscale and compress error:', error);
+      toast({
+        title: "Enhancement Failed",
+        description: "Failed to upscale and compress images. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
+  const downloadFile = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadAll = async () => {
+    try {
+      const zip = new JSZip();
+      
+      displayImages.forEach((image, index) => {
+        const base64Data = image.processedData.split(',')[1];
+        zip.file(`processed_${image.name}`, base64Data, { base64: true });
+      });
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      downloadFile(url, 'processed_images.zip');
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Download Complete",
+        description: `Downloaded ${displayImages.length} images as ZIP file.`
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download Failed",
+        description: "Failed to create ZIP file. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDownloadSingle = (index: number) => {
-    console.log(`Downloading image ${index + 1}...`);
+    const image = displayImages[index];
+    downloadFile(image.processedData, `processed_${image.name}`);
+    toast({
+      title: "Download Complete",
+      description: `Downloaded ${image.name}`
+    });
   };
 
-  const handleRetry = (index: number) => {
-    console.log(`Retrying processing for image ${index + 1}...`);
+  const handleRetryProcessing = () => {
+    onRetry();
   };
 
   return (
@@ -51,15 +146,19 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
               Processing Complete!
             </h2>
             <p className="text-muted-foreground">
-              {files.length} photos transformed into studio quality
+              {processedImages.length} photos transformed into studio quality
             </p>
           </div>
         </div>
         
         <div className="flex items-center space-x-4">
-          <Button variant="outline">
+          <Button 
+            variant="outline" 
+            onClick={handleUpscaleAndCompress}
+            disabled={isUpscaling}
+          >
             <Zap className="w-4 h-4 mr-2" />
-            Upscale & Compress
+            {isUpscaling ? 'Processing...' : 'Upscale & Compress'}
           </Button>
           <Button variant="electric" onClick={handleDownloadAll}>
             <Download className="w-4 h-4 mr-2" />
@@ -75,7 +174,7 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
             <div className="w-12 h-12 bg-gradient-electric rounded-full flex items-center justify-center mx-auto mb-3">
               <ImageIcon className="w-6 h-6 text-electric-foreground" />
             </div>
-            <h3 className="text-2xl font-bold text-foreground">{files.length}</h3>
+            <h3 className="text-2xl font-bold text-foreground">{processedImages.length}</h3>
             <p className="text-muted-foreground">Photos Processed</p>
           </CardContent>
         </Card>
@@ -86,7 +185,7 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
               <Download className="w-6 h-6 text-success" />
             </div>
             <h3 className="text-2xl font-bold text-foreground">
-              {(files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024).toFixed(1)}MB
+              {(processedImages.reduce((acc, img) => acc + img.size, 0) / 1024 / 1024).toFixed(1)}MB
             </h3>
             <p className="text-muted-foreground">Total Size</p>
           </CardContent>
@@ -113,12 +212,12 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
         {/* Grid View */}
         <TabsContent value="grid">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {processedImages.map((image, index) => (
+            {displayImages.map((image, index) => (
               <Card key={index} className="group shadow-soft hover:shadow-medium transition-smooth">
                 <CardContent className="p-0">
                   <div className="relative aspect-square overflow-hidden rounded-t-lg">
                     <img 
-                      src={image.processed}
+                      src={image.processedData}
                       alt={`Processed ${image.name}`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-smooth cursor-pointer"
                       onClick={() => setSelectedImage(index)}
@@ -159,7 +258,8 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={() => handleRetry(index)}
+                        onClick={handleRetryProcessing}
+                        title="Retry entire processing workflow"
                       >
                         <RotateCcw className="w-4 h-4" />
                       </Button>
@@ -174,7 +274,7 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
         {/* Comparison View */}
         <TabsContent value="comparison">
           <div className="space-y-8">
-            {processedImages.map((image, index) => (
+            {displayImages.map((image, index) => (
               <Card key={index} className="shadow-soft">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
@@ -191,7 +291,8 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={() => handleRetry(index)}
+                        onClick={handleRetryProcessing}
+                        title="Retry entire processing workflow"
                       >
                         <RotateCcw className="w-4 h-4 mr-1" />
                         Retry
@@ -205,7 +306,7 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
                       <h4 className="font-medium text-muted-foreground">Original</h4>
                       <div className="aspect-square rounded-lg overflow-hidden border border-border">
                         <img 
-                          src={image.original}
+                          src={image.originalData}
                           alt="Original"
                           className="w-full h-full object-cover"
                         />
@@ -216,7 +317,7 @@ export const GalleryPreview = ({ files, onBack }: GalleryPreviewProps) => {
                       <h4 className="font-medium text-success">Studio Enhanced</h4>
                       <div className="aspect-square rounded-lg overflow-hidden border border-success/50">
                         <img 
-                          src={image.processed}
+                          src={image.processedData}
                           alt="Processed"
                           className="w-full h-full object-cover"
                         />
