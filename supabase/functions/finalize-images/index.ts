@@ -75,9 +75,24 @@ serve(async (req) => {
       console.log(`Finalizing image ${i + 1}/${compositedImages.length}: ${compositedImage.name}`);
 
       try {
+        // Validate input data
+        if (!compositedImage.data) {
+          throw new Error(`Composited image data is missing for ${compositedImage.name}`);
+        }
+        if (!correspondingMask.data) {
+          throw new Error(`Mask data is missing for ${correspondingMask.name}`);
+        }
+
         // Extract base64 data and detect mime types
         const getImageInfo = (dataUrl: string) => {
-          const [header, data] = dataUrl.split(',');
+          if (!dataUrl || typeof dataUrl !== 'string') {
+            throw new Error('Invalid dataUrl: must be a non-empty string');
+          }
+          const parts = dataUrl.split(',');
+          if (parts.length !== 2) {
+            throw new Error('Invalid dataUrl format: must contain header and data separated by comma');
+          }
+          const [header, data] = parts;
           const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
           return { data, mimeType };
         };

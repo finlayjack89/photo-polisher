@@ -321,7 +321,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
       const { data: finalResult, error } = await supabase.functions.invoke('finalize-images', {
         body: {
-          compositedImages: compositedImages,
+          compositedImages: compositedImages.map(img => ({
+            name: img.name,
+            data: img.compositedData
+          })),
           originalMasks
         }
       });
