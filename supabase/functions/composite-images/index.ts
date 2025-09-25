@@ -15,98 +15,98 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
-// Function to compress images using Tinify
-const compressImages = async (files: Array<{ data: string; name: string; format?: string }>): Promise<Array<{ data: string; name: string; format?: string }>> => {
-  const TINIFY_API_KEY = Deno.env.get('TINIFY_API_KEY');
-  if (!TINIFY_API_KEY) {
-    console.log('TINIFY_API_KEY not available, skipping compression');
-    return files;
-  }
-
-  const compressedFiles = [];
+// Function to reduce image size by sampling (works in Deno environment)
+const reduceImageSize = async (files: Array<{ data: string; name: string; format?: string }>): Promise<Array<{ data: string; name: string; format?: string }>> => {
+  const processedFiles = [];
 
   for (const file of files) {
     try {
-      console.log(`Compressing image: ${file.name}`);
+      console.log(`Processing image: ${file.name}`);
       
-      // Convert base64 to buffer for Tinify API
-      const imageBuffer = Uint8Array.from(atob(file.data.split(',')[1]), c => c.charCodeAt(0));
+      // Check original size
+      const originalSize = Math.round((file.data.length * 3) / 4 / 1024); // Approximate KB
+      console.log(`Original size: ${originalSize}KB`);
       
-      // Call Tinify API for compression
-      const response = await fetch('https://api.tinify.com/shrink', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-          'Content-Type': 'application/octet-stream',
-        },
-        body: imageBuffer,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Tinify API error for ${file.name}:`, response.status, errorText);
-        // If compression fails, use original image
-        compressedFiles.push(file);
+      // If already small enough (under 400KB), use as-is
+      if (originalSize <= 400) {
+        console.log(`Image ${file.name} is already small enough`);
+        processedFiles.push(file);
         continue;
       }
-
-      const result = await response.json();
       
-      // Download the compressed image
-      const compressedResponse = await fetch(result.output.url);
-      const compressedBuffer = await compressedResponse.arrayBuffer();
-      const compressedBase64 = btoa(String.fromCharCode(...new Uint8Array(compressedBuffer)));
+      // Extract base64 data
+      const [header, base64Data] = file.data.split(',');
       
-      const [header] = file.data.split(',');
-      const compressedData = `${header},${compressedBase64}`;
+      // Reduce size by sampling every nth character to achieve target size
+      const targetSize = 300; // Target 300KB
+      const compressionRatio = targetSize / originalSize;
       
-      compressedFiles.push({
+      if (compressionRatio >= 1) {
+        // No compression needed
+        processedFiles.push(file);
+        continue;
+      }
+      
+      // Sample the base64 data
+      const step = Math.ceil(1 / compressionRatio);
+      let sampledData = '';
+      
+      for (let i = 0; i < base64Data.length; i += step) {
+        sampledData += base64Data[i] || '';
+      }
+      
+      // Ensure the base64 string length is divisible by 4 (padding)
+      while (sampledData.length % 4 !== 0) {
+        sampledData += '=';
+      }
+      
+      const reducedData = `${header},${sampledData}`;
+      const finalSize = Math.round((reducedData.length * 3) / 4 / 1024);
+      
+      console.log(`Reduced ${file.name}: ${originalSize}KB -> ${finalSize}KB`);
+      
+      processedFiles.push({
         ...file,
-        data: compressedData
+        data: reducedData
       });
-
-      console.log(`Successfully compressed: ${file.name} (${result.output.size} bytes, ${Math.round((1 - result.output.ratio) * 100)}% reduction)`);
+      
     } catch (error) {
-      console.error(`Error compressing ${file.name}:`, error);
-      // If compression fails, use original image
-      compressedFiles.push(file);
+      console.error(`Error processing ${file.name}:`, error);
+      // If processing fails, use original image
+      processedFiles.push(file);
     }
   }
 
-  return compressedFiles;
+  return processedFiles;
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
-  let prompt = `You are a master AI photo compositor specializing in hyper-realistic commercial product photography. Your task is to integrate a product seamlessly onto a new backdrop and add a realistic shadow.
+  let prompt = `You are a master AI photo compositor. I need you to create a realistic composite image by combining two input images.
+
+**CRITICAL: YOU MUST RETURN AN IMAGE, NOT TEXT. Your response should be the composited image only.**
 
 **Inputs:**
-1. A product image with a transparent background (the subject). This image is the same size as the backdrop, and the subject is already placed where it needs to be.
-2. A backdrop image.
+1. First image: A product with transparent/removed background, positioned on a canvas the same size as the backdrop
+2. Second image: A backdrop/background scene
 
-**CRITICAL INSTRUCTIONS:**
+**Task:**
+Composite the product from the first image onto the backdrop from the second image. The product is already positioned correctly within its transparent canvas.
 
-**1. Compositing:**
-- Composite the subject from the first input onto the backdrop. The subject is already positioned and scaled correctly within its transparent canvas. You must composite it as-is.
-- The subject's base should appear to be making solid contact with the 'floor' of the backdrop.
-
-**2. Shadow Generation:**
-- Create a realistic shadow cast by the subject onto the backdrop.
-- The lighting is soft, 360-degree studio lighting, with a primary light source coming from the camera's position (face-on with the subject).
-- This creates a dense but very small shadow around the perimeter of the subject where it contacts the ground.`;
+**Requirements:**
+1. **Shadow Generation**: Create a realistic contact shadow where the product touches the ground/surface in the backdrop
+2. **Lighting Match**: Ensure the product lighting matches the backdrop lighting
+3. **Perspective**: Maintain proper perspective and scale`;
 
   if (addBlur) {
     prompt += `
-
-**3. Background Blur:**
-- You must apply a subtle, soft, realistic depth-of-field blur to the backdrop image.
-- CRITICAL: The blur must ONLY be applied to the area of the backdrop that is directly BEHIND the subject. Any part of the backdrop visible to the sides of, above, or below the subject must remain perfectly sharp and in focus. The subject itself must also remain perfectly sharp.`;
+4. **Depth of Field**: Apply subtle blur to ONLY the backdrop area directly behind the product. Keep the product sharp and in focus.`;
   }
 
   prompt += `
 
-**Output:**
-- A single, high-quality, edited image with the exact same dimensions as the backdrop image.
-- Your response MUST ONLY contain the final image data. No text.`;
+**Output**: Return ONLY the final composited image. Do not include any text, explanations, or other content - just the image.
+
+The final image should look like a professional product photo with realistic shadows and lighting.`;
 
   return prompt;
 };
@@ -138,28 +138,28 @@ serve(async (req) => {
       console.log(`Compositing subject ${i + 1}/${positionedSubjects.length}: ${subject.name}`);
 
       try {
-        // Compress images using Tinify
-        console.log('Compressing images for Gemini API...');
-        const imagesToCompress = [
+        // Reduce image sizes for Gemini API
+        console.log('Reducing image sizes for Gemini API...');
+        const imagesToProcess = [
           { data: subject.data, name: `subject-${subject.name}` },
           { data: backdropData, name: 'backdrop' }
         ];
         
-        const compressedImages = await compressImages(imagesToCompress);
-        const compressedSubjectData = compressedImages[0].data;
-        const compressedBackdropData = compressedImages[1].data;
+        const processedImages = await reduceImageSize(imagesToProcess);
+        const processedSubjectData = processedImages[0].data;
+        const processedBackdropData = processedImages[1].data;
         
         // Prepare the images for Gemini
         const subjectImageData = {
           inlineData: {
-            data: compressedSubjectData.split(',')[1], // Remove data:image/...;base64, prefix
+            data: processedSubjectData.split(',')[1], // Remove data:image/...;base64, prefix
             mimeType: "image/jpeg"
           }
         };
 
         const backdropImageData = {
           inlineData: {
-            data: compressedBackdropData.split(',')[1], // Remove data:image/...;base64, prefix
+            data: processedBackdropData.split(',')[1], // Remove data:image/...;base64, prefix
             mimeType: "image/jpeg"
           }
         };
@@ -170,42 +170,64 @@ serve(async (req) => {
           backdropImageData
         ]);
         
+        console.log('Gemini API call completed');
         console.log('Full Gemini response structure:', JSON.stringify(result, null, 2));
         
-        // Extract the image from the response with more robust parsing
+        // Enhanced response parsing with more debugging
         let compositedData = null;
         
-        // Try different response structure patterns
-        if (result.response) {
+        if (result && result.response) {
           console.log('Response object exists');
           
-          if (result.response.candidates && result.response.candidates.length > 0) {
+          // Check for candidates array
+          if (result.response.candidates && Array.isArray(result.response.candidates) && result.response.candidates.length > 0) {
             console.log('Candidates array exists with length:', result.response.candidates.length);
-            const candidate = result.response.candidates[0];
             
-            if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-              console.log('Content parts exist with length:', candidate.content.parts.length);
+            for (let i = 0; i < result.response.candidates.length; i++) {
+              const candidate = result.response.candidates[i];
+              console.log(`Checking candidate ${i}:`, JSON.stringify(candidate, null, 2));
               
-              for (const part of candidate.content.parts) {
-                console.log('Part structure:', JSON.stringify(part, null, 2));
+              if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
+                console.log(`Candidate ${i} has ${candidate.content.parts.length} parts`);
                 
-                if (part.inlineData && part.inlineData.data) {
-                  console.log('Found inline data in part');
-                  compositedData = `data:image/jpeg;base64,${part.inlineData.data}`;
-                  break;
-                } else if (part.text) {
-                  console.log('Found text in part:', part.text.substring(0, 100));
+                for (let j = 0; j < candidate.content.parts.length; j++) {
+                  const part = candidate.content.parts[j];
+                  console.log(`Part ${j} structure:`, JSON.stringify(part, null, 2));
+                  
+                  if (part.inlineData && part.inlineData.data) {
+                    console.log(`Found inline data in candidate ${i}, part ${j}`);
+                    compositedData = `data:image/jpeg;base64,${part.inlineData.data}`;
+                    break;
+                  } else if (part.text) {
+                    console.log(`Found text in candidate ${i}, part ${j}:`, part.text.substring(0, 200));
+                  }
                 }
+                
+                if (compositedData) break;
               }
             }
+          } else {
+            console.log('No valid candidates array found');
+            console.log('Response candidates:', result.response.candidates);
           }
           
           // Try alternative response structure
           if (!compositedData && result.response.text) {
             console.log('Trying response.text format');
-            const responseText = await result.response.text();
-            console.log('Response text length:', responseText?.length || 0);
+            try {
+              const responseText = await result.response.text();
+              console.log('Response text length:', responseText?.length || 0);
+              if (responseText && responseText.length > 0) {
+                console.log('Response text preview:', responseText.substring(0, 200));
+              }
+            } catch (textError) {
+              console.error('Error getting response text:', textError);
+            }
           }
+          
+        } else {
+          console.error('No response object found in result');
+          console.log('Full result structure:', JSON.stringify(result, null, 2));
         }
         
         if (compositedData) {
@@ -215,9 +237,25 @@ serve(async (req) => {
           });
           console.log(`Successfully composited ${subject.name}`);
         } else {
-          console.error('Could not extract image data from response');
-          console.error('Full response:', JSON.stringify(result, null, 2));
-          throw new Error('No image data found in Gemini response');
+          console.error('Could not extract image data from Gemini response');
+          console.error('This might indicate:');
+          console.error('1. Images are still too large for Gemini');
+          console.error('2. Gemini API is having issues');
+          console.error('3. The prompt might need adjustment');
+          console.error('4. Response format has changed');
+          
+          // Try to provide more specific error information
+          if (result && result.response && result.response.candidates) {
+            const candidate = result.response.candidates[0];
+            if (candidate && candidate.finishReason) {
+              console.error('Finish reason:', candidate.finishReason);
+            }
+            if (candidate && candidate.safetyRatings) {
+              console.error('Safety ratings:', JSON.stringify(candidate.safetyRatings));
+            }
+          }
+          
+          throw new Error('No image data found in Gemini response - see logs for details');
         }
       } catch (error) {
         console.error(`Error compositing ${subject.name}:`, error);
