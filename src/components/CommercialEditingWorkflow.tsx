@@ -314,18 +314,35 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setProgress(0);
 
     try {
+      console.log('Starting finalization with:', { 
+        compositedImagesCount: compositedImages.length,
+        hasBackdrop: !!processedImages.backdrop,
+        hasPlacement: !!processedImages.placement 
+      });
+
+      // Validate required data
+      if (!processedImages.backdrop) {
+        throw new Error('No backdrop found');
+      }
+      if (!processedImages.placement) {
+        throw new Error('No placement data found');
+      }
+
       // Use the positioned subjects as guidance images for finalization
       const guidanceImages = [];
       for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
         const subject = processedImages.backgroundRemoved[i];
+        console.log(`Creating guidance image ${i + 1}/${processedImages.backgroundRemoved.length}`);
         
         // Re-create the positioned subject data as guidance for finalization
         const backdropImg = new Image();
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           backdropImg.onload = resolve;
+          backdropImg.onerror = reject;
           backdropImg.src = processedImages.backdrop;
         });
 
+        console.log('Backdrop loaded, positioning subject...');
         const guidanceData = await positionSubjectOnCanvas(
           subject.backgroundRemovedData,
           backdropImg.naturalWidth,
@@ -339,6 +356,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         });
       }
 
+      console.log('Calling finalize-images function...');
       const { data: finalResult, error } = await supabase.functions.invoke('finalize-images', {
         body: {
           compositedImages: compositedImages.map(img => ({
@@ -349,7 +367,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Finalize-images error:', error);
+        throw error;
+      }
 
       setProgress(100);
       setProcessedImages(prev => ({ ...prev, finalized: finalResult.results }));
