@@ -47,16 +47,19 @@ const buildCompositingPrompt = (addBlur: boolean): string => {
 
 **CRITICAL INSTRUCTIONS:**
 
-**1. Compositing:**
-- Composite the subject from the first input onto the backdrop. The subject is already positioned and scaled correctly within its transparent canvas. You must composite it as-is.
-- The subject's base should appear to be making solid contact with the 'floor' of the backdrop.
-- The perspective of the placed product must perfectly match the perspective of the backdrop.
-- CRITICAL: Do not alter the structure, shape, or physical characteristics of the subject. Only blend it with the background and add shadows.
+**1. Compositing - POSITIONING IS SACRED:**
+- ABSOLUTELY CRITICAL: The subject in the first image is already positioned EXACTLY where the user wants it. DO NOT move, resize, scale, or reposition the subject in ANY way.
+- Your ONLY job is to overlay the subject from the first image onto the backdrop image in the EXACT same position and scale.
+- The user has spent time carefully positioning this subject - you must preserve their positioning decisions completely.
+- Simply composite the subject as-is from the first image onto the backdrop. No repositioning whatsoever.
+- The subject's pixels must remain in their exact locations relative to the canvas dimensions.
+- CRITICAL: Do not alter the structure, shape, size, position, or physical characteristics of the subject. Only blend it with the background and add shadows.
 
 **2. Shadow Generation:**
 - Create a realistic shadow cast by the subject onto the backdrop.
 - The lighting is soft, 360-degree studio lighting, with a primary light source coming from the camera's position (face-on with the subject).
-- This creates a dense but very small shadow around the perimeter of the subject where it contacts the ground. The shadow should be compact, suggesting encompassing light that prevents large shadows from being cast.`;
+- This creates a dense but very small shadow around the perimeter of the subject where it contacts the ground. The shadow should be compact, suggesting encompassing light that prevents large shadows from being cast.
+- IMPORTANT: Base the shadow on the subject's CURRENT position in the first image - do not reposition the subject to create the shadow.`;
 
   if (addBlur) {
     prompt += `
@@ -103,6 +106,7 @@ serve(async (req) => {
     for (let i = 0; i < positionedSubjects.length; i++) {
       const subject = positionedSubjects[i];
       console.log(`Compositing subject ${i + 1}/${positionedSubjects.length}: ${subject.name}`);
+      console.log(`Subject positioned data size: ${Math.round((subject.data.length * 3) / 4 / 1024)}KB`);
 
       try {
         // Check image sizes for Gemini API (up to 20MB supported, 4MB recommended)
