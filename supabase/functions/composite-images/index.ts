@@ -15,32 +15,65 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
-// Function to estimate and limit image size by reducing quality
-const limitImageSize = (base64Data: string, maxSizeKB: number = 500): string => {
-  // If the image is already small enough, return as is
-  const currentSizeKB = Math.round((base64Data.length * 3) / 4 / 1024);
-  console.log(`Original image size: ${currentSizeKB}KB`);
-  
-  if (currentSizeKB <= maxSizeKB) {
-    return base64Data;
+// Function to compress images using Tinify
+const compressImages = async (files: Array<{ data: string; name: string; format?: string }>): Promise<Array<{ data: string; name: string; format?: string }>> => {
+  const TINIFY_API_KEY = Deno.env.get('TINIFY_API_KEY');
+  if (!TINIFY_API_KEY) {
+    console.log('TINIFY_API_KEY not available, skipping compression');
+    return files;
   }
-  
-  // For larger images, we'll sample every nth byte to reduce size
-  // This is a simple approach that works in Deno environment
-  const [header, data] = base64Data.split(',');
-  const compressionRatio = maxSizeKB / currentSizeKB;
-  const step = Math.ceil(1 / compressionRatio);
-  
-  let compressedData = '';
-  for (let i = 0; i < data.length; i += step) {
-    compressedData += data[i];
+
+  const compressedFiles = [];
+
+  for (const file of files) {
+    try {
+      console.log(`Compressing image: ${file.name}`);
+      
+      // Convert base64 to buffer for Tinify API
+      const imageBuffer = Uint8Array.from(atob(file.data.split(',')[1]), c => c.charCodeAt(0));
+      
+      // Call Tinify API for compression
+      const response = await fetch('https://api.tinify.com/shrink', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+          'Content-Type': 'application/octet-stream',
+        },
+        body: imageBuffer,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Tinify API error for ${file.name}:`, response.status, errorText);
+        // If compression fails, use original image
+        compressedFiles.push(file);
+        continue;
+      }
+
+      const result = await response.json();
+      
+      // Download the compressed image
+      const compressedResponse = await fetch(result.output.url);
+      const compressedBuffer = await compressedResponse.arrayBuffer();
+      const compressedBase64 = btoa(String.fromCharCode(...new Uint8Array(compressedBuffer)));
+      
+      const [header] = file.data.split(',');
+      const compressedData = `${header},${compressedBase64}`;
+      
+      compressedFiles.push({
+        ...file,
+        data: compressedData
+      });
+
+      console.log(`Successfully compressed: ${file.name} (${result.output.size} bytes, ${Math.round((1 - result.output.ratio) * 100)}% reduction)`);
+    } catch (error) {
+      console.error(`Error compressing ${file.name}:`, error);
+      // If compression fails, use original image
+      compressedFiles.push(file);
+    }
   }
-  
-  const result = `${header},${compressedData}`;
-  const newSizeKB = Math.round((result.length * 3) / 4 / 1024);
-  console.log(`Compressed image size: ${newSizeKB}KB`);
-  
-  return result;
+
+  return compressedFiles;
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
@@ -105,22 +138,28 @@ serve(async (req) => {
       console.log(`Compositing subject ${i + 1}/${positionedSubjects.length}: ${subject.name}`);
 
       try {
-        // Limit image sizes to reduce payload
-        console.log('Limiting image sizes for Gemini API...');
-        const limitedSubjectData = limitImageSize(subject.data, 400);
-        const limitedBackdropData = limitImageSize(backdropData, 400);
+        // Compress images using Tinify
+        console.log('Compressing images for Gemini API...');
+        const imagesToCompress = [
+          { data: subject.data, name: `subject-${subject.name}` },
+          { data: backdropData, name: 'backdrop' }
+        ];
+        
+        const compressedImages = await compressImages(imagesToCompress);
+        const compressedSubjectData = compressedImages[0].data;
+        const compressedBackdropData = compressedImages[1].data;
         
         // Prepare the images for Gemini
         const subjectImageData = {
           inlineData: {
-            data: limitedSubjectData.split(',')[1], // Remove data:image/...;base64, prefix
+            data: compressedSubjectData.split(',')[1], // Remove data:image/...;base64, prefix
             mimeType: "image/jpeg"
           }
         };
 
         const backdropImageData = {
           inlineData: {
-            data: limitedBackdropData.split(',')[1], // Remove data:image/...;base64, prefix
+            data: compressedBackdropData.split(',')[1], // Remove data:image/...;base64, prefix
             mimeType: "image/jpeg"
           }
         };
