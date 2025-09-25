@@ -15,46 +15,26 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
-// Function to reduce image size using canvas resizing (proper approach)
-const reduceImageSize = async (imageData: string, maxSizeKB: number = 800): Promise<string> => {
+// Function to check image size and pass through if acceptable
+const checkImageSize = async (imageData: string, maxSizeKB: number = 4096): Promise<string> => {
   try {
     const originalSize = Math.round((imageData.length * 3) / 4 / 1024);
-    console.log(`Original image size: ${originalSize}KB`);
+    console.log(`Image size: ${originalSize}KB, limit: ${maxSizeKB}KB`);
     
     if (originalSize <= maxSizeKB) {
-      console.log('Image already within size limits');
+      console.log('Image within acceptable size limits');
       return imageData;
     }
     
-    // For now, if image is too large, we'll use a simple truncation approach
-    // but ensure the base64 remains valid
-    const [header, base64Data] = imageData.split(',');
-    if (!base64Data) {
-      console.log('Invalid base64 format, using original');
-      return imageData;
-    }
+    console.log(`Warning: Image (${originalSize}KB) exceeds recommended limit (${maxSizeKB}KB) but proceeding anyway`);
+    console.log('Consider using Tinify compression earlier in the pipeline for better results');
     
-    // Calculate reduction ratio
-    const targetRatio = maxSizeKB / originalSize;
-    const targetLength = Math.floor(base64Data.length * targetRatio);
-    
-    // Make sure the length is divisible by 4 for valid base64
-    const validLength = Math.floor(targetLength / 4) * 4;
-    const reducedBase64 = base64Data.substring(0, validLength);
-    
-    // Add proper padding
-    const paddingNeeded = (4 - (reducedBase64.length % 4)) % 4;
-    const paddedBase64 = reducedBase64 + '='.repeat(paddingNeeded);
-    
-    const reducedData = `${header},${paddedBase64}`;
-    const finalSize = Math.round((reducedData.length * 3) / 4 / 1024);
-    
-    console.log(`Reduced image: ${originalSize}KB -> ${finalSize}KB`);
-    return reducedData;
+    // Return original image - let Gemini handle it
+    return imageData;
     
   } catch (error) {
-    console.error('Error reducing image size:', error);
-    return imageData; // Return original if reduction fails
+    console.error('Error checking image size:', error);
+    return imageData;
   }
 };
 
@@ -125,10 +105,10 @@ serve(async (req) => {
       console.log(`Compositing subject ${i + 1}/${positionedSubjects.length}: ${subject.name}`);
 
       try {
-        // Reduce image sizes for Gemini API
-        console.log('Processing images for Gemini 2.5 Flash...');
-        const processedSubjectData = await reduceImageSize(subject.data, 800);
-        const processedBackdropData = await reduceImageSize(backdropData, 800);
+        // Check image sizes for Gemini API (up to 20MB supported, 4MB recommended)
+        console.log('Checking image sizes for Gemini 2.5 Flash...');
+        const processedSubjectData = await checkImageSize(subject.data, 4096);
+        const processedBackdropData = await checkImageSize(backdropData, 4096);
         
         // Extract base64 data and detect mime type
         const getImageInfo = (dataUrl: string) => {
