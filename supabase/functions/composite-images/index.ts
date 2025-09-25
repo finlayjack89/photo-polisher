@@ -45,15 +45,21 @@ const buildCompositingPrompt = (addBlur: boolean): string => {
 1. A product image with a transparent background (the subject). This image is the same size as the backdrop, and the subject is already placed where it needs to be.
 2. A backdrop image.
 
-**CRITICAL INSTRUCTIONS:**
+**CRITICAL INSTRUCTIONS - POSITIONING IS ABSOLUTELY SACRED:**
 
-**1. Compositing - POSITIONING IS SACRED:**
-- ABSOLUTELY CRITICAL: The subject in the first image is already positioned EXACTLY where the user wants it. DO NOT move, resize, scale, or reposition the subject in ANY way.
-- Your ONLY job is to overlay the subject from the first image onto the backdrop image in the EXACT same position and scale.
-- The user has spent time carefully positioning this subject - you must preserve their positioning decisions completely.
-- Simply composite the subject as-is from the first image onto the backdrop. No repositioning whatsoever.
-- The subject's pixels must remain in their exact locations relative to the canvas dimensions.
-- CRITICAL: Do not alter the structure, shape, size, position, or physical characteristics of the subject. Only blend it with the background and add shadows.
+**1. ZERO REPOSITIONING RULE:**
+- FORBIDDEN: Do NOT move, resize, scale, rotate, or reposition the subject in ANY way whatsoever.
+- FORBIDDEN: Do NOT make the subject smaller or larger than it appears in the first image.
+- FORBIDDEN: Do NOT center the subject or adjust its placement based on your aesthetic judgment.
+- REQUIRED: The subject must appear in the EXACT same pixel locations as in the first input image.
+- REQUIRED: The subject must maintain its EXACT same size as shown in the first input image.
+- REQUIRED: Simply overlay/composite the subject from the first image onto the backdrop without ANY spatial modifications.
+
+**2. Pixel-Perfect Preservation:**
+- Every pixel of the subject must remain in its exact X,Y coordinate position.
+- The subject's scale, rotation, and positioning have been precisely set by the user and are FINAL.
+- Your role is ONLY to blend the existing subject with the backdrop and add realistic shadows.
+- Think of this as a simple layer overlay operation - no geometric transformations allowed.
 
 **2. Shadow Generation:**
 - Create a realistic shadow cast by the subject onto the backdrop.
