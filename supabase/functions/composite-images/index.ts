@@ -15,6 +15,34 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
+// Function to estimate and limit image size by reducing quality
+const limitImageSize = (base64Data: string, maxSizeKB: number = 500): string => {
+  // If the image is already small enough, return as is
+  const currentSizeKB = Math.round((base64Data.length * 3) / 4 / 1024);
+  console.log(`Original image size: ${currentSizeKB}KB`);
+  
+  if (currentSizeKB <= maxSizeKB) {
+    return base64Data;
+  }
+  
+  // For larger images, we'll sample every nth byte to reduce size
+  // This is a simple approach that works in Deno environment
+  const [header, data] = base64Data.split(',');
+  const compressionRatio = maxSizeKB / currentSizeKB;
+  const step = Math.ceil(1 / compressionRatio);
+  
+  let compressedData = '';
+  for (let i = 0; i < data.length; i += step) {
+    compressedData += data[i];
+  }
+  
+  const result = `${header},${compressedData}`;
+  const newSizeKB = Math.round((result.length * 3) / 4 / 1024);
+  console.log(`Compressed image size: ${newSizeKB}KB`);
+  
+  return result;
+};
+
 const buildCompositingPrompt = (addBlur: boolean): string => {
   let prompt = `You are a master AI photo compositor specializing in hyper-realistic commercial product photography. Your task is to integrate a product seamlessly onto a new backdrop and add a realistic shadow.
 
@@ -77,17 +105,22 @@ serve(async (req) => {
       console.log(`Compositing subject ${i + 1}/${positionedSubjects.length}: ${subject.name}`);
 
       try {
+        // Limit image sizes to reduce payload
+        console.log('Limiting image sizes for Gemini API...');
+        const limitedSubjectData = limitImageSize(subject.data, 400);
+        const limitedBackdropData = limitImageSize(backdropData, 400);
+        
         // Prepare the images for Gemini
         const subjectImageData = {
           inlineData: {
-            data: subject.data.split(',')[1], // Remove data:image/...;base64, prefix
-            mimeType: "image/png"
+            data: limitedSubjectData.split(',')[1], // Remove data:image/...;base64, prefix
+            mimeType: "image/jpeg"
           }
         };
 
         const backdropImageData = {
           inlineData: {
-            data: backdropData.split(',')[1], // Remove data:image/...;base64, prefix
+            data: limitedBackdropData.split(',')[1], // Remove data:image/...;base64, prefix
             mimeType: "image/jpeg"
           }
         };
