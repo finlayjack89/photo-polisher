@@ -249,10 +249,14 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentProcessingStep('Positioning subjects...');
 
     try {
+      // Update processed images with backdrop and placement data
+      setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
+
       // Get backdrop dimensions
       const backdropImg = new Image();
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         backdropImg.onload = resolve;
+        backdropImg.onerror = reject;
         backdropImg.src = backdrop;
       });
 
@@ -294,7 +298,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       
       setTimeout(() => {
         setCurrentStep('finalizing');
-        startFinalization(compositeResult.results);
+        startFinalization(compositeResult.results, backdrop, placement);
       }, 500);
 
     } catch (error) {
@@ -309,22 +313,22 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     }
   };
 
-  const startFinalization = async (compositedImages: Array<{ name: string; compositedData: string; }>) => {
+  const startFinalization = async (compositedImages: Array<{ name: string; compositedData: string; }>, backdrop: string, placement: SubjectPlacement) => {
     setCurrentProcessingStep('Final touches and color grading...');
     setProgress(0);
 
     try {
       console.log('Starting finalization with:', { 
         compositedImagesCount: compositedImages.length,
-        hasBackdrop: !!processedImages.backdrop,
-        hasPlacement: !!processedImages.placement 
+        hasBackdrop: !!backdrop,
+        hasPlacement: !!placement 
       });
 
       // Validate required data
-      if (!processedImages.backdrop) {
+      if (!backdrop) {
         throw new Error('No backdrop found');
       }
-      if (!processedImages.placement) {
+      if (!placement) {
         throw new Error('No placement data found');
       }
 
@@ -339,7 +343,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         await new Promise((resolve, reject) => {
           backdropImg.onload = resolve;
           backdropImg.onerror = reject;
-          backdropImg.src = processedImages.backdrop;
+          backdropImg.src = backdrop;
         });
 
         console.log('Backdrop loaded, positioning subject...');
@@ -347,7 +351,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           subject.backgroundRemovedData,
           backdropImg.naturalWidth,
           backdropImg.naturalHeight,
-          processedImages.placement
+          placement
         );
         
         guidanceImages.push({
