@@ -282,6 +282,12 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
 
   const handleContinue = () => {
     if (backdrop) {
+      console.log('BackdropPositioning - Final placement values:', {
+        x: placement.x,
+        y: placement.y,
+        scale: placement.scale,
+        scalePercentage: Math.round(placement.scale * 100) + '%'
+      });
       onPositioningComplete(backdrop, placement, addBlur);
     }
   };

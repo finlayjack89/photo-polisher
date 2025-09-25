@@ -119,6 +119,16 @@ export const positionSubjectOnCanvas = (
         const dx = (placement.x * targetWidth) - (scaledWidth / 2);
         const dy = (placement.y * targetHeight) - (scaledHeight / 2);
 
+        console.log('positionSubjectOnCanvas - Positioning details:', {
+          targetDimensions: `${targetWidth}x${targetHeight}`,
+          subjectDimensions: `${subjectImage.naturalWidth}x${subjectImage.naturalHeight}`,
+          placement: placement,
+          calculatedSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+          calculatedPosition: `${Math.round(dx)}, ${Math.round(dy)}`,
+          scaleAsPixels: Math.round(scaledWidth),
+          scaleAsPercentage: Math.round(placement.scale * 100) + '%'
+        });
+
         // Draw subject on transparent canvas
         ctx.drawImage(subjectImage, dx, dy, scaledWidth, scaledHeight);
         resolve(canvas.toDataURL('image/png'));
