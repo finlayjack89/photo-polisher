@@ -39,9 +39,9 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            version: "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc972f6b04b84f6a74747a89a", // Real-ESRGAN upscaler
+            version: "f121d640bd9edc26ac3e3a4a8e5b49a6b1a29893de7c02c98c6b1b645ad95bd9", // Updated Real-ESRGAN model version
             input: {
-              image: `data:image/png;base64,${file.data}`,
+              image: file.data.startsWith('data:') ? file.data : `data:image/png;base64,${file.data}`,
               scale: 2
             }
           }),
@@ -83,7 +83,18 @@ serve(async (req) => {
             // Fetch the upscaled image
             const imageResponse = await fetch(statusResult.output);
             const imageBuffer = await imageResponse.arrayBuffer();
-            const base64Data = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+            
+            // Convert ArrayBuffer to base64 more efficiently to avoid stack overflow
+            const uint8Array = new Uint8Array(imageBuffer);
+            let binaryString = '';
+            const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+            
+            for (let i = 0; i < uint8Array.length; i += chunkSize) {
+              const chunk = uint8Array.subarray(i, i + chunkSize);
+              binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+            }
+            
+            const base64Data = btoa(binaryString);
             
             upscaledFiles.push({
               originalName: file.name,

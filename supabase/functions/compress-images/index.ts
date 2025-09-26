@@ -59,7 +59,18 @@ serve(async (req) => {
         // Download the compressed image
         const compressedResponse = await fetch(result.output.url);
         const compressedBuffer = await compressedResponse.arrayBuffer();
-        const compressedBase64 = btoa(String.fromCharCode(...new Uint8Array(compressedBuffer)));
+        
+        // Convert ArrayBuffer to base64 more efficiently to avoid stack overflow
+        const uint8Array = new Uint8Array(compressedBuffer);
+        let binaryString = '';
+        const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+        
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.subarray(i, i + chunkSize);
+          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        
+        const compressedBase64 = btoa(binaryString);
         
         compressedFiles.push({
           originalName: file.originalName || file.name,

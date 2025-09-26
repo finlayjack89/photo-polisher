@@ -38,27 +38,49 @@ export const GalleryPreview = ({ processedImages, onBack, onRetry }: GalleryPrev
       // Prepare data for upscaling
       const upscaleData = processedImages.map(img => ({
         name: img.name,
-        data: img.processedData,
+        data: img.processedData.replace(/^data:image\/[a-z]+;base64,/, ''), // Remove data URL prefix
         size: img.size,
         type: 'image/png'
       }));
 
-      // Call upscale function
-      const { data: upscaleResult, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
-        body: { files: upscaleData }
-      });
+      // Process images in batches of 2 to avoid CPU timeouts
+      const BATCH_SIZE = 2;
+      const allUpscaledFiles: any[] = [];
+      
+      // Upscale in batches
+      for (let i = 0; i < upscaleData.length; i += BATCH_SIZE) {
+        const batch = upscaleData.slice(i, i + BATCH_SIZE);
+        
+        const { data: upscaleResult, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
+          body: { files: batch }
+        });
 
-      if (upscaleError) throw upscaleError;
+        if (upscaleError) throw upscaleError;
+        
+        if (upscaleResult?.upscaledFiles) {
+          allUpscaledFiles.push(...upscaleResult.upscaledFiles);
+        }
+      }
 
-      // Then compress the upscaled images
-      const { data: compressResult, error: compressError } = await supabase.functions.invoke('compress-images', {
-        body: { files: upscaleResult.upscaledFiles }
-      });
+      // Compress the upscaled images in batches
+      const allCompressedFiles: any[] = [];
+      
+      for (let i = 0; i < allUpscaledFiles.length; i += BATCH_SIZE) {
+        const batch = allUpscaledFiles.slice(i, i + BATCH_SIZE);
+        
+        const { data: compressResult, error: compressError } = await supabase.functions.invoke('compress-images', {
+          body: { files: batch }
+        });
 
-      if (compressError) throw compressError;
+        if (compressError) throw compressError;
+        
+        if (compressResult?.compressedFiles) {
+          allCompressedFiles.push(...compressResult.compressedFiles);
+        }
+      }
 
       // Update displayed images with upscaled and compressed versions
-      const enhanced = compressResult.compressedFiles.map((file: any) => ({
+      const enhanced = allCompressedFiles.map((file: any) => ({
         name: file.originalName,
         originalData: processedImages.find(img => img.name === file.originalName)?.originalData || '',
         processedData: `data:image/png;base64,${file.data}`,
