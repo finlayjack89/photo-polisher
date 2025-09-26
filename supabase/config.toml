@@ -10,6 +10,9 @@ max_rows = 1000
 [functions.process-images]
 verify_jwt = false
 
+[functions.process-image]
+verify_jwt = false
+
 [functions.analyze-images]
 verify_jwt = false
 
