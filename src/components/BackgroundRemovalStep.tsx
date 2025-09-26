@@ -60,18 +60,34 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       setProgress(20);
       setCurrentProcessingStep('Removing backgrounds with AI...');
 
-      // Call the background removal edge function
-      const { data: result, error } = await supabase.functions.invoke('remove-backgrounds', {
-        body: { images: imageData }
-      });
+      // Process images in batches of 3 to avoid CPU timeouts
+      const BATCH_SIZE = 3;
+      const allResults: ProcessedImage[] = [];
+      
+      for (let i = 0; i < imageData.length; i += BATCH_SIZE) {
+        const batch = imageData.slice(i, i + BATCH_SIZE);
+        const batchProgress = ((i / imageData.length) * 80) + 20; // 20-100% range
+        
+        setCurrentProcessingStep(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(imageData.length / BATCH_SIZE)}...`);
+        setProgress(batchProgress);
 
-      if (error) {
-        throw new Error(error.message);
+        const { data: result, error } = await supabase.functions.invoke('remove-backgrounds', {
+          body: { images: batch }
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (result?.results) {
+          allResults.push(...result.results);
+        }
       }
+
       setProgress(100);
       setCurrentProcessingStep('Complete!');
       
-      setProcessedImages(result.results);
+      setProcessedImages(allResults);
       
     } catch (error) {
       console.error('Error removing backgrounds:', error);
