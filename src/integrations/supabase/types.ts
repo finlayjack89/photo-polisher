@@ -14,16 +14,195 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      processing_cache: {
+        Row: {
+          cache_key: string
+          created_at: string | null
+          expires_at: string | null
+          hit_count: number | null
+          id: string
+          last_accessed: string | null
+          operation: Database["public"]["Enums"]["operation_type"]
+          options_hash: string
+          original_url: string
+          processed_url: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string | null
+          expires_at?: string | null
+          hit_count?: number | null
+          id?: string
+          last_accessed?: string | null
+          operation: Database["public"]["Enums"]["operation_type"]
+          options_hash: string
+          original_url: string
+          processed_url: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string | null
+          expires_at?: string | null
+          hit_count?: number | null
+          id?: string
+          last_accessed?: string | null
+          operation?: Database["public"]["Enums"]["operation_type"]
+          options_hash?: string
+          original_url?: string
+          processed_url?: string
+        }
+        Relationships: []
+      }
+      processing_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          operation: Database["public"]["Enums"]["operation_type"]
+          original_image_url: string
+          processed_image_url: string | null
+          processing_options: Json | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["processing_status"] | null
+          thumbnail_url: string | null
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          operation: Database["public"]["Enums"]["operation_type"]
+          original_image_url: string
+          processed_image_url?: string | null
+          processing_options?: Json | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["processing_status"] | null
+          thumbnail_url?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          operation?: Database["public"]["Enums"]["operation_type"]
+          original_image_url?: string
+          processed_image_url?: string | null
+          processing_options?: Json | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["processing_status"] | null
+          thumbnail_url?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      system_health: {
+        Row: {
+          id: string
+          metadata: Json | null
+          metric_name: string
+          metric_value: number
+          recorded_at: string | null
+        }
+        Insert: {
+          id?: string
+          metadata?: Json | null
+          metric_name: string
+          metric_value: number
+          recorded_at?: string | null
+        }
+        Update: {
+          id?: string
+          metadata?: Json | null
+          metric_name?: string
+          metric_value?: number
+          recorded_at?: string | null
+        }
+        Relationships: []
+      }
+      user_quotas: {
+        Row: {
+          created_at: string | null
+          current_usage: number | null
+          id: string
+          monthly_limit: number | null
+          reset_date: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_usage?: number | null
+          id?: string
+          monthly_limit?: number | null
+          reset_date?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_usage?: number | null
+          id?: string
+          monthly_limit?: number | null
+          reset_date?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_data: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          cache_deleted: number
+          jobs_deleted: number
+        }[]
+      }
+      get_cache_entry: {
+        Args: {
+          p_operation: Database["public"]["Enums"]["operation_type"]
+          p_options_hash: string
+          p_original_url: string
+        }
+        Returns: {
+          hit_count: number
+          processed_url: string
+        }[]
+      }
+      reset_monthly_quotas: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      update_user_quota_usage: {
+        Args: { increment?: number; user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      operation_type:
+        | "upscale"
+        | "compress"
+        | "thumbnail"
+        | "format_convert"
+        | "batch"
+      processing_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +329,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      operation_type: [
+        "upscale",
+        "compress",
+        "thumbnail",
+        "format_convert",
+        "batch",
+      ],
+      processing_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+    },
   },
 } as const
