@@ -13,6 +13,15 @@ verify_jwt = false
 [functions.process-image]
 verify_jwt = false
 
+[functions.batch-process-images]
+verify_jwt = true
+
+[functions.processing-queue]
+verify_jwt = false
+
+[functions.cleanup-scheduler]
+verify_jwt = false
+
 [functions.analyze-images]
 verify_jwt = false
 
