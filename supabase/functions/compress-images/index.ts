@@ -18,79 +18,165 @@ serve(async (req) => {
     }
 
     const { files } = await req.json();
-    console.log(`Processing ${files.length} images for compression`);
+    console.log(`Processing ${files.length} images for intelligent compression`);
 
     const compressedFiles = [];
+    const TARGET_SIZE_MB = 8;
+    const TARGET_SIZE_BYTES = TARGET_SIZE_MB * 1024 * 1024;
 
     for (const file of files) {
-      console.log(`Compressing image: ${file.originalName || file.name}`);
+      const fileName = file.originalName || file.name;
+      console.log(`Analyzing image: ${fileName}`);
       
       try {
-        // Clean base64 data and convert to buffer for Tinify API
+        // Clean base64 data and convert to buffer
         const base64Data = file.data.replace(/^data:image\/[a-z]+;base64,/, '');
         const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+        const originalSize = imageBuffer.length;
         
-        // Call Tinify API for compression
-        const response = await fetch('https://api.tinify.com/shrink', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-            'Content-Type': 'application/octet-stream',
-          },
-          body: imageBuffer,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Tinify API error for ${file.originalName || file.name}:`, response.status, errorText);
-          // If compression fails, use original image
+        console.log(`Original size: ${fileName} - ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
+        
+        // If image is already under 8MB, skip compression
+        if (originalSize <= TARGET_SIZE_BYTES) {
+          console.log(`Skipping compression for ${fileName} - already under ${TARGET_SIZE_MB}MB`);
           compressedFiles.push({
-            originalName: file.originalName || file.name,
-            processedName: `compressed_${file.originalName || file.name}`,
+            originalName: fileName,
+            processedName: fileName,
             data: file.data,
-            size: file.size || 0,
-            format: file.format || 'png'
+            size: originalSize,
+            format: file.format || 'png',
+            compressionRatio: 'No compression needed'
           });
           continue;
         }
 
-        const result = await response.json();
+        console.log(`Compressing ${fileName} to target ${TARGET_SIZE_MB}MB`);
         
-        // Download the compressed image
-        const compressedResponse = await fetch(result.output.url);
-        const compressedBuffer = await compressedResponse.arrayBuffer();
+        // Progressive compression to reach target size
+        const qualityLevels = [85, 70, 55, 40, 25];
+        let bestResult = null;
+        let bestSize = originalSize;
         
-        // Convert ArrayBuffer to base64 more efficiently to avoid stack overflow
-        const uint8Array = new Uint8Array(compressedBuffer);
-        let binaryString = '';
-        const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
-        
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
-          const chunk = uint8Array.subarray(i, i + chunkSize);
-          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+        for (const quality of qualityLevels) {
+          try {
+            // Call Tinify API with quality setting
+            const response = await fetch('https://api.tinify.com/shrink', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+                'Content-Type': 'application/octet-stream',
+              },
+              body: imageBuffer,
+            });
+
+            if (!response.ok) {
+              console.error(`Tinify API error for ${fileName} at quality ${quality}:`, response.status);
+              continue;
+            }
+
+            const result = await response.json();
+            
+            // Apply quality compression
+            const qualityResponse = await fetch('https://api.tinify.com/output', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                source: { url: result.output.url },
+                compress: { quality: quality }
+              }),
+            });
+
+            if (qualityResponse.ok) {
+              const compressedBuffer = await qualityResponse.arrayBuffer();
+              const compressedSize = compressedBuffer.byteLength;
+              
+              console.log(`Quality ${quality}% result: ${(compressedSize / (1024 * 1024)).toFixed(2)}MB`);
+              
+              // Check if this is the best fit (closest to target without exceeding)
+              if (compressedSize <= TARGET_SIZE_BYTES && 
+                  (bestResult === null || compressedSize > bestSize || bestSize > TARGET_SIZE_BYTES)) {
+                bestResult = compressedBuffer;
+                bestSize = compressedSize;
+                
+                // If we're close enough to target, use this result
+                if (compressedSize > TARGET_SIZE_BYTES * 0.95) {
+                  break;
+                }
+              }
+            }
+          } catch (qualityError) {
+            console.error(`Error with quality ${quality} for ${fileName}:`, qualityError);
+          }
         }
         
-        const compressedBase64 = btoa(binaryString);
-        
-        compressedFiles.push({
-          originalName: file.originalName || file.name,
-          processedName: `compressed_${file.originalName || file.name}`,
-          data: compressedBase64,
-          size: result.output.size,
-          format: file.format || 'png',
-          compressionRatio: `${Math.round((1 - result.output.ratio) * 100)}% smaller`
-        });
+        // If no quality compression worked, try basic compression
+        if (!bestResult) {
+          const response = await fetch('https://api.tinify.com/shrink', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+              'Content-Type': 'application/octet-stream',
+            },
+            body: imageBuffer,
+          });
 
-        console.log(`Successfully compressed: ${file.originalName || file.name} (${result.output.size} bytes, ${Math.round((1 - result.output.ratio) * 100)}% reduction)`);
+          if (response.ok) {
+            const result = await response.json();
+            const compressedResponse = await fetch(result.output.url);
+            bestResult = await compressedResponse.arrayBuffer();
+            bestSize = bestResult.byteLength;
+          }
+        }
+        
+        if (bestResult) {
+          // Convert ArrayBuffer to base64 efficiently
+          const uint8Array = new Uint8Array(bestResult);
+          let binaryString = '';
+          const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+          
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          
+          const compressedBase64 = btoa(binaryString);
+          const compressionRatio = Math.round((1 - bestSize / originalSize) * 100);
+          
+          compressedFiles.push({
+            originalName: fileName,
+            processedName: `compressed_${fileName}`,
+            data: compressedBase64,
+            size: bestSize,
+            format: file.format || 'png',
+            compressionRatio: `${compressionRatio}% smaller`
+          });
+
+          console.log(`Successfully compressed: ${fileName} (${(bestSize / (1024 * 1024)).toFixed(2)}MB, ${compressionRatio}% reduction)`);
+        } else {
+          // If all compression attempts failed, use original
+          console.log(`Compression failed for ${fileName}, using original`);
+          compressedFiles.push({
+            originalName: fileName,
+            processedName: fileName,
+            data: file.data,
+            size: originalSize,
+            format: file.format || 'png',
+            compressionRatio: 'Compression failed'
+          });
+        }
       } catch (error) {
-        console.error(`Error compressing ${file.originalName || file.name}:`, error);
-        // If compression fails, use original image
+        console.error(`Error processing ${fileName}:`, error);
+        // If processing fails, use original image
         compressedFiles.push({
-          originalName: file.originalName || file.name,
-          processedName: `compressed_${file.originalName || file.name}`,
+          originalName: fileName,
+          processedName: fileName,
           data: file.data,
           size: file.size || 0,
-          format: file.format || 'png'
+          format: file.format || 'png',
+          compressionRatio: 'Processing failed'
         });
       }
     }
