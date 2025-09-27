@@ -51,98 +51,105 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`Compressing ${fileName} using gradual quality reduction`);
+        console.log(`Compressing ${fileName} using gradual quality reduction to reach ~${TARGET_SIZE_MB}MB`);
         
-        // Use gradual quality reduction approach - start at 98% and reduce by 2% each iteration
         let bestResult = null;
         let bestSize = originalSize;
-        let currentQuality = 98;
-        let attempts = 0;
-        const maxAttempts = 25; // Prevents infinite loops (98% down to 48%)
+        let currentQuality = 95; // Start with high quality
+        let previousResult = null;
+        let previousSize = originalSize;
+        
+        // First, try basic compression to see if that's enough
+        try {
+          const initialResponse = await fetch('https://api.tinify.com/shrink', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+              'Content-Type': 'application/octet-stream',
+            },
+            body: imageBuffer,
+          });
 
-        while (bestSize > TARGET_SIZE_BYTES && currentQuality >= 50 && attempts < maxAttempts) {
-          attempts++;
-          console.log(`Attempt ${attempts}: Trying quality ${currentQuality}%`);
-          
-          try {
-            const response = await fetch('https://api.tinify.com/shrink', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-                'Content-Type': 'application/octet-stream',
-              },
-              body: imageBuffer,
-            });
-
-            if (response.ok) {
-              const result = await response.json();
+          if (initialResponse.ok) {
+            const initialResult = await initialResponse.json();
+            const initialCompressed = await fetch(initialResult.output.url);
+            const initialBuffer = await initialCompressed.arrayBuffer();
+            const initialSize = initialBuffer.byteLength;
+            
+            console.log(`Initial compression: ${(initialSize / (1024 * 1024)).toFixed(2)}MB`);
+            
+            // If basic compression gets us under target, use it
+            if (initialSize <= TARGET_SIZE_BYTES) {
+              bestResult = initialBuffer;
+              bestSize = initialSize;
+              console.log(`Basic compression sufficient for ${fileName}`);
+            } else {
+              // Need quality reduction - start iterative process
+              console.log(`Need quality reduction for ${fileName}, starting at ${currentQuality}%`);
               
-              // Apply quality settings
-              const qualityResponse = await fetch(result.output.url, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  convert: {
-                    type: 'image/jpeg',
-                    quality: Math.round(currentQuality)
+              while (currentQuality >= 70 && bestSize > TARGET_SIZE_BYTES) {
+                try {
+                  const qualityResponse = await fetch(initialResult.output.url, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      convert: {
+                        type: 'image/jpeg',
+                        quality: Math.round(currentQuality)
+                      }
+                    }),
+                  });
+                  
+                  if (qualityResponse.ok) {
+                    const qualityResult = await qualityResponse.json();
+                    const compressedResponse = await fetch(qualityResult.output.url);
+                    const compressedBuffer = await compressedResponse.arrayBuffer();
+                    const compressedSize = compressedBuffer.byteLength;
+                    
+                    console.log(`Quality ${currentQuality}%: ${(compressedSize / (1024 * 1024)).toFixed(2)}MB`);
+                    
+                    // If this quality level gets us just under the target, use it
+                    if (compressedSize <= TARGET_SIZE_BYTES) {
+                      // Check if previous quality (higher) was closer to target but still under
+                      if (previousResult && previousSize <= TARGET_SIZE_BYTES && 
+                          (TARGET_SIZE_BYTES - previousSize) < (TARGET_SIZE_BYTES - compressedSize)) {
+                        bestResult = previousResult;
+                        bestSize = previousSize;
+                        console.log(`Using previous quality level for optimal size: ${(previousSize / (1024 * 1024)).toFixed(2)}MB`);
+                      } else {
+                        bestResult = compressedBuffer;
+                        bestSize = compressedSize;
+                        console.log(`Target achieved at quality ${currentQuality}%`);
+                      }
+                      break;
+                    }
+                    
+                    // Store this result as previous for next iteration
+                    previousResult = compressedBuffer;
+                    previousSize = compressedSize;
                   }
-                }),
-              });
-              
-              if (qualityResponse.ok) {
-                const qualityResult = await qualityResponse.json();
-                const compressedResponse = await fetch(qualityResult.output.url);
-                const compressedBuffer = await compressedResponse.arrayBuffer();
-                const compressedSize = compressedBuffer.byteLength;
-                
-                console.log(`Quality ${currentQuality}%: ${(compressedSize / (1024 * 1024)).toFixed(2)}MB`);
-                
-                // Update best result
-                bestResult = compressedBuffer;
-                bestSize = compressedSize;
-                
-                // If we've reached the target size, break early
-                if (compressedSize <= TARGET_SIZE_BYTES) {
-                  console.log(`Target size reached at quality ${currentQuality}%`);
+                  
+                  // Reduce quality by 3% for next iteration
+                  currentQuality -= 3;
+                } catch (error) {
+                  console.error(`Error at quality ${currentQuality}%:`, error);
                   break;
                 }
               }
+              
+              // If we still don't have a result under target, use the last attempt
+              if (bestSize > TARGET_SIZE_BYTES && previousResult) {
+                bestResult = previousResult;
+                bestSize = previousSize;
+                console.log(`Using best available compression: ${(bestSize / (1024 * 1024)).toFixed(2)}MB`);
+              }
             }
-            
-            // Reduce quality by 2% for next iteration
-            currentQuality -= 2;
-          } catch (error) {
-            console.error(`Error at quality ${currentQuality}%:`, error);
-            break;
           }
-        }
-        
-        // If no compression worked or we couldn't get under target size, try basic Tinify compression
-        if (!bestResult || bestSize > TARGET_SIZE_BYTES) {
-          console.log(`Fallback: Using basic Tinify compression for ${fileName}`);
-          try {
-            const response = await fetch('https://api.tinify.com/shrink', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-                'Content-Type': 'application/octet-stream',
-              },
-              body: imageBuffer,
-            });
-            
-            if (response.ok) {
-              const result = await response.json();
-              const compressedResponse = await fetch(result.output.url);
-              bestResult = await compressedResponse.arrayBuffer();
-              bestSize = bestResult.byteLength;
-              console.log(`Basic compression result: ${(bestSize / (1024 * 1024)).toFixed(2)}MB`);
-            }
-          } catch (error) {
-            console.error(`Fallback compression failed:`, error);
-          }
+        } catch (error) {
+          console.error(`Initial compression failed for ${fileName}:`, error);
         }
         
         if (bestResult) {
