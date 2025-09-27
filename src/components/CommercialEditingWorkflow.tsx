@@ -246,66 +246,104 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const startCompositing = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Positioning subjects...');
+    setCurrentProcessingStep('Creating processing job...');
 
     try {
-      // Update processed images with backdrop and placement data
-      setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
-
-      // Get backdrop dimensions
-      const backdropImg = new Image();
-      await new Promise((resolve, reject) => {
-        backdropImg.onload = resolve;
-        backdropImg.onerror = reject;
-        backdropImg.src = backdrop;
-      });
-
-      // Position all subjects on canvases matching backdrop dimensions
-      const positionedSubjects = [];
-      for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
-        const subject = processedImages.backgroundRemoved[i];
-        setProgress((i / processedImages.backgroundRemoved.length) * 30);
-        
-        const positionedData = await positionSubjectOnCanvas(
-          subject.backgroundRemovedData,
-          backdropImg.naturalWidth,
-          backdropImg.naturalHeight,
-          placement
-        );
-        
-        positionedSubjects.push({
-          name: subject.name,
-          data: positionedData
-        });
-      }
-
-      setProgress(40);
-      setCurrentProcessingStep('AI compositing with shadows...');
-
-      // Composite images with AI
-      const { data: compositeResult, error } = await supabase.functions.invoke('composite-images', {
+      // Create processing job
+      const { data: jobResult, error: jobError } = await supabase.functions.invoke('create-processing-job', {
         body: {
-          backdropData: backdrop,
-          positionedSubjects,
+          backgroundRemovedImages: processedImages.backgroundRemoved,
+          backdrop,
+          placement,
           addBlur
         }
       });
 
-      if (error) throw error;
+      if (jobError || !jobResult?.job_id) {
+        throw new Error(jobError?.message || 'Failed to create processing job');
+      }
 
-      setProgress(80);
-      setProcessedImages(prev => ({ ...prev, composited: compositeResult.results }));
-      
+      const jobId = jobResult.job_id;
+      console.log('Created processing job:', jobId);
+
+      setProgress(20);
+      setCurrentProcessingStep('Job created, processing images...');
+
+      // Subscribe to job updates
+      const channel = supabase
+        .channel('job_updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'processing_jobs',
+            filter: `id=eq.${jobId}`
+          },
+          async (payload) => {
+            const job = payload.new as any;
+            console.log('Job update received:', job.status);
+
+            if (job.status === 'processing') {
+              setProgress(60);
+              setCurrentProcessingStep('AI processing in progress...');
+            } else if (job.status === 'complete') {
+              setProgress(100);
+              setCurrentProcessingStep('Processing complete!');
+              
+              // Update processed images with results
+              setProcessedImages(prev => ({ 
+                ...prev, 
+                backdrop, 
+                placement, 
+                addBlur,
+                finalized: job.results 
+              }));
+
+              toast({
+                title: "Processing Complete",
+                description: `Successfully created ${job.results.length} professional product images`
+              });
+
+              setTimeout(() => {
+                setIsProcessing(false);
+                setCurrentStep('complete');
+                channel.unsubscribe();
+              }, 1000);
+            } else if (job.status === 'failed') {
+              console.error('Job failed:', job.results);
+              toast({
+                title: "Processing Failed",
+                description: "Failed to process images. Please try again.",
+                variant: "destructive"
+              });
+              setIsProcessing(false);
+              setCurrentStep('positioning');
+              channel.unsubscribe();
+            }
+          }
+        )
+        .subscribe();
+
+      // Set a timeout for the job
       setTimeout(() => {
-        setCurrentStep('finalizing');
-        startFinalization(compositeResult.results, backdrop, placement);
-      }, 500);
+        if (currentStep === 'compositing') {
+          channel.unsubscribe();
+          toast({
+            title: "Processing Timeout",
+            description: "Processing is taking longer than expected. Please try again.",
+            variant: "destructive"
+          });
+          setIsProcessing(false);
+          setCurrentStep('positioning');
+        }
+      }, 5 * 60 * 1000); // 5 minute timeout
 
     } catch (error) {
-      console.error('Error in compositing:', error);
+      console.error('Error starting processing job:', error);
       toast({
         title: "Error",
-        description: "Failed to composite images. Please try again.",
+        description: "Failed to start processing. Please try again.",
         variant: "destructive"
       });
       setIsProcessing(false);

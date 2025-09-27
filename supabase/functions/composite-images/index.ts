@@ -147,8 +147,13 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use Gemini 2.5 Flash Image Preview - supports image generation
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash-latest",
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: "image/png",
+      },
+    });
 
     const prompt = buildCompositingPrompt(addBlur);
     const results = [];

@@ -47,8 +47,13 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use the correct Gemini 2.5 Flash Image Preview model for image editing
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash-latest",
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: "image/png",
+      },
+    });
 
     const prompt = buildFinalizationPrompt();
     const results = [];
