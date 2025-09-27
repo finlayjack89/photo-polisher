@@ -270,7 +270,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       setProgress(20);
       setCurrentProcessingStep('Job created, processing images...');
 
-      // Subscribe to job updates
+      // Subscribe to job updates for real-time progress
       const channel = supabase
         .channel('job_updates')
         .on(
@@ -283,14 +283,30 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           },
           async (payload) => {
             const job = payload.new as any;
-            console.log('Job update received:', job.status);
+            console.log('Job update received:', job.status, job.metadata);
 
             if (job.status === 'processing') {
-              setProgress(60);
-              setCurrentProcessingStep('AI processing in progress...');
-            } else if (job.status === 'complete') {
+              // Calculate progress based on processed count
+              const processedCount = job.metadata?.processedCount || 0;
+              const totalCount = job.metadata?.totalCount || processedImages.backgroundRemoved.length;
+              const progressPercent = 20 + Math.round((processedCount / totalCount) * 70); // 20-90%
+              
+              setProgress(progressPercent);
+              setCurrentProcessingStep(`Processing ${processedCount}/${totalCount} images...`);
+            } else if (job.status === 'completed') {
               setProgress(100);
               setCurrentProcessingStep('Processing complete!');
+              
+              // Parse the results from processed_image_url field
+              let results;
+              try {
+                results = typeof job.processed_image_url === 'string' 
+                  ? JSON.parse(job.processed_image_url)
+                  : job.processed_image_url;
+              } catch (e) {
+                console.error('Failed to parse job results:', e);
+                results = [];
+              }
               
               // Update processed images with results
               setProcessedImages(prev => ({ 
@@ -298,12 +314,12 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
                 backdrop, 
                 placement, 
                 addBlur,
-                finalized: job.results 
+                finalized: results
               }));
 
               toast({
                 title: "Processing Complete",
-                description: `Successfully created ${job.results.length} professional product images`
+                description: `Successfully created ${results.length} professional product images`
               });
 
               setTimeout(() => {
@@ -312,10 +328,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
                 channel.unsubscribe();
               }, 1000);
             } else if (job.status === 'failed') {
-              console.error('Job failed:', job.results);
+              console.error('Job failed:', job.error_message);
               toast({
-                title: "Processing Failed",
-                description: "Failed to process images. Please try again.",
+                title: "Processing Failed", 
+                description: job.error_message || "Failed to process images. Please try again.",
                 variant: "destructive"
               });
               setIsProcessing(false);
