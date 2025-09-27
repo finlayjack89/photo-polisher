@@ -233,6 +233,24 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
                         PNG with Transparency
                       </Badge>
                     </div>
+                    
+                    {/* Download Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = image.backgroundRemovedData;
+                        link.download = `background_removed_${image.name}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="w-full mt-2"
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Download
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

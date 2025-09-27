@@ -190,8 +190,13 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
       const enhanced = allCompressedFiles.map((file: any) => {
         const originalImg = processedImages.find(img => img.name === file.originalName);
         const originalSize = originalImg?.size || 0;
-        const compressionSavings = originalSize > 0 ? Math.round((1 - file.size / originalSize) * 100) : 0;
-        const qualityRetained = 100 - compressionSavings; // Approximate quality retention
+        
+        // For upscaling, calculate the scale factor (should be 2x max = 200% total size)
+        const scaleFactor = originalSize > 0 ? file.size / originalSize : 1;
+        const scalePercentage = Math.round(scaleFactor * 100);
+        
+        // Quality should show scale factor capped at 200% (2x upscale max)
+        const qualityPercentage = Math.min(scalePercentage, 200);
         
         return {
           name: file.originalName,
@@ -199,8 +204,8 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
           processedData: `data:image/png;base64,${file.data}`,
           size: file.size,
           originalSize: originalSize,
-          compressionRatio: file.compressionRatio || `${compressionSavings}% smaller`,
-          qualityPercentage: Math.max(qualityRetained, 85) // Ensure minimum 85% quality display
+          compressionRatio: `${Math.round((scaleFactor - 1) * 100)}% larger`,
+          qualityPercentage: qualityPercentage
         };
       });
 

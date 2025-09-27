@@ -2,11 +2,12 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, ArrowRight, Image as ImageIcon } from "lucide-react";
+import { CheckCircle, ArrowRight, Image as ImageIcon, Download, ArrowLeft } from "lucide-react";
 
 interface ImagePreviewStepProps {
   files: File[];
   onContinue: () => void;
+  onBack: () => void;
   wasCompressed?: boolean;
   compressionData?: {
     originalSize: number;
@@ -19,6 +20,7 @@ interface ImagePreviewStepProps {
 export const ImagePreviewStep: React.FC<ImagePreviewStepProps> = ({
   files,
   onContinue,
+  onBack,
   wasCompressed = false,
   compressionData = []
 }) => {
@@ -123,12 +125,40 @@ export const ImagePreviewStep: React.FC<ImagePreviewStepProps> = ({
                     </Badge>
                   )}
                 </div>
+                
+                {/* Download Button */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const url = URL.createObjectURL(file);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = file.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="w-full mt-2"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download
+                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        <div className="text-center">
+        <div className="flex justify-between">
+          <Button 
+            variant="outline" 
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <Button onClick={onContinue} size="lg">
             Continue to Configuration
             <ArrowRight className="h-4 w-4 ml-2" />

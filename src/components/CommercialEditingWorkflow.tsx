@@ -502,6 +502,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       <ImagePreviewStep
         files={currentFiles}
         onContinue={() => setCurrentStep('background-removal')}
+        onBack={() => setCurrentStep('compression')}
         wasCompressed={needsCompression && currentFiles !== files}
       />
     );

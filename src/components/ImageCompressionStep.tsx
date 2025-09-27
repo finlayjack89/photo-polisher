@@ -116,6 +116,29 @@ export const ImageCompressionStep: React.FC<ImageCompressionStepProps> = ({
               </Button>
             </div>
 
+            {/* Download Original Images Button */}
+            <div className="text-center">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  files.forEach((file) => {
+                    const url = URL.createObjectURL(file);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = file.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  });
+                }}
+                className="text-xs"
+              >
+                Download Original Images
+              </Button>
+            </div>
+
             <p className="text-xs text-muted-foreground text-center">
               Optimization includes resizing to 1024px max dimension and compression for Edge Function compatibility
             </p>

@@ -34,10 +34,17 @@ const buildShadowPrompt = (): string => {
 - Only add the shadow beneath and around the subject's base
 - Maintain all existing backdrop elements and subject placement
 
+**4. Quality Preservation:**
+- CRITICAL: Preserve maximum image quality and detail - output must retain 95%+ of original quality
+- Do NOT compress, blur, or reduce image resolution
+- Maintain all fine textures, patterns, and surface details
+- Output in highest available quality with no quality degradation
+
 **Output Requirements:**
 - Return the complete image with subject preserved and realistic shadow added
 - Maintain exact dimensions and composition
 - Professional studio lighting quality
+- Maximum quality preservation with no compression artifacts
 - Your response MUST ONLY contain the final image data. No text.`;
 };
 
@@ -67,10 +74,18 @@ const buildReflectionPrompt = (): string => {
 - Only enhance the environment around the subject (lighting, reflections, color grade)
 - Maintain professional product photography standards
 
+**5. Quality Preservation:**
+- CRITICAL: Preserve maximum image quality and detail - output must retain 95%+ of original quality
+- Do NOT compress, blur, or reduce image resolution or sharpness
+- Maintain all fine textures, patterns, leather grain, and surface details exactly as input
+- Output in highest available quality with no compression or quality loss
+- Preserve original image sharpness and clarity
+
 **Output Requirements:**
 - Return the final polished image with all enhancements applied
 - Professional commercial photography quality
 - Perfect integration of all elements
+- Maximum quality preservation with zero quality degradation
 - Your response MUST ONLY contain the final image data. No text.`;
 };
 
