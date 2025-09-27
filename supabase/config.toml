@@ -13,8 +13,14 @@ verify_jwt = false
 [functions.process-image]
 verify_jwt = false
 
-[functions.batch-process-images]
-verify_jwt = true
+[functions.process-single-image]
+verify_jwt = false
+
+[functions.image-processing-worker]
+verify_jwt = false
+
+[functions.create-processing-job]
+verify_jwt = false
 
 [functions.processing-queue]
 verify_jwt = false
