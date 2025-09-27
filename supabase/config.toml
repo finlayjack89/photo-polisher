@@ -51,3 +51,6 @@ verify_jwt = false
 
 [functions.finalize-images]
 verify_jwt = false
+
+[functions.finalize-image-v3]
+verify_jwt = false
