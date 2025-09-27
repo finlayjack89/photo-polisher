@@ -496,20 +496,20 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
-  if (currentStep === 'preview-results' && processedImages.clientComposited) {
+  if (currentStep === 'preview-results' && processedImages.finalResults) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <h2 className="text-2xl font-bold mb-4">Your Images Are Ready!</h2>
         <p className="text-muted-foreground mb-6">
-          Your images have been composed successfully. You can download them now or enhance them further with AI.
+          Your images have been processed successfully. You can download them now or enhance them further with AI.
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {processedImages.clientComposited.map((result, index) => (
+          {processedImages.finalResults.map((result, index) => (
             <div key={index} className="border rounded-lg p-4">
               <h3 className="font-semibold mb-2">{result.name}</h3>
               <img 
-                src={result.compositedData} 
+                src={result.finalizedData} 
                 alt={result.name}
                 className="w-full h-48 object-contain bg-gray-50 rounded"
               />
@@ -542,8 +542,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
-  if (currentStep === 'complete' && (processedImages.aiEnhanced || processedImages.clientComposited)) {
-    const finalImages = processedImages.aiEnhanced || processedImages.clientComposited;
+  if (currentStep === 'complete' && (processedImages.aiEnhanced || processedImages.finalResults)) {
+    const finalImages = processedImages.aiEnhanced || processedImages.finalResults;
     return (
       <GalleryPreview
         results={finalImages.map((result, index) => ({
@@ -551,10 +551,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           originalData: files[index] ? URL.createObjectURL(files[index]) : '',
           finalizedData: processedImages.aiEnhanced 
             ? (result as any).enhancedData 
-            : (result as any).compositedData,
+            : result.finalizedData,
           size: ((processedImages.aiEnhanced 
             ? (result as any).enhancedData 
-            : (result as any).compositedData) || '').length * 0.75
+            : result.finalizedData) || '').length * 0.75
         }))}
         onBack={onBack}
         title="Final Enhanced Images"
