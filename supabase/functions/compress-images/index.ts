@@ -50,85 +50,30 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`Compressing ${fileName} to target ${TARGET_SIZE_MB}MB`);
+        console.log(`Compressing ${fileName} using lossless compression`);
         
-        // Progressive compression to reach target size
-        const qualityLevels = [85, 70, 55, 40, 25];
+        // Use Tinify's lossless compression (shrink only)
+        const response = await fetch('https://api.tinify.com/shrink', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+            'Content-Type': 'application/octet-stream',
+          },
+          body: imageBuffer,
+        });
+
         let bestResult = null;
         let bestSize = originalSize;
-        
-        for (const quality of qualityLevels) {
-          try {
-            // Call Tinify API with quality setting
-            const response = await fetch('https://api.tinify.com/shrink', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-                'Content-Type': 'application/octet-stream',
-              },
-              body: imageBuffer,
-            });
 
-            if (!response.ok) {
-              console.error(`Tinify API error for ${fileName} at quality ${quality}:`, response.status);
-              continue;
-            }
-
-            const result = await response.json();
-            
-            // Apply quality compression
-            const qualityResponse = await fetch('https://api.tinify.com/output', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                source: { url: result.output.url },
-                compress: { quality: quality }
-              }),
-            });
-
-            if (qualityResponse.ok) {
-              const compressedBuffer = await qualityResponse.arrayBuffer();
-              const compressedSize = compressedBuffer.byteLength;
-              
-              console.log(`Quality ${quality}% result: ${(compressedSize / (1024 * 1024)).toFixed(2)}MB`);
-              
-              // Check if this is the best fit (closest to target without exceeding)
-              if (compressedSize <= TARGET_SIZE_BYTES && 
-                  (bestResult === null || compressedSize > bestSize || bestSize > TARGET_SIZE_BYTES)) {
-                bestResult = compressedBuffer;
-                bestSize = compressedSize;
-                
-                // If we're close enough to target, use this result
-                if (compressedSize > TARGET_SIZE_BYTES * 0.95) {
-                  break;
-                }
-              }
-            }
-          } catch (qualityError) {
-            console.error(`Error with quality ${quality} for ${fileName}:`, qualityError);
-          }
-        }
-        
-        // If no quality compression worked, try basic compression
-        if (!bestResult) {
-          const response = await fetch('https://api.tinify.com/shrink', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
-              'Content-Type': 'application/octet-stream',
-            },
-            body: imageBuffer,
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            const compressedResponse = await fetch(result.output.url);
-            bestResult = await compressedResponse.arrayBuffer();
-            bestSize = bestResult.byteLength;
-          }
+        if (response.ok) {
+          const result = await response.json();
+          const compressedResponse = await fetch(result.output.url);
+          bestResult = await compressedResponse.arrayBuffer();
+          bestSize = bestResult.byteLength;
+          
+          console.log(`Lossless compression result: ${(bestSize / (1024 * 1024)).toFixed(2)}MB`);
+        } else {
+          console.error(`Tinify API error for ${fileName}:`, response.status);
         }
         
         if (bestResult) {
