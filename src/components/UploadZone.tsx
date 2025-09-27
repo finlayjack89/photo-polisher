@@ -12,8 +12,12 @@ interface UploadZoneProps {
   onFilesUploaded: (files: File[]) => void;
 }
 
+interface FileWithOriginalSize extends File {
+  originalSize?: number;
+}
+
 export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<FileWithOriginalSize[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
 
   // Convert HEIC to PNG
@@ -124,11 +128,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
         
         // Process and compress the image
         console.log(`Processing image: ${processedFile.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
-        const compressedBlob = await processAndCompressImage(processedFile);
+        const compressedBlob = await processAndCompressImage(processedFile, originalSize);
         const finalFile = new File([compressedBlob], processedFile.name, {
           type: 'image/jpeg',
           lastModified: Date.now()
-        });
+        }) as FileWithOriginalSize;
+        finalFile.originalSize = originalSize;
         console.log(`Processed size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
         
         processedFiles.push(finalFile);
@@ -219,14 +224,14 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
                     />
                   )}
                   
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium truncate">{file.name}</p>
-                    <div className="text-xs text-muted-foreground">
-                      Original: {(file.size / (1024 * 1024)).toFixed(2)}MB
-                    </div>
-                    <div className="text-xs text-green-600">
-                      Optimized: {(file.size / (1024 * 1024)).toFixed(2)}MB
-                    </div>
+                   <div className="space-y-1">
+                     <p className="text-sm font-medium truncate">{file.name}</p>
+                     <div className="text-xs text-muted-foreground">
+                       Original: {((file.originalSize || file.size) / (1024 * 1024)).toFixed(2)}MB
+                     </div>
+                     <div className="text-xs text-green-600">
+                       Optimized: {(file.size / (1024 * 1024)).toFixed(2)}MB
+                     </div>
                     <div className="text-xs text-muted-foreground">
                       {file.type}
                     </div>

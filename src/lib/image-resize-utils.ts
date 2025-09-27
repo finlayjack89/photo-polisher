@@ -23,9 +23,9 @@ export const getImageDimensions = (file: File): Promise<{ width: number; height:
 
 /**
  * Smart two-step image processing: resize to 2048px max, then compress iteratively if needed
- * Ensures maximum quality while staying under 5MB
+ * Ensures maximum quality while staying under 5MB (or 4.5MB minimum for files originally over 5MB)
  */
-export const processAndCompressImage = (file: File): Promise<Blob> => {
+export const processAndCompressImage = (file: File, originalFileSize?: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -57,7 +57,11 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
         
-        const targetSizeInBytes = 5 * 1024 * 1024;
+        // Determine target size: for files originally over 5MB, minimum should be 4.5MB
+        const originalSize = originalFileSize || file.size;
+        const targetSizeInBytes = originalSize > 5 * 1024 * 1024 
+          ? 4.5 * 1024 * 1024  // 4.5MB minimum for files over 5MB
+          : 5 * 1024 * 1024;   // 5MB for smaller files
         
         // First, attempt to get a high-quality blob
         canvas.toBlob(
