@@ -5,10 +5,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Move, RotateCw, ArrowRight, AlertCircle, Zap } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, Move, RotateCw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
 import { SubjectPlacement } from "@/lib/canvas-utils";
 import { resizeImageFile, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
+import { BackdropLibrary } from "@/components/BackdropLibrary";
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects
@@ -405,25 +407,55 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Backdrop Upload */}
+              {/* Backdrop Selection */}
               <div className="space-y-2">
                 <Label>Backdrop Image *</Label>
-                <div 
-                  className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {backdrop ? "Backdrop uploaded" : "Click to upload backdrop"}
-                  </p>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBackdropUpload}
-                  className="hidden"
-                />
+                <Tabs defaultValue="upload" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="upload">Upload New</TabsTrigger>
+                    <TabsTrigger value="library">From Library</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="upload" className="mt-4">
+                    <div 
+                      className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        {backdrop ? "Backdrop uploaded" : "Click to upload backdrop"}
+                      </p>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBackdropUpload}
+                      className="hidden"
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="library" className="mt-4">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Library className="h-4 w-4" />
+                          Your Backdrop Library
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <BackdropLibrary 
+                          selectionMode={true}
+                          onSelect={(backdrop, imageUrl) => {
+                            setBackdrop(imageUrl);
+                            setBackdropFile(null); // Clear file reference for library images
+                            drawPreview(); // Redraw canvas with new backdrop
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Background Blur Option */}
