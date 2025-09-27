@@ -72,6 +72,29 @@ serve(async (req) => {
 
     console.log(`Created job ${job.id} for ${backgroundRemovedImages.length} images`);
 
+    // Trigger processing queue to start processing this job
+    try {
+      // Use fetch directly to call the processing queue with query parameters
+      const queueUrl = `${supabaseUrl}/functions/v1/processing-queue?action=process`;
+      const queueResponse = await fetch(queueUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
+      
+      if (queueResponse.ok) {
+        console.log('Processing queue triggered for job', job.id);
+      } else {
+        console.error('Failed to trigger processing queue:', await queueResponse.text());
+      }
+    } catch (queueError) {
+      console.error('Failed to trigger processing queue:', queueError);
+      // Don't fail the job creation if queue trigger fails
+    }
+
     return new Response(JSON.stringify({ 
       job_id: job.id,
       status: 'pending',

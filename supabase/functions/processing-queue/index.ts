@@ -164,23 +164,44 @@ async function processIndividualJob(job: any) {
         });
         break;
       
+      case 'composite':
+        result = await supabase.functions.invoke('image-processing-worker', {
+          body: {
+            job_id: job.id
+          }
+        });
+        break;
+      
       default:
         throw new Error(`Unsupported operation: ${job.operation}`);
     }
 
     if (result.error) throw result.error;
 
-    // Update job with success
-    const processedUrl = result.data?.upscaledFiles?.[0]?.data || result.data?.compressedFiles?.[0]?.data;
+    // Update job with success - handle different operation types
+    let processedUrl = null;
     
-    await supabase
-      .from('processing_jobs')
-      .update({
-        status: 'completed',
-        processed_image_url: processedUrl ? `data:image/png;base64,${processedUrl}` : job.original_image_url,
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', job.id);
+    if (job.operation === 'composite') {
+      // For composite operations, the image-processing-worker handles status updates itself
+      // We just need to check if it succeeded
+      if (!result.data?.success) {
+        throw new Error('Composite processing failed');
+      }
+      // Don't update status here - the image-processing-worker already did it
+      return;
+    } else {
+      // For upscale/compress operations
+      processedUrl = result.data?.upscaledFiles?.[0]?.data || result.data?.compressedFiles?.[0]?.data;
+      
+      await supabase
+        .from('processing_jobs')
+        .update({
+          status: 'completed',
+          processed_image_url: processedUrl ? `data:image/png;base64,${processedUrl}` : job.original_image_url,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job.id);
+    }
 
     console.log(`Job ${job.id} completed successfully`);
 
