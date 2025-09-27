@@ -11,7 +11,7 @@ import {
   fileToDataUrl,
   SubjectPlacement
 } from "@/lib/canvas-utils";
-import { resizeImageFile } from "@/lib/image-resize-utils";
+// Removed resizeImageFile import - now using processAndCompressImage in UploadZone
 import { useToast } from "@/hooks/use-toast";
 
 interface CommercialEditingWorkflowProps {
@@ -56,177 +56,26 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }, []);
 
   const analyzeImages = () => {
-    const maxDimension = 1024; // Max width/height for Edge Function processing
-    const maxFileSize = 5 * 1024 * 1024; // 5MB threshold for compression advisory
-    
-    
-    let needsProcessing = false;
-    let largeFiles = 0;
-    
+    // Images are now pre-processed during upload to be 2048px max and under 5MB
+    // Skip compression step and go directly to background removal
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     
-    // Check if any files are too large in file size
-    files.forEach(file => {
-      if (file.size > maxFileSize) {
-        largeFiles++;
-        needsProcessing = true;
-      }
+    setCompressionAnalysis({ 
+      totalSize, 
+      largeFiles: 0,  // All files are already optimized
+      needsResize: false,
+      maxDimension: 2048 
     });
-    
-    // For image files, we also need to check dimensions
-    Promise.all(
-      files.map(file => {
-        if (file.type.startsWith('image/')) {
-          return new Promise<boolean>((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              const needsResize = img.width > maxDimension || img.height > maxDimension;
-              resolve(needsResize);
-            };
-            img.onerror = () => resolve(false);
-            img.src = URL.createObjectURL(file);
-          });
-        }
-        return Promise.resolve(false);
-      })
-    ).then(results => {
-      const needsResize = results.some(Boolean);
-      if (needsResize || needsProcessing) {
-        needsProcessing = true;
-      }
-      
-      setCompressionAnalysis({ 
-        totalSize, 
-        largeFiles,
-        needsResize,
-        maxDimension 
-      });
-      setNeedsCompression(needsProcessing);
-      setCurrentStep(needsProcessing ? 'compression' : 'background-removal');
-    });
+    setNeedsCompression(false);
+    setCurrentStep('background-removal');
   };
 
+  // Compression step is no longer needed - images are pre-processed during upload
+  // This function is kept for backwards compatibility but should not be called
   const handleCompressImages = async () => {
-    setIsProcessing(true);
-    setProgress(0);
-    setCurrentProcessingStep('Resizing and compressing images...');
-
-    try {
-      const maxDimension = 1024; // Max dimension for Edge Function compatibility
-      const processedFiles: File[] = [];
-
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setProgress((i / files.length) * 50);
-        setCurrentProcessingStep(`Processing ${file.name}...`);
-
-        if (file.type.startsWith('image/')) {
-          // Check if image needs resizing
-          const img = new Image();
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.src = URL.createObjectURL(file);
-          });
-
-          let processedFile = file;
-          
-          // Resize if needed
-          if (img.naturalWidth > maxDimension || img.naturalHeight > maxDimension) {
-            processedFile = await resizeImageFile(file, maxDimension, maxDimension, 0.8);
-          }
-
-          processedFiles.push(processedFile);
-        } else {
-          processedFiles.push(file);
-        }
-      }
-
-      setProgress(50);
-      setCurrentProcessingStep('Applying compression...');
-
-      // Now compress the resized files if they're still large
-      const filesNeedingCompression = processedFiles.filter(f => f.size > 2 * 1024 * 1024); // 2MB threshold
-      
-      if (filesNeedingCompression.length > 0) {
-        // Convert to base64 for compression API
-        const imageData = await Promise.all(
-          filesNeedingCompression.map(async (file) => ({
-            data: await fileToDataUrl(file),
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }))
-        );
-
-        setProgress(70);
-
-        // Compress via Tinify API
-        const { data: compressedData, error: compressError } = await supabase.functions.invoke('compress-images', {
-          body: {
-            files: imageData.map(f => ({
-              data: f.data,
-              originalName: f.name,
-              size: f.size,
-              format: f.type.split('/')[1] || 'png'
-            }))
-          }
-        });
-
-        if (compressError || !compressedData?.success) {
-          console.warn('Compression failed, using resized files:', compressError?.message);
-          setCurrentFiles(processedFiles);
-        } else {
-          // Convert compressed data back to File objects
-          const compressedFiles = await Promise.all(
-            compressedData.compressedFiles.map(async (cf: any) => {
-              const byteString = atob(cf.data);
-              const ab = new ArrayBuffer(byteString.length);
-              const ia = new Uint8Array(ab);
-              for (let i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
-              }
-              return new File([ab], cf.originalName, { type: `image/${cf.format}` });
-            })
-          );
-
-          // Merge compressed files with non-compressed ones
-          const finalFiles = [...compressedFiles];
-          processedFiles.forEach(file => {
-            if (!filesNeedingCompression.some(f => f.name === file.name)) {
-              finalFiles.push(file);
-            }
-          });
-
-          setCurrentFiles(finalFiles);
-        }
-      } else {
-        setCurrentFiles(processedFiles);
-      }
-
-      setProgress(100);
-      setCurrentProcessingStep('Processing complete!');
-      
-      toast({
-        title: "Images Optimized",
-        description: `Successfully processed ${processedFiles.length} images for AI processing`
-      });
-
-      setTimeout(() => {
-        setIsProcessing(false);
-        setCurrentStep('background-removal');
-      }, 1000);
-
-    } catch (error) {
-      console.error('Error processing images:', error);
-      toast({
-        title: "Processing Error",
-        description: "Failed to process images. You can continue with original images.",
-        variant: "destructive"
-      });
-      setIsProcessing(false);
-      setCurrentStep('background-removal');
-    }
+    console.log('Compression step bypassed - images already processed during upload');
+    setCurrentFiles(files);
+    setCurrentStep('background-removal');
   };
 
   const handleBackgroundRemovalComplete = async (backgroundRemovedImages: Array<{
