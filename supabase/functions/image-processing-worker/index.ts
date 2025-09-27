@@ -102,7 +102,8 @@ serve(async (req) => {
             imageUrl: image.backgroundRemovedData,
             imageName: image.name,
             backdrop: backdrop,
-            placement: placement || 'center'
+            placement: placement || { x: 0.5, y: 0.5, scale: 1.0 },
+            addBlur: false
           }
         });
 

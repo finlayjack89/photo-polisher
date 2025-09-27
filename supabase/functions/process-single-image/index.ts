@@ -38,36 +38,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get Replicate API key for background removal
-    const replicateApiKey = Deno.env.get('REPLICATE_API_KEY');
-    if (!replicateApiKey) {
-      throw new Error('REPLICATE_API_KEY not found');
-    }
-
     // Get Gemini API key for compositing and finalization
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
       throw new Error('GEMINI_API_KEY not found');
     }
 
-    // Step 1: Remove background
-    console.log(`Removing background for ${imageName}...`);
-    const { data: bgRemovalResult, error: bgRemovalError } = await supabase.functions.invoke('remove-backgrounds', {
-      body: {
-        images: [{
-          data: imageUrl,
-          name: imageName
-        }]
-      }
-    });
+    // imageUrl already contains background-removed data from the frontend
+    console.log(`Using background-removed image data for ${imageName}`);
+    const backgroundRemovedData = imageUrl;
 
-    if (bgRemovalError || !bgRemovalResult?.results?.[0]) {
-      throw new Error(`Background removal failed: ${bgRemovalError?.message || 'No result'}`);
-    }
-
-    const backgroundRemovedData = bgRemovalResult.results[0].backgroundRemovedData;
-
-    // Step 2: Position subject on canvas (simplified for server environment)
+    // Step 1: Position subject on canvas
     console.log(`Positioning subject for ${imageName}...`);
     const positionedData = await positionSubjectOnCanvas(
       backgroundRemovedData,
@@ -76,7 +57,7 @@ serve(async (req) => {
       placement
     );
 
-    // Step 3: Composite with AI
+    // Step 2: Composite with AI
     console.log(`Compositing ${imageName}...`);
     
     const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -137,7 +118,7 @@ Output only the final composited image - no text or explanations.`;
       throw new Error(`Failed to generate composited image for ${imageName}`);
     }
 
-    // Step 4: Finalization
+    // Step 3: Finalization
     console.log(`Finalizing ${imageName}...`);
     
     const finalizationPrompt = `Edit this composited product image to add professional finishing touches.
