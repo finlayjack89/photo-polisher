@@ -3,47 +3,9 @@
  */
 
 /**
- * Resize an image to fit within maximum dimensions while maintaining aspect ratio
+ * Smart two-step image processing: resize to 2048px max, then compress iteratively if needed
+ * Ensures maximum quality while staying under 5MB
  */
-export const resizeImageFile = (file: File, maxWidth: number, maxHeight: number, quality: number = 0.8): Promise<File> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Could not get canvas context'));
-
-      // Calculate new dimensions while maintaining aspect ratio
-      let { width, height } = calculateResizedDimensions(
-        img.naturalWidth, 
-        img.naturalHeight, 
-        maxWidth, 
-        maxHeight
-      );
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw resized image
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Convert to blob and then to File
-      canvas.toBlob((blob) => {
-        if (!blob) return reject(new Error('Failed to create blob'));
-        
-        const resizedFile = new File([blob], file.name, {
-          type: 'image/jpeg', // Always convert to JPEG for smaller size
-          lastModified: Date.now()
-        });
-        
-        resolve(resizedFile);
-      }, 'image/jpeg', quality);
-    };
-
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
-  });
-};
 
 /**
  * Calculate new dimensions that fit within max bounds while maintaining aspect ratio

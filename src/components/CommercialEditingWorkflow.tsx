@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { BackdropPositioning } from './BackdropPositioning';
 import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
-import { ImageCompressionStep } from './ImageCompressionStep';
 import { ImagePreviewStep } from './ImagePreviewStep';
 import { BackgroundRemovalStep } from './BackgroundRemovalStep';
 import { supabase } from "@/integrations/supabase/client";
@@ -91,13 +90,18 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
     console.log('Positioning completed, starting V5 single-image processing...');
     setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
-    startV5SingleImageProcessing();
+    setCurrentStep('processing');
   };
 
   // V5 Single-Image Processing with Real-Time Progress
   const startV5SingleImageProcessing = async () => {
     if (!processedImages.backgroundRemoved?.length || !processedImages.backdrop || !processedImages.placement) {
       console.error('Missing required data for V5 processing');
+      toast({
+        title: "Processing Error", 
+        description: "Missing required data for processing. Please try again.",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -176,6 +180,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
     } catch (error) {
       console.error('V5 processing workflow failed:', error);
+      toast({
+        title: "Processing Failed",
+        description: error instanceof Error ? error.message : 'Unknown error occurred during processing',
+        variant: "destructive"
+      });
       setCurrentProcessingStep(`❌ Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setProgress(0);
       setIsProcessing(false);
@@ -424,24 +433,12 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     return null; // Auto-analysis in useEffect
   }
 
-  if (currentStep === 'compression') {
-    return (
-      <ImageCompressionStep
-        files={files}
-        compressionAnalysis={compressionAnalysis!}
-        onCompress={handleCompressImages}
-        onSkip={() => setCurrentStep('preview')}
-        isProcessing={isProcessing}
-      />
-    );
-  }
-
   if (currentStep === 'preview') {
     return (
       <ImagePreviewStep
         files={currentFiles}
         onContinue={() => setCurrentStep('background-removal')}
-        onBack={() => setCurrentStep('compression')}
+        onBack={onBack}
         wasCompressed={needsCompression && currentFiles !== files}
       />
     );
@@ -464,6 +461,25 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         cutoutImages={processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)}
         onPositioningComplete={handlePositioningComplete}
         onBack={() => setCurrentStep('background-removal')}
+      />
+    );
+  }
+
+  // Auto-start processing when we have all required data
+  React.useEffect(() => {
+    if (currentStep === 'processing' && processedImages.backdrop && processedImages.placement && processedImages.backgroundRemoved.length > 0) {
+      startV5SingleImageProcessing();
+    }
+  }, [currentStep, processedImages.backdrop, processedImages.placement, processedImages.backgroundRemoved.length]);
+
+  if (currentStep === 'processing') {
+    return (
+      <ProcessingStep
+        title="Processing Images"
+        description="Creating your professional product images..."
+        progress={progress}
+        currentStep={currentProcessingStep}
+        files={currentFiles}
       />
     );
   }

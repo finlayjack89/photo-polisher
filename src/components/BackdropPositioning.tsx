@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Move, RotateCw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
 import { SubjectPlacement } from "@/lib/canvas-utils";
-import { resizeImageFile, getImageDimensions } from "@/lib/image-resize-utils";
+import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 import { BackdropLibrary } from "@/components/BackdropLibrary";
 
@@ -62,7 +62,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     setIsOptimizing(true);
     try {
       // Resize image to max 2048px while maintaining aspect ratio
-      const optimizedFile = await resizeImageFile(backdropFile, 2048, 2048, 0.9);
+      const optimizedFile = await processAndCompressImage(backdropFile);
       
       // Update analysis with final size
       setBackdropAnalysis(prev => prev ? {
