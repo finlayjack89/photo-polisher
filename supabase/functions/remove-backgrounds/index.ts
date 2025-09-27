@@ -41,12 +41,35 @@ serve(async (req) => {
       try {
         console.log(`Image data length: ${image.data.length}`);
         
-        // Use Bria Background Remove model
+        // Preprocess image to handle EXIF orientation and ensure better quality
+        let processedImageData = image.data;
+        
+        // If the image data doesn't start with data:image, add the prefix
+        if (!processedImageData.startsWith('data:image/')) {
+          // Detect format from the first few bytes or default to JPEG
+          const isJPEG = processedImageData.startsWith('/9j/');
+          const isPNG = processedImageData.startsWith('iVBOR');
+          
+          if (isPNG) {
+            processedImageData = `data:image/png;base64,${processedImageData}`;
+          } else {
+            processedImageData = `data:image/jpeg;base64,${processedImageData}`;
+          }
+        }
+        
+        console.log(`Using processed image data for: ${image.name}`);
+        
+        // Use improved background removal model with better quality
         const output = await replicate.run(
-          "bria/remove-background",
+          "cjwbw/rembg",
           {
             input: {
-              image: image.data
+              image: processedImageData,
+              model: "u2net", // Higher quality model
+              alpha_matting: true, // Better edge quality
+              alpha_matting_foreground_threshold: 270,
+              alpha_matting_background_threshold: 10,
+              alpha_matting_erode_size: 10
             }
           }
         );
