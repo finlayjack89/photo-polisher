@@ -47,13 +47,14 @@ serve(async (req) => {
 
     console.log(`Creating processing job for user ${user.id}`);
 
-    // Create job in database
+    // Create job in database using existing schema
     const { data: job, error: jobError } = await supabase
       .from('processing_jobs')
       .insert({
         user_id: user.id,
         status: 'pending',
-        job_data: {
+        operation: 'composite',
+        metadata: {
           backgroundRemovedImages,
           backdrop,
           placement,

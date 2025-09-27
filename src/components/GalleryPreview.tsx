@@ -91,23 +91,29 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
         .eq('id', jobId)
         .single();
 
-      if (job && job.status) {
-        setJobStatus(job.status);
-        
-        if (job.status === 'completed' && (job as any).results) {
-          const results = Array.isArray((job as any).results) ? (job as any).results.map((result: any) => ({
-            name: result.name,
+    if (job && job.metadata) {
+      setJobStatus(job.status);
+      
+      if (job.status === 'completed' && (job as any).processed_image_url) {
+        // Parse the processed image URL as results
+        try {
+          const processedImageData = (job as any).processed_image_url;
+          const results = [{
+            name: 'processed_image',
             originalData: '',
-            processedData: result.finalizedData,
-            size: result.finalizedData.length * 0.75
-          })) : [];
+            processedData: processedImageData,
+            size: processedImageData.length * 0.75
+          }];
           
           setJobResults(results);
           setIsMonitoringJob(false);
-        } else if (job.status === 'failed') {
-          setIsMonitoringJob(false);
+        } catch (e) {
+          console.error('Error parsing job results:', e);
         }
+      } else if (job.status === 'failed') {
+        setIsMonitoringJob(false);
       }
+    }
     };
 
     checkJobStatus();

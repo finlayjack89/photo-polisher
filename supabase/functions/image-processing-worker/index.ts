@@ -56,7 +56,7 @@ serve(async (req) => {
       throw new Error(`Job not found: ${jobError?.message}`);
     }
 
-    console.log(`Found job ${job_id} with ${job.job_data.backgroundRemovedImages.length} images`);
+    console.log(`Found job ${job_id} with ${job.metadata.backgroundRemovedImages.length} images`);
 
     // Update job status to processing
     await supabase
@@ -73,7 +73,7 @@ serve(async (req) => {
       },
     });
 
-    const { backgroundRemovedImages, backdrop, placement, addBlur } = job.job_data;
+    const { backgroundRemovedImages, backdrop, placement, addBlur } = job.metadata;
     const results = [];
 
     try {
@@ -201,12 +201,13 @@ Generate the final edited image with these improvements.`;
         console.log(`Successfully processed ${subject.name}`);
       }
 
-      // Update job with results
+      // Update job with results using existing schema
       await supabase
         .from('processing_jobs')
         .update({ 
           status: 'completed',
-          results: results
+          processed_image_url: JSON.stringify(results),
+          completed_at: new Date().toISOString()
         })
         .eq('id', job_id);
 
@@ -215,12 +216,13 @@ Generate the final edited image with these improvements.`;
     } catch (processingError) {
       console.error('Processing error:', processingError);
       
-      // Update job status to failed
+      // Update job status to failed using existing schema
       await supabase
         .from('processing_jobs')
         .update({ 
           status: 'failed',
-          results: { error: processingError instanceof Error ? processingError.message : String(processingError) }
+          error_message: processingError instanceof Error ? processingError.message : String(processingError),
+          completed_at: new Date().toISOString()
         })
         .eq('id', job_id);
 
