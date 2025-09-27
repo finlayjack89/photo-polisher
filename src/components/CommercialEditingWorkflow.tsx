@@ -54,6 +54,13 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     analyzeImages();
   }, []);
 
+  // Auto-start processing when we have all required data
+  React.useEffect(() => {
+    if (currentStep === 'processing' && processedImages.backdrop && processedImages.placement && processedImages.backgroundRemoved.length > 0) {
+      startV5SingleImageProcessing();
+    }
+  }, [currentStep, processedImages.backdrop, processedImages.placement, processedImages.backgroundRemoved.length]);
+
   const analyzeImages = () => {
     // Images are now pre-processed during upload to be 2048px max and under 5MB
     // Skip compression step and go directly to background removal
@@ -464,13 +471,6 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       />
     );
   }
-
-  // Auto-start processing when we have all required data
-  React.useEffect(() => {
-    if (currentStep === 'processing' && processedImages.backdrop && processedImages.placement && processedImages.backgroundRemoved.length > 0) {
-      startV5SingleImageProcessing();
-    }
-  }, [currentStep, processedImages.backdrop, processedImages.placement, processedImages.backgroundRemoved.length]);
 
   if (currentStep === 'processing') {
     return (
