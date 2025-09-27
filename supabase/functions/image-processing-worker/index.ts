@@ -36,11 +36,10 @@ serve(async (req) => {
       throw new Error(`Job not found: ${jobError?.message}`);
     }
 
-    const { backgroundRemovedImages } = job.metadata;
-    const { backdrop, placement, addBlur } = job.processing_options || {};
+    const { backgroundRemovedImages, backdrop, placement, addBlur } = job.metadata;
     
     console.log(`Found job ${job_id} with ${backgroundRemovedImages?.length || 0} images`);
-    console.log('Job processing options:', { hasBackdrop: !!backdrop, placement, addBlur });
+    console.log('Job metadata:', { hasBackdrop: !!backdrop, placement, addBlur });
     
     if (!backgroundRemovedImages || backgroundRemovedImages.length === 0) {
       await supabase
