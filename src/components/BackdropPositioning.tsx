@@ -446,10 +446,31 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                       <CardContent>
                         <BackdropLibrary 
                           selectionMode={true}
-                          onSelect={(backdrop, imageUrl) => {
-                            setBackdrop(imageUrl);
-                            setBackdropFile(null); // Clear file reference for library images
-                            drawPreview(); // Redraw canvas with new backdrop
+                          onSelect={async (backdrop, imageUrl) => {
+                            try {
+                              // Convert signed URL to data URL for proper processing
+                              const response = await fetch(imageUrl);
+                              const blob = await response.blob();
+                              const reader = new FileReader();
+                              reader.onload = (e) => {
+                                if (e.target?.result) {
+                                  setBackdrop(e.target.result as string);
+                                  setBackdropFile(null); // Clear file reference for library images
+                                  toast({
+                                    title: "Backdrop Selected",
+                                    description: `Using "${backdrop.name}" from library`
+                                  });
+                                }
+                              };
+                              reader.readAsDataURL(blob);
+                            } catch (error) {
+                              console.error('Error loading backdrop from library:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to load backdrop from library. Please try again.",
+                                variant: "destructive"
+                              });
+                            }
                           }}
                         />
                       </CardContent>
