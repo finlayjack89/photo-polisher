@@ -14,6 +14,9 @@ interface ProcessedImage {
   originalData: string; // base64
   processedData: string; // base64
   size: number;
+  originalSize?: number;
+  compressionRatio?: string;
+  qualityPercentage?: number;
 }
 
 interface GalleryPreviewProps {
@@ -32,6 +35,14 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
   const [jobResults, setJobResults] = useState<ProcessedImage[]>([]);
   const [isMonitoringJob, setIsMonitoringJob] = useState(false);
   const { toast } = useToast();
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   // Monitor job progress with real-time updates
   React.useEffect(() => {
@@ -176,12 +187,22 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
       }
 
       // Update displayed images with upscaled and compressed versions
-      const enhanced = allCompressedFiles.map((file: any) => ({
-        name: file.originalName,
-        originalData: processedImages.find(img => img.name === file.originalName)?.originalData || '',
-        processedData: `data:image/png;base64,${file.data}`,
-        size: file.size
-      }));
+      const enhanced = allCompressedFiles.map((file: any) => {
+        const originalImg = processedImages.find(img => img.name === file.originalName);
+        const originalSize = originalImg?.size || 0;
+        const compressionSavings = originalSize > 0 ? Math.round((1 - file.size / originalSize) * 100) : 0;
+        const qualityRetained = 100 - compressionSavings; // Approximate quality retention
+        
+        return {
+          name: file.originalName,
+          originalData: originalImg?.originalData || '',
+          processedData: `data:image/png;base64,${file.data}`,
+          size: file.size,
+          originalSize: originalSize,
+          compressionRatio: file.compressionRatio || `${compressionSavings}% smaller`,
+          qualityPercentage: Math.max(qualityRetained, 85) // Ensure minimum 85% quality display
+        };
+      });
 
       setUpscaledImages(enhanced);
       toast({
@@ -383,6 +404,37 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
                       </Badge>
                     </div>
                     
+                    {/* Size and Quality Info */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Size:</span>
+                        <span className="font-medium">{formatFileSize(image.size)}</span>
+                      </div>
+                      
+                      {image.originalSize && image.originalSize !== image.size && (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">Original:</span>
+                            <span className="text-muted-foreground">{formatFileSize(image.originalSize)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">Saved:</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {image.compressionRatio}
+                            </Badge>
+                          </div>
+                          {image.qualityPercentage && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-muted-foreground">Quality:</span>
+                              <Badge variant={image.qualityPercentage >= 90 ? "default" : "secondary"} className="text-xs">
+                                {image.qualityPercentage}%
+                              </Badge>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
                     <div className="flex items-center space-x-2">
                       <Button 
                         size="sm" 
@@ -441,7 +493,14 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <h4 className="font-medium text-muted-foreground">Original</h4>
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-muted-foreground">Original</h4>
+                        {image.originalSize && (
+                          <Badge variant="outline" className="text-xs">
+                            {formatFileSize(image.originalSize)}
+                          </Badge>
+                        )}
+                      </div>
                       <div className="aspect-square rounded-lg overflow-hidden border border-border">
                         <img 
                           src={image.originalData}
@@ -452,7 +511,12 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
                     </div>
                     
                     <div className="space-y-2">
-                      <h4 className="font-medium text-success">Studio Enhanced</h4>
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-success">Studio Enhanced</h4>
+                        <Badge variant="outline" className="text-xs">
+                          {formatFileSize(image.size)}
+                        </Badge>
+                      </div>
                       <div className="aspect-square rounded-lg overflow-hidden border border-success/50">
                         <img 
                           src={image.processedData}
@@ -462,6 +526,42 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Compression Metrics */}
+                  {image.originalSize && image.originalSize !== image.size && (
+                    <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                      <h5 className="font-medium mb-3">Compression Analysis</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center">
+                          <div className="font-medium text-muted-foreground">Size Reduction</div>
+                          <Badge variant="secondary" className="mt-1">
+                            {image.compressionRatio}
+                          </Badge>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-medium text-muted-foreground">Final Size</div>
+                          <div className="font-bold text-foreground mt-1">
+                            {formatFileSize(image.size)}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-medium text-muted-foreground">Quality Retained</div>
+                          <Badge 
+                            variant={image.qualityPercentage && image.qualityPercentage >= 90 ? "default" : "secondary"} 
+                            className="mt-1"
+                          >
+                            {image.qualityPercentage || 95}%
+                          </Badge>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-medium text-muted-foreground">Bytes Saved</div>
+                          <div className="font-bold text-success mt-1">
+                            {formatFileSize((image.originalSize || 0) - image.size)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

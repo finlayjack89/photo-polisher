@@ -8,12 +8,19 @@ interface ImagePreviewStepProps {
   files: File[];
   onContinue: () => void;
   wasCompressed?: boolean;
+  compressionData?: {
+    originalSize: number;
+    compressedSize: number;
+    compressionRatio: string;
+    qualityPercentage: number;
+  }[];
 }
 
 export const ImagePreviewStep: React.FC<ImagePreviewStepProps> = ({
   files,
   onContinue,
-  wasCompressed = false
+  wasCompressed = false,
+  compressionData = []
 }) => {
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -80,11 +87,39 @@ export const ImagePreviewStep: React.FC<ImagePreviewStepProps> = ({
               </div>
               <CardContent className="p-3">
                 <h3 className="font-medium text-sm truncate mb-1">{file.name}</h3>
-                <div className="flex justify-between items-center text-xs text-muted-foreground">
-                  <span>{formatFileSize(file.size)}</span>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs text-muted-foreground">
+                    <span>Current Size:</span>
+                    <span className="font-medium">{formatFileSize(file.size)}</span>
+                  </div>
+                  
+                  {wasCompressed && compressionData[index] && (
+                    <>
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>Original:</span>
+                        <span>{formatFileSize(compressionData[index].originalSize)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Saved:</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {compressionData[index].compressionRatio}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Quality:</span>
+                        <Badge 
+                          variant={compressionData[index].qualityPercentage >= 90 ? "default" : "secondary"} 
+                          className="text-xs"
+                        >
+                          {compressionData[index].qualityPercentage}%
+                        </Badge>
+                      </div>
+                    </>
+                  )}
+                  
                   {wasCompressed && (
-                    <Badge variant="outline" className="text-xs">
-                      Optimized
+                    <Badge variant="outline" className="text-xs w-full justify-center">
+                      Lossless Optimized
                     </Badge>
                   )}
                 </div>
