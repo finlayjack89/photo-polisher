@@ -135,60 +135,51 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
     document.body.removeChild(link);
   };
 
-  const handleDownloadAll = async () => {
+  const downloadAllAsZip = async () => {
     try {
       const zip = new JSZip();
       
-      displayImages.forEach((image, index) => {
-        const imageData = image.finalizedData || image.processedData || '';
-        const base64Data = imageData.split(',')[1];
-        if (base64Data) {
-          zip.file(`processed_${image.name}`, base64Data, { base64: true });
+      displayImages.forEach((image) => {
+        const imageData = image.finalizedData || image.processedData;
+        if (imageData) {
+          const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+          zip.file(`${image.name}`, base64Data, { base64: true });
         }
       });
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(zipBlob);
-      downloadFile(url, 'processed_images.zip');
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'processed-images.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       toast({
-        title: "Download Complete",
-        description: `Downloaded ${displayImages.length} images as ZIP file.`
+        title: "Download Started",
+        description: "Your images are being downloaded as a ZIP file."
       });
     } catch (error) {
       console.error('Download error:', error);
       toast({
         title: "Download Failed",
-        description: "Failed to create ZIP file. Please try again.",
+        description: "Failed to create ZIP file. Please try downloading images individually.",
         variant: "destructive"
       });
     }
   };
 
-  const handleDownloadSingle = (index: number) => {
-    const image = displayImages[index];
-    const imageData = image.finalizedData || image.processedData || '';
-    if (imageData) {
-      downloadFile(imageData, `processed_${image.name}`);
-      toast({
-        title: "Download Complete",
-        description: `Downloaded ${image.name}`
-      });
-    }
-  };
-
-  if (displayImages.length === 0) {
+  if (!displayImages || displayImages.length === 0) {
     return (
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-foreground mb-2">No images to display</h3>
-          <p className="text-muted-foreground mb-4">
-            Process some images to see results here.
-          </p>
-          <Button onClick={onBack}>
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold">No Images Found</h2>
+          <p className="text-muted-foreground">There are no processed images to display.</p>
+          <Button onClick={onBack} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Upload
+            Go Back
           </Button>
         </div>
       </div>
@@ -196,177 +187,166 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Header */}
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Upload
-          </Button>
-          <div>
-            <h2 className="text-3xl font-bold text-foreground">
-              {title}
-            </h2>
-            <p className="text-muted-foreground">
-              {displayImages.length} photos transformed with V5 architecture
-            </p>
-          </div>
+        <div>
+          <h2 className="text-3xl font-bold">{title}</h2>
+          <p className="text-muted-foreground">
+            {displayImages.length} image{displayImages.length !== 1 ? 's' : ''} processed
+          </p>
         </div>
-        
-        <div className="flex items-center space-x-4">
+        <div className="flex gap-2">
+          <Button onClick={onBack} variant="outline">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
           <Button 
-            variant="outline" 
-            onClick={handleUpscaleAndCompress}
+            onClick={handleUpscaleAndCompress} 
             disabled={isUpscaling}
+            variant="default"
           >
             <Zap className="w-4 h-4 mr-2" />
-            {isUpscaling ? 'Processing...' : 'Upscale & Compress'}
+            {isUpscaling ? 'Enhancing...' : 'AI Enhance & Upscale'}
           </Button>
-          <Button variant="electric" onClick={handleDownloadAll}>
+          <Button onClick={downloadAllAsZip} variant="default">
             <Download className="w-4 h-4 mr-2" />
-            Download All (ZIP)
+            Download All
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="shadow-soft">
-          <CardContent className="p-6 text-center">
-            <div className="w-12 h-12 bg-gradient-electric rounded-full flex items-center justify-center mx-auto mb-3">
-              <ImageIcon className="w-6 h-6 text-electric-foreground" />
-            </div>
-            <h3 className="text-2xl font-bold text-foreground">{displayImages.length}</h3>
-            <p className="text-muted-foreground">Photos Processed</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-soft">
-          <CardContent className="p-6 text-center">
-            <div className="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Download className="w-6 h-6 text-success" />
-            </div>
-            <h3 className="text-2xl font-bold text-foreground">
-              {(displayImages.reduce((acc, img) => acc + (img.size || 0), 0) / 1024 / 1024).toFixed(1)}MB
-            </h3>
-            <p className="text-muted-foreground">Total Size</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-soft">
-          <CardContent className="p-6 text-center">
-            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Zap className="w-6 h-6 text-primary" />
-            </div>
-            <h3 className="text-2xl font-bold text-foreground">2.5s</h3>
-            <p className="text-muted-foreground">V5 Processing Time</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'grid' | 'comparison')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="grid">Grid View</TabsTrigger>
+          <TabsTrigger value="comparison">Comparison View</TabsTrigger>
+        </TabsList>
 
-      {/* Grid View */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayImages.map((image, index) => {
-          const imageData = image.finalizedData || image.processedData || '';
-          return (
-            <Card key={index} className="group shadow-soft hover:shadow-medium transition-smooth">
-              <CardContent className="p-0">
-                <div className="relative aspect-square overflow-hidden rounded-t-lg">
-                  <img 
-                    src={imageData}
-                    alt={`Processed ${image.name}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-smooth cursor-pointer"
-                    onClick={() => setSelectedImage(index)}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-smooth" />
-                  
-                  <Badge className="absolute top-3 left-3 bg-success text-success-foreground">
-                    V5 Quality
-                  </Badge>
-                  
-                  <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-smooth">
-                    <Button size="sm" variant="glass" onClick={() => setSelectedImage(index)}>
+        <TabsContent value="grid" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayImages.map((image, index) => (
+              <Card key={index} className="overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5" />
+                    {image.name}
+                  </CardTitle>
+                  {image.size && (
+                    <div className="flex gap-2">
+                      <Badge variant="secondary">
+                        {formatFileSize(image.size)}
+                      </Badge>
+                      {image.compressionRatio && (
+                        <Badge variant="outline">
+                          {image.compressionRatio}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                    <img
+                      src={image.finalizedData || image.processedData || image.originalData}
+                      alt={image.name}
+                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadFile(
+                        image.finalizedData || image.processedData || image.originalData || '',
+                        image.name
+                      )}
+                      className="flex-1"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedImage(selectedImage === index ? null : index)}
+                    >
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
-                </div>
-                
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-foreground truncate">
-                      {image.name}
-                    </h4>
-                    <Badge variant="outline" className="text-xs">
-                      PNG
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="comparison" className="space-y-4">
+          {displayImages.map((image, index) => (
+            <Card key={index} className="overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5" />
+                  {image.name}
+                  {image.size && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {formatFileSize(image.size)}
                     </Badge>
-                  </div>
-                  
-                  {/* Size and Quality Info */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Size:</span>
-                      <span className="font-medium">{formatFileSize(image.size || 0)}</span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {image.originalData && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">Original</h4>
+                      <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                        <img
+                          src={image.originalData}
+                          alt={`${image.name} - Original`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     </div>
-                    
-                    {image.originalSize && image.originalSize !== image.size && (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Original:</span>
-                          <span className="text-muted-foreground">{formatFileSize(image.originalSize)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Change:</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {image.compressionRatio}
-                          </Badge>
-                        </div>
-                        {image.qualityPercentage && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Quality:</span>
-                            <Badge variant={image.qualityPercentage >= 90 ? "default" : "secondary"} className="text-xs">
-                              {image.qualityPercentage}%
-                            </Badge>
-                          </div>
-                        )}
-                      </>
+                  )}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Processed</h4>
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                      <img
+                        src={image.finalizedData || image.processedData || image.originalData}
+                        alt={`${image.name} - Processed`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    size="sm"
+                    onClick={() => downloadFile(
+                      image.finalizedData || image.processedData || image.originalData || '',
+                      image.name
                     )}
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Button 
-                      size="sm" 
-                      variant="electric"
-                      onClick={() => handleDownloadSingle(index)}
-                      className="flex-1"
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      Download
-                    </Button>
-                  </div>
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
+          ))}
+        </TabsContent>
+      </Tabs>
 
-      {/* Full Screen Modal */}
       {selectedImage !== null && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-          <div className="relative max-w-4xl max-h-full">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="absolute -top-12 right-0 text-white hover:text-gray-300"
-              onClick={() => setSelectedImage(null)}
-            >
-              Close ✕
-            </Button>
-            <img 
-              src={displayImages[selectedImage].finalizedData || displayImages[selectedImage].processedData || ''}
-              alt={`Full size ${displayImages[selectedImage].name}`}
-              className="max-w-full max-h-full object-contain rounded-lg"
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="max-w-4xl max-h-full">
+            <img
+              src={displayImages[selectedImage].finalizedData || displayImages[selectedImage].processedData || displayImages[selectedImage].originalData}
+              alt={displayImages[selectedImage].name}
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>

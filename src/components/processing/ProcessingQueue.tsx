@@ -118,26 +118,26 @@ export const ProcessingQueue = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cache Efficiency</CardTitle>
+            <CardTitle className="text-sm font-medium">Cache Entries</CardTitle>
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.cacheHits}</div>
+            <div className="text-2xl font-bold">{stats.totalProcessed}</div>
             <p className="text-xs text-muted-foreground">
-              Total cache hits from {stats.totalProcessed} entries
+              Total cached results
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Processing Time</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Cache Hits</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.averageProcessingTime}s</div>
+            <div className="text-2xl font-bold">{stats.cacheHits}</div>
             <p className="text-xs text-muted-foreground">
-              Per image with V5 architecture
+              Performance optimization
             </p>
           </CardContent>
         </Card>
@@ -145,54 +145,36 @@ export const ProcessingQueue = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Zap className="h-5 w-5 text-electric" />
-            <span>V5 Processing Architecture</span>
-          </CardTitle>
+          <CardTitle>Processing Performance</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <h3 className="font-semibold text-foreground">Real-Time Processing</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• No queue delays - process images immediately</li>
-                <li>• Individual image processing for maximum quality</li>
-                <li>• Real-time progress updates for each image</li>
-                <li>• Support for up to 20 images simultaneously</li>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="flex justify-between mb-2">
+              <span className="text-sm font-medium">Average Processing Time</span>
+              <span className="text-sm text-muted-foreground">{stats.averageProcessingTime}s per image</span>
+            </div>
+            <Progress value={75} className="w-full" />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <div className="p-4 rounded-lg bg-muted">
+              <h4 className="font-medium mb-2">V5 Architecture Benefits</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Real-time image processing</li>
+                <li>• No queue management needed</li>
+                <li>• Optimized cache system</li>
+                <li>• Sequential multi-step processing</li>
               </ul>
             </div>
             
-            <div className="space-y-3">
-              <h3 className="font-semibold text-foreground">Enhanced Features</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• HEIC to PNG conversion with quality preservation</li>
-                <li>• Gemini 2.5 Flash Image Preview AI model</li>
-                <li>• Up to 18MB image support</li>
-                <li>• Simplified architecture with better error handling</li>
+            <div className="p-4 rounded-lg bg-muted">
+              <h4 className="font-medium mb-2">Processing Pipeline</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Background removal (AI)</li>
+                <li>• Backdrop compositing</li>
+                <li>• AI enhancement</li>
+                <li>• Final optimization</li>
               </ul>
-            </div>
-          </div>
-
-          <div className="bg-muted/50 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                Active
-              </Badge>
-              <span className="font-medium text-foreground">V5 Single-Image Processing Pipeline</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Background Removal</span>
-                <Badge variant="secondary">Replicate API</Badge>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>AI Compositing</span>
-                <Badge variant="secondary">Gemini 2.5 Flash</Badge>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Final Enhancement</span>
-                <Badge variant="secondary">Gemini 2.5 Flash</Badge>
-              </div>
             </div>
           </div>
         </CardContent>

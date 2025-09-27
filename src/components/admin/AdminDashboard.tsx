@@ -118,7 +118,7 @@ export const AdminDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeProcessing}</div>
             <p className="text-xs text-muted-foreground">
-              V5 real-time processing
+              Real-time processing (V5)
             </p>
           </CardContent>
         </Card>
@@ -139,73 +139,46 @@ export const AdminDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">System Health</CardTitle>
-            <div className={`w-3 h-3 rounded-full ${getHealthColor(stats.systemHealth)}`} />
+            <div className={`h-3 w-3 rounded-full ${getHealthColor(stats.systemHealth)}`} />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold capitalize">{stats.systemHealth}</div>
             <p className="text-xs text-muted-foreground">
-              V5 architecture status
+              All services operational
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>V5 Architecture Benefits</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                ✓ Real-time Processing
-              </Badge>
-              <span className="text-sm text-muted-foreground">No queue delays</span>
+      <Card>
+        <CardHeader>
+          <CardTitle>System Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">V5 Architecture Status</h3>
+              <p className="text-muted-foreground text-sm">
+                The system is running on V5 single-image processing architecture with real-time processing capabilities.
+              </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                ✓ Quality Preservation
-              </Badge>
-              <span className="text-sm text-muted-foreground">18MB image support</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg bg-muted">
+                <h4 className="font-medium">Processing Model</h4>
+                <p className="text-sm text-muted-foreground">Real-time single-image processing</p>
+              </div>
+              <div className="p-4 rounded-lg bg-muted">
+                <h4 className="font-medium">AI Model</h4>
+                <p className="text-sm text-muted-foreground">Gemini 2.5 Flash Image Preview</p>
+              </div>
+              <div className="p-4 rounded-lg bg-muted">
+                <h4 className="font-medium">Cache System</h4>
+                <p className="text-sm text-muted-foreground">Optimized for performance</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                ✓ HEIC Support
-              </Badge>
-              <span className="text-sm text-muted-foreground">Native iPhone photo support</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                ✓ Simplified Architecture
-              </Badge>
-              <span className="text-sm text-muted-foreground">Single-function processing</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>System Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-sm">
-              <strong>Architecture:</strong> V5 Single-Image Processing
-            </div>
-            <div className="text-sm">
-              <strong>AI Model:</strong> Gemini 2.5 Flash Image Preview
-            </div>
-            <div className="text-sm">
-              <strong>Image Support:</strong> PNG, JPG, WEBP, HEIC up to 20MB
-            </div>
-            <div className="text-sm">
-              <strong>Processing:</strong> Real-time individual image processing
-            </div>
-            <div className="text-sm">
-              <strong>Quality:</strong> Lossless PNG conversion for HEIC files
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
