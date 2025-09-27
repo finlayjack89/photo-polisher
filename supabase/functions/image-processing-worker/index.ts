@@ -18,7 +18,7 @@ serve(async (req) => {
       throw new Error('No job_id provided');
     }
 
-    console.log(`Processing job ${job_id}`);
+    console.log(`Starting orchestration for job ${job_id}`);
     
     // Get Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -36,100 +36,68 @@ serve(async (req) => {
       throw new Error(`Job not found: ${jobError?.message}`);
     }
 
-    console.log(`Found job ${job_id} with ${job.metadata.backgroundRemovedImages.length} images`);
+    const { backgroundRemovedImages } = job.metadata;
+    console.log(`Found job ${job_id} with ${backgroundRemovedImages.length} images`);
 
-    // Update job status to processing
+    // Update job status to processing and initialize metadata
     await supabase
       .from('processing_jobs')
-      .update({ status: 'processing' })
+      .update({ 
+        status: 'processing',
+        metadata: {
+          ...job.metadata,
+          processedCount: 0,
+          totalCount: backgroundRemovedImages.length,
+          currentStatus: 'Starting image processing...'
+        }
+      })
       .eq('id', job_id);
 
-    const { backgroundRemovedImages, backdrop, placement, addBlur } = job.metadata;
-    const results = [];
-    let processedCount = 0;
-
-    try {
-      // Process each image individually using the new process-single-image function
-      for (let i = 0; i < backgroundRemovedImages.length; i++) {
-        const subject = backgroundRemovedImages[i];
-        console.log(`Processing image ${i + 1}/${backgroundRemovedImages.length}: ${subject.name}`);
-
-        try {
-          // Call the new process-single-image function
-          const { data: processResult, error: processError } = await supabase.functions.invoke('process-single-image', {
-            body: {
-              imageUrl: subject.backgroundRemovedData,
-              imageName: subject.name,
-              backdrop,
-              placement,
-              addBlur
-            }
-          });
-
-          if (processError || !processResult?.success) {
-            throw new Error(`Failed to process ${subject.name}: ${processError?.message || processResult?.error}`);
-          }
-
-          results.push(processResult.result);
-          processedCount++;
-
-          console.log(`Successfully processed ${subject.name} (${processedCount}/${backgroundRemovedImages.length})`);
-
-          // Update job with current progress
-          await supabase
+    // Start processing with the first image
+    if (backgroundRemovedImages.length > 0) {
+      const firstImage = backgroundRemovedImages[0];
+      console.log(`Starting processing with first image: ${firstImage.name}`);
+      
+      // Use background task to start the processing chain
+      supabase.functions.invoke('process-image-step', {
+        body: {
+          job_id,
+          image_name: firstImage.name,
+          step: 'composite',
+          image_data: firstImage.backgroundRemovedData
+        }
+      }).then(({ error }) => {
+        if (error) {
+          console.error(`Failed to start processing chain:`, error);
+          // Update job to failed if we can't start processing
+          supabase
             .from('processing_jobs')
             .update({ 
-              metadata: {
-                ...job.metadata,
-                processedCount,
-                totalCount: backgroundRemovedImages.length,
-                currentStatus: `Processing ${processedCount}/${backgroundRemovedImages.length} images...`
-              }
+              status: 'failed',
+              error_message: `Failed to start processing: ${error.message}`,
+              completed_at: new Date().toISOString()
             })
             .eq('id', job_id);
-
-        } catch (imageError) {
-          console.error(`Failed to process image ${subject.name}:`, imageError);
-          // Continue with other images but log the failure
-          results.push({
-            name: subject.name,
-            error: imageError instanceof Error ? imageError.message : String(imageError)
-          });
         }
-      }
-
-      // Update job with results using existing schema
+      });
+      
+      console.log(`Job ${job_id} orchestration started successfully`);
+    } else {
+      // No images to process
       await supabase
         .from('processing_jobs')
         .update({ 
           status: 'completed',
-          processed_image_url: JSON.stringify(results),
+          processed_image_url: JSON.stringify([]),
           completed_at: new Date().toISOString()
         })
         .eq('id', job_id);
-
-      console.log(`Job ${job_id} completed successfully with ${results.length} processed images`);
-
-    } catch (processingError) {
-      console.error('Processing error:', processingError);
-      
-      // Update job status to failed using existing schema
-      await supabase
-        .from('processing_jobs')
-        .update({ 
-          status: 'failed',
-          error_message: processingError instanceof Error ? processingError.message : String(processingError),
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', job_id);
-
-      throw processingError;
     }
 
     return new Response(JSON.stringify({ 
       success: true,
       job_id: job_id,
-      results_count: results.length
+      message: 'Processing started'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

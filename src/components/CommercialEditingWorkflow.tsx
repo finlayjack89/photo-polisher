@@ -289,10 +289,16 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
               // Calculate progress based on processed count
               const processedCount = job.metadata?.processedCount || 0;
               const totalCount = job.metadata?.totalCount || processedImages.backgroundRemoved.length;
-              const progressPercent = 20 + Math.round((processedCount / totalCount) * 70); // 20-90%
+              const currentStatus = job.metadata?.currentStatus || `Processing ${processedCount}/${totalCount} images...`;
+              
+              // More granular progress calculation
+              let progressPercent = 20; // Base for job creation
+              if (totalCount > 0) {
+                progressPercent = 20 + Math.round((processedCount / totalCount) * 70); // 20-90%
+              }
               
               setProgress(progressPercent);
-              setCurrentProcessingStep(`Processing ${processedCount}/${totalCount} images...`);
+              setCurrentProcessingStep(currentStatus);
             } else if (job.status === 'completed') {
               setProgress(100);
               setCurrentProcessingStep('Processing complete!');
