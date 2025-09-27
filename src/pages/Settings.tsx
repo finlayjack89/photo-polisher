@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 const Settings = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const [refreshLibrary, setRefreshLibrary] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -32,7 +33,6 @@ const Settings = () => {
   if (!user) {
     return null;
   }
-  const [refreshLibrary, setRefreshLibrary] = useState(0);
 
   const handleBackdropUploaded = () => {
     setRefreshLibrary(prev => prev + 1);
