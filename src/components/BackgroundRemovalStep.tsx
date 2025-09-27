@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, Download, Scissors, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Loader2, Scissors, Download } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface BackgroundRemovalStepProps {
   files: File[];
@@ -38,6 +39,15 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
   const [isProcessingLocal, setIsProcessingLocal] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
+  const { toast } = useToast();
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const handleRemoveBackgrounds = async () => {
     setIsProcessingLocal(true);
@@ -103,12 +113,6 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
     } finally {
       setIsProcessingLocal(false);
     }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${Math.round(bytes / (1024 * 1024))} MB`;
   };
 
   const shouldCompress = (size: number) => size > 5 * 1024 * 1024; // 5MB threshold
@@ -299,16 +303,53 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {files.map((file, index) => (
-                  <div key={index} className="space-y-2">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      className="w-full h-32 object-cover rounded border"
-                    />
-                    <p className="text-xs text-muted-foreground truncate">
-                      {file.name}
-                    </p>
-                  </div>
+                  <Card key={index} className="p-3">
+                    <div className="space-y-3">
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-32 object-cover rounded border"
+                      />
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium truncate">
+                          {file.name}
+                        </p>
+                        
+                        {/* File Size Information */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Size:</span>
+                            <Badge variant="outline" className="text-xs">
+                              {formatFileSize(file.size)}
+                            </Badge>
+                          </div>
+                          <Badge variant="outline" className="text-xs w-full justify-center">
+                            Post-Compression
+                          </Badge>
+                        </div>
+                        
+                        {/* Download Button */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const url = URL.createObjectURL(file);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = file.name;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="w-full"
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
                 ))}
               </div>
               
