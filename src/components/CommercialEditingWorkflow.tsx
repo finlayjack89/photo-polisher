@@ -28,6 +28,7 @@ interface ProcessedImages {
   addBlur?: boolean;
   composited?: Array<{ name: string; compositedData: string; }>;
   finalized?: Array<{ name: string; finalizedData: string; }>;
+  jobId?: string;
 }
 
 export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps> = ({
@@ -499,18 +500,16 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
-  if (currentStep === 'complete' && processedImages.finalized) {
-    // Prepare processed images data for GalleryPreview
-    const galleryImages = processedImages.finalized.map((result, index) => ({
-      name: result.name,
-      originalData: files[index] ? URL.createObjectURL(files[index]) : '',
-      processedData: result.finalizedData,
-      size: result.finalizedData.length * 0.75 // Rough estimate of base64 to bytes
-    }));
-
+  if (currentStep === 'complete' && (processedImages.finalized || processedImages.jobId)) {
     return (
       <GalleryPreview
-        processedImages={galleryImages}
+        processedImages={processedImages.finalized ? processedImages.finalized.map((result, index) => ({
+          name: result.name,
+          originalData: files[index] ? URL.createObjectURL(files[index]) : '',
+          processedData: result.finalizedData,
+          size: result.finalizedData.length * 0.75
+        })) : []}
+        jobId={processedImages.jobId}
         onBack={onBack}
         onRetry={() => setCurrentStep('compression')}
       />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,19 +18,109 @@ interface ProcessedImage {
 
 interface GalleryPreviewProps {
   processedImages: ProcessedImage[];
+  jobId?: string;
   onBack: () => void;
   onRetry: () => void;
 }
 
-export const GalleryPreview = ({ processedImages, onBack, onRetry }: GalleryPreviewProps) => {
+export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: GalleryPreviewProps) => {
   const [selectedView, setSelectedView] = useState<'grid' | 'comparison'>('grid');
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledImages, setUpscaledImages] = useState<ProcessedImage[]>([]);
+  const [jobStatus, setJobStatus] = useState<string>('pending');
+  const [jobResults, setJobResults] = useState<ProcessedImage[]>([]);
+  const [isMonitoringJob, setIsMonitoringJob] = useState(false);
   const { toast } = useToast();
 
-  // Use upscaled images if available, otherwise use original processed images
-  const displayImages = upscaledImages.length > 0 ? upscaledImages : processedImages;
+  // Monitor job progress with real-time updates
+  React.useEffect(() => {
+    if (!jobId || processedImages.length > 0) return;
+
+    setIsMonitoringJob(true);
+    console.log('Starting real-time monitoring for job:', jobId);
+
+    const channel = supabase
+      .channel('job-monitoring')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'processing_jobs',
+          filter: `id=eq.${jobId}`
+        },
+        (payload) => {
+          console.log('Job update received:', payload);
+          const updatedJob = payload.new as any;
+          
+          setJobStatus(updatedJob.status);
+          
+          if (updatedJob.status === 'complete' && updatedJob.results) {
+            const results = Array.isArray(updatedJob.results) ? updatedJob.results.map((result: any) => ({
+              name: result.name,
+              originalData: '', 
+              processedData: result.finalizedData,
+              size: result.finalizedData.length * 0.75
+            })) : [];
+            
+            setJobResults(results);
+            setIsMonitoringJob(false);
+            
+            toast({
+              title: "Processing Complete!",
+              description: `Successfully processed ${results.length} images`
+            });
+          } else if (updatedJob.status === 'failed') {
+            setIsMonitoringJob(false);
+            toast({
+              title: "Processing Failed", 
+              description: "There was an error processing your images. Please try again.",
+              variant: "destructive"
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Check current job status
+    const checkJobStatus = async () => {
+      const { data: job, error } = await supabase
+        .from('processing_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single();
+
+      if (job && job.status) {
+        setJobStatus(job.status);
+        
+        if (job.status === 'complete' && (job as any).results) {
+          const results = Array.isArray((job as any).results) ? (job as any).results.map((result: any) => ({
+            name: result.name,
+            originalData: '',
+            processedData: result.finalizedData,
+            size: result.finalizedData.length * 0.75
+          })) : [];
+          
+          setJobResults(results);
+          setIsMonitoringJob(false);
+        } else if (job.status === 'failed') {
+          setIsMonitoringJob(false);
+        }
+      }
+    };
+
+    checkJobStatus();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [jobId, processedImages.length]);
+
+  // Use job results if available, otherwise use provided processed images or upscaled images
+  const displayImages = jobResults.length > 0 ? jobResults : 
+                      upscaledImages.length > 0 ? upscaledImages : 
+                      processedImages;
 
   const handleUpscaleAndCompress = async () => {
     setIsUpscaling(true);
@@ -156,6 +246,21 @@ export const GalleryPreview = ({ processedImages, onBack, onRetry }: GalleryPrev
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {/* Processing Status */}
+      {isMonitoringJob && (
+        <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+            <div>
+              <h3 className="font-medium text-foreground">Processing in Progress</h3>
+              <p className="text-sm text-muted-foreground">
+                Status: {jobStatus} • Your images are being processed by our AI pipeline
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -165,28 +270,33 @@ export const GalleryPreview = ({ processedImages, onBack, onRetry }: GalleryPrev
           </Button>
           <div>
             <h2 className="text-3xl font-bold text-foreground">
-              Processing Complete!
+              {displayImages.length > 0 ? 'Processing Complete!' : 'Processing Your Images...'}
             </h2>
             <p className="text-muted-foreground">
-              {processedImages.length} photos transformed into studio quality
+              {displayImages.length > 0 
+                ? `${displayImages.length} photos transformed into studio quality`
+                : 'Please wait while we process your images...'
+              }
             </p>
           </div>
         </div>
         
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            onClick={handleUpscaleAndCompress}
-            disabled={isUpscaling}
-          >
-            <Zap className="w-4 h-4 mr-2" />
-            {isUpscaling ? 'Processing...' : 'Upscale & Compress'}
-          </Button>
-          <Button variant="electric" onClick={handleDownloadAll}>
-            <Download className="w-4 h-4 mr-2" />
-            Download All (ZIP)
-          </Button>
-        </div>
+        {displayImages.length > 0 && (
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="outline" 
+              onClick={handleUpscaleAndCompress}
+              disabled={isUpscaling}
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              {isUpscaling ? 'Processing...' : 'Upscale & Compress'}
+            </Button>
+            <Button variant="electric" onClick={handleDownloadAll}>
+              <Download className="w-4 h-4 mr-2" />
+              Download All (ZIP)
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
