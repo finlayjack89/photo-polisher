@@ -247,14 +247,37 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const startCompositing = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Creating processing job...');
+    setCurrentProcessingStep('Converting backdrop to permanent format...');
 
     try {
-      // Create processing job
+      // Convert backdrop URL to base64 to prevent expiration issues
+      let backdropData: string;
+      if (backdrop.startsWith('data:')) {
+        // Already base64
+        backdropData = backdrop;
+      } else {
+        // Convert signed URL to base64
+        setCurrentProcessingStep('Loading backdrop image...');
+        const response = await fetch(backdrop);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        backdropData = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      setCurrentProcessingStep('Creating processing job...');
+      
+      // Create processing job with base64 backdrop data
       const { data: jobResult, error: jobError } = await supabase.functions.invoke('create-processing-job', {
         body: {
           backgroundRemovedImages: processedImages.backgroundRemoved,
-          backdrop,
+          backdrop: backdropData,
           placement,
           addBlur
         }
