@@ -39,7 +39,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            version: "f121d640bd9edc26ac3e3a4a8e5b49a6b1a29893de7c02c98c6b1b645ad95bd9", // Updated Real-ESRGAN model version
+            version: "f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa", // Working Real-ESRGAN model version
             input: {
               image: file.data.startsWith('data:') ? file.data : `data:image/png;base64,${file.data}`,
               scale: 2
