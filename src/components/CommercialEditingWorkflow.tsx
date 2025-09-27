@@ -57,7 +57,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   const analyzeImages = () => {
     const maxDimension = 1024; // Max width/height for Edge Function processing
-    const maxFileSize = 18 * 1024 * 1024; // 18MB threshold (10% below Gemini's 20MB inline limit)
+    const maxFileSize = 5 * 1024 * 1024; // 5MB threshold for compression advisory
     
     
     let needsProcessing = false;
