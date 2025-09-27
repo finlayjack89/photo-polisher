@@ -21,7 +21,8 @@ serve(async (req) => {
     console.log(`Processing ${files.length} images for intelligent compression`);
 
     const compressedFiles = [];
-    const TARGET_SIZE_MB = 8;
+    // Set target to 18MB (10% below Gemini's 20MB inline request limit)
+    const TARGET_SIZE_MB = 18;
     const TARGET_SIZE_BYTES = TARGET_SIZE_MB * 1024 * 1024;
 
     for (const file of files) {
@@ -36,7 +37,7 @@ serve(async (req) => {
         
         console.log(`Original size: ${fileName} - ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
         
-        // If image is already under 8MB, skip compression
+        // If image is already under 18MB, skip compression
         if (originalSize <= TARGET_SIZE_BYTES) {
           console.log(`Skipping compression for ${fileName} - already under ${TARGET_SIZE_MB}MB`);
           compressedFiles.push({
@@ -50,9 +51,9 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`Compressing ${fileName} using lossless compression`);
+        console.log(`Compressing ${fileName} using truly lossless PNG optimization`);
         
-        // Use Tinify's lossless compression (shrink only)
+        // Use Tinify's PNG optimization for truly lossless compression
         const response = await fetch('https://api.tinify.com/shrink', {
           method: 'POST',
           headers: {
@@ -67,11 +68,33 @@ serve(async (req) => {
 
         if (response.ok) {
           const result = await response.json();
-          const compressedResponse = await fetch(result.output.url);
-          bestResult = await compressedResponse.arrayBuffer();
-          bestSize = bestResult.byteLength;
           
-          console.log(`Lossless compression result: ${(bestSize / (1024 * 1024)).toFixed(2)}MB`);
+          // Convert to PNG to ensure lossless quality preservation
+          const pngResponse = await fetch(result.output.url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(`api:${TINIFY_API_KEY}`)}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              convert: {
+                type: 'image/png'
+              }
+            }),
+          });
+          
+          if (pngResponse.ok) {
+            const pngResult = await pngResponse.json();
+            const finalResponse = await fetch(pngResult.output.url);
+            bestResult = await finalResponse.arrayBuffer();
+          } else {
+            // Fallback to original compression result
+            const compressedResponse = await fetch(result.output.url);
+            bestResult = await compressedResponse.arrayBuffer();
+          }
+          
+          bestSize = bestResult.byteLength;
+          console.log(`Lossless PNG compression result: ${(bestSize / (1024 * 1024)).toFixed(2)}MB`);
         } else {
           console.error(`Tinify API error for ${fileName}:`, response.status);
         }
