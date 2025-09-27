@@ -293,6 +293,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       setProgress(20);
       setCurrentProcessingStep('Job created, processing images...');
 
+      // Set up job monitoring with timeout detection
+      let lastProgressUpdate = Date.now();
+      let progressCheckInterval: NodeJS.Timeout;
+
       // Subscribe to job updates for real-time progress
       const channel = supabase
         .channel('job_updates')
@@ -307,6 +311,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           async (payload) => {
             const job = payload.new as any;
             console.log('Job update received:', job.status, job.metadata);
+            lastProgressUpdate = Date.now();
 
             if (job.status === 'processing') {
               // Calculate progress based on processed count
@@ -358,6 +363,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
               }, 1000);
             } else if (job.status === 'failed') {
               console.error('Job failed:', job.error_message);
+              clearInterval(progressCheckInterval);
               toast({
                 title: "Processing Failed", 
                 description: job.error_message || "Failed to process images. Please try again.",
@@ -371,9 +377,43 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         )
         .subscribe();
 
+      // Monitor for stuck jobs - check for progress updates
+      progressCheckInterval = setInterval(async () => {
+        const timeSinceLastUpdate = Date.now() - lastProgressUpdate;
+        const stuckThreshold = 2 * 60 * 1000; // 2 minutes without updates
+        
+        if (timeSinceLastUpdate > stuckThreshold && currentStep === 'compositing') {
+          console.warn(`Job ${jobId} appears stuck - no updates for ${timeSinceLastUpdate}ms`);
+          
+          // Check job status directly
+          const { data: jobCheck } = await supabase
+            .from('processing_jobs')
+            .select('status, error_message, metadata')
+            .eq('id', jobId)
+            .single();
+            
+          if (jobCheck?.status === 'failed') {
+            clearInterval(progressCheckInterval);
+            channel.unsubscribe();
+            toast({
+              title: "Processing Failed",
+              description: jobCheck.error_message || "Job failed during processing. Please try again.",
+              variant: "destructive"
+            });
+            setIsProcessing(false);
+            setCurrentStep('positioning');
+          } else if (jobCheck?.status === 'processing') {
+            // Job is still processing but not sending updates - give it more time
+            lastProgressUpdate = Date.now();
+            setCurrentProcessingStep('Processing continues (checking status)...');
+          }
+        }
+      }, 30000); // Check every 30 seconds
+
       // Set a timeout for the job
       setTimeout(() => {
         if (currentStep === 'compositing') {
+          clearInterval(progressCheckInterval);
           channel.unsubscribe();
           toast({
             title: "Processing Timeout",

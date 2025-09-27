@@ -119,17 +119,28 @@ serve(async (req) => {
         });
 
         if (processError) {
+          console.error(`Process error for ${image.name}:`, processError);
           throw new Error(`Failed to process image ${image.name}: ${processError.message}`);
         }
 
-        if (result?.finalizedData) {
+        console.log(`Raw result structure for ${image.name}:`, JSON.stringify(result, null, 2));
+
+        // Fix response structure access: result.result.finalizedData (not result.finalizedData)
+        if (result?.result?.finalizedData) {
           processedResults.push({
             name: image.name,
-            url: result.finalizedData
+            url: result.result.finalizedData
           });
           console.log(`Successfully processed image ${image.name}`);
         } else {
-          throw new Error(`No processed data returned for image ${image.name}`);
+          console.error(`Invalid result structure for ${image.name}:`, {
+            hasResult: !!result,
+            hasResultProperty: !!result?.result,
+            hasFinalizedData: !!result?.result?.finalizedData,
+            resultKeys: result ? Object.keys(result) : 'no result',
+            resultResultKeys: result?.result ? Object.keys(result.result) : 'no result.result'
+          });
+          throw new Error(`No processed data returned for image ${image.name}. Expected result.result.finalizedData but got: ${JSON.stringify(result)}`);
         }
 
         // Update progress

@@ -193,10 +193,19 @@ Generate the final edited image with these improvements.`;
 
   } catch (error) {
     console.error('Error in process-single-image:', error);
+    console.error('Full error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      type: typeof error,
+      error: error
+    });
+    
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: 'Failed to process image', 
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 500, 
