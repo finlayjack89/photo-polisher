@@ -47,8 +47,27 @@ serve(async (req) => {
 
     console.log(`Creating processing job for user ${user.id}`);
 
-    // Create job in database using existing schema
-    const { data: job, error: jobError } = await supabase
+    // Optimize data storage to prevent timeout
+    // Store only essential data, not full base64 images
+    const optimizedBackgroundImages = backgroundRemovedImages.map(img => ({
+      name: img.name,
+      size: img.size,
+      // Store a hash or truncated preview instead of full data
+      dataPreview: img.backgroundRemovedData.substring(0, 100) + '...',
+      hasData: !!img.backgroundRemovedData
+    }));
+
+    // For backdrop, store only a preview if it's very large
+    let optimizedBackdrop = backdrop;
+    if (backdrop && backdrop.length > 50000) { // If larger than ~37KB base64
+      console.log(`Backdrop is large (${backdrop.length} chars), storing preview only`);
+      optimizedBackdrop = backdrop.substring(0, 100) + '...';
+    }
+
+    console.log(`Storing optimized data: ${optimizedBackgroundImages.length} images, backdrop length: ${optimizedBackdrop.length}`);
+
+    // Create job in database with timeout protection
+    const insertPromise = supabase
       .from('processing_jobs')
       .insert({
         user_id: user.id,
@@ -56,6 +75,15 @@ serve(async (req) => {
         operation: 'composite',
         original_image_url: 'composite-job', // Required field for composite operations
         metadata: {
+          backgroundRemovedImages: optimizedBackgroundImages,
+          backdrop: optimizedBackdrop,
+          placement,
+          addBlur,
+          // Store the actual data separately in processing_options for the worker
+          hasLargeData: true
+        },
+        // Store the actual processing data in a separate field
+        processing_options: {
           backgroundRemovedImages,
           backdrop,
           placement,
@@ -65,6 +93,16 @@ serve(async (req) => {
       .select()
       .single();
 
+    // Add timeout to the database operation
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database operation timed out after 10 seconds')), 10000);
+    });
+
+    const { data: job, error: jobError } = await Promise.race([
+      insertPromise,
+      timeoutPromise
+    ]) as any;
+
     if (jobError) {
       console.error('Error creating job:', jobError);
       throw jobError;
@@ -72,27 +110,23 @@ serve(async (req) => {
 
     console.log(`Created job ${job.id} for ${backgroundRemovedImages.length} images`);
 
-    // Trigger processing queue to start processing this job
+    // Trigger processing queue to start processing this job - use direct function invocation
     try {
-      // Use fetch directly to call the processing queue with query parameters
-      const queueUrl = `${supabaseUrl}/functions/v1/processing-queue?action=process`;
-      const queueResponse = await fetch(queueUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
+      console.log('Triggering image processing worker for job:', job.id);
+      
+      // Call image-processing-worker directly instead of processing-queue
+      const { error: workerError } = await supabase.functions.invoke('image-processing-worker', {
+        body: { job_id: job.id }
       });
       
-      if (queueResponse.ok) {
-        console.log('Processing queue triggered for job', job.id);
+      if (workerError) {
+        console.error('Failed to invoke image-processing-worker:', workerError);
       } else {
-        console.error('Failed to trigger processing queue:', await queueResponse.text());
+        console.log('Image processing worker invoked successfully for job', job.id);
       }
-    } catch (queueError) {
-      console.error('Failed to trigger processing queue:', queueError);
-      // Don't fail the job creation if queue trigger fails
+    } catch (workerError) {
+      console.error('Error invoking image-processing-worker:', workerError);
+      // Don't fail the job creation if worker invocation fails - job will remain pending
     }
 
     return new Response(JSON.stringify({ 

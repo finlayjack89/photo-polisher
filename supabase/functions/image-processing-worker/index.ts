@@ -36,7 +36,9 @@ serve(async (req) => {
       throw new Error(`Job not found: ${jobError?.message}`);
     }
 
-    const { backgroundRemovedImages, backdrop, placement, addBlur } = job.metadata;
+    // Try to get data from processing_options first (new format), fallback to metadata (legacy)
+    const jobData = job.processing_options || job.metadata;
+    const { backgroundRemovedImages, backdrop, placement, addBlur } = jobData;
     
     console.log(`Found job ${job_id} with ${backgroundRemovedImages?.length || 0} images`);
     console.log('Job metadata:', { hasBackdrop: !!backdrop, placement, addBlur });
