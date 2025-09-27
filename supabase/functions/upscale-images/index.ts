@@ -42,7 +42,7 @@ serve(async (req) => {
             version: "f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa", // Working Real-ESRGAN model version
             input: {
               image: file.data.startsWith('data:') ? file.data : `data:image/png;base64,${file.data}`,
-              scale: 2
+              scale: 2 // Maximum 2x (100% increase) to retain original texture
             }
           }),
         });
