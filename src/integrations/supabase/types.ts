@@ -86,57 +86,6 @@ export type Database = {
         }
         Relationships: []
       }
-      processing_jobs: {
-        Row: {
-          completed_at: string | null
-          created_at: string | null
-          error_message: string | null
-          expires_at: string | null
-          id: string
-          metadata: Json | null
-          operation: Database["public"]["Enums"]["operation_type"]
-          original_image_url: string
-          processed_image_url: string | null
-          processing_options: Json | null
-          started_at: string | null
-          status: Database["public"]["Enums"]["processing_status"] | null
-          thumbnail_url: string | null
-          user_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          metadata?: Json | null
-          operation: Database["public"]["Enums"]["operation_type"]
-          original_image_url: string
-          processed_image_url?: string | null
-          processing_options?: Json | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["processing_status"] | null
-          thumbnail_url?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          metadata?: Json | null
-          operation?: Database["public"]["Enums"]["operation_type"]
-          original_image_url?: string
-          processed_image_url?: string | null
-          processing_options?: Json | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["processing_status"] | null
-          thumbnail_url?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       system_health: {
         Row: {
           id: string

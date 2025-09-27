@@ -238,10 +238,98 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentStep('positioning');
   };
 
-  const handlePositioningComplete = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
+  const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
+    console.log('Positioning completed, starting V5 single-image processing...');
     setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
-    setCurrentStep('client-compositing');
-    await startClientCompositing(backdrop, placement, addBlur);
+    startV5SingleImageProcessing();
+  };
+
+  // V5 Single-Image Processing with Real-Time Progress
+  const startV5SingleImageProcessing = async () => {
+    if (!processedImages.backgroundRemoved?.length || !processedImages.backdrop || !processedImages.placement) {
+      console.error('Missing required data for V5 processing');
+      return;
+    }
+
+    setCurrentStep('processing');
+    setIsProcessing(true);
+    setProgress(0);
+    setCurrentProcessingStep('Starting V5 single-image processing...');
+
+    const results: Array<{ name: string; finalizedData: string }> = [];
+    const totalImages = processedImages.backgroundRemoved.length;
+
+    try {
+      // Process each image individually with real-time progress
+      for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
+        const image = processedImages.backgroundRemoved[i];
+        
+        setCurrentProcessingStep(`Processing ${image.name} (${i + 1}/${totalImages})...`);
+        setProgress((i / totalImages) * 100);
+
+        console.log(`V5 Processing image ${i + 1}/${totalImages}: ${image.name}`);
+
+        try {
+          const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
+            body: {
+              imageData: image.backgroundRemovedData,
+              imageName: image.name,
+              backdrop: processedImages.backdrop,
+              placement: processedImages.placement,
+              addBlur: processedImages.addBlur || false
+            }
+          });
+
+          if (error) {
+            console.error(`V5 processing failed for ${image.name}:`, error);
+            throw new Error(`Processing failed for ${image.name}: ${error.message}`);
+          }
+
+          if (data?.success && data.result) {
+            results.push({
+              name: data.result.name,
+              finalizedData: data.result.finalizedData
+            });
+            
+            console.log(`✓ Successfully processed ${image.name} with V5 architecture`);
+            setCurrentProcessingStep(`✓ Completed ${image.name} (${i + 1}/${totalImages})`);
+          } else {
+            throw new Error(`Invalid response for ${image.name}`);
+          }
+
+        } catch (imageError) {
+          console.error(`Failed to process ${image.name}:`, imageError);
+          // Continue with other images instead of failing entirely
+          setCurrentProcessingStep(`⚠ Failed to process ${image.name}, continuing with others...`);
+        }
+
+        // Update progress after each image
+        setProgress(((i + 1) / totalImages) * 100);
+      }
+
+      // Update with final results
+      setProcessedImages(prev => ({
+        ...prev,
+        finalResults: results
+      }));
+      
+      setProgress(100);
+      setCurrentProcessingStep(`✓ V5 Processing complete! ${results.length}/${totalImages} images processed successfully.`);
+      
+      console.log(`V5 Processing completed: ${results.length}/${totalImages} images successful`);
+      
+      // Move to preview step
+      setTimeout(() => {
+        setCurrentStep('preview-results');
+        setIsProcessing(false);
+      }, 1500);
+
+    } catch (error) {
+      console.error('V5 processing workflow failed:', error);
+      setCurrentProcessingStep(`❌ Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setProgress(0);
+      setIsProcessing(false);
+    }
   };
 
   const startClientCompositing = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
