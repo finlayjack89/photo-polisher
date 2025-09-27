@@ -15,27 +15,88 @@ interface CompositeRequest {
   addBlur: boolean;
 }
 
-// Function to check image size and pass through if acceptable
-const checkImageSize = async (imageData: string, maxSizeKB: number = 4096): Promise<string> => {
+// Enhanced image validation and size checking
+const validateAndProcessImage = async (imageData: string, imageName: string, maxSizeKB: number = 4096): Promise<string> => {
   try {
-    const originalSize = Math.round((imageData.length * 3) / 4 / 1024);
-    console.log(`Image size: ${originalSize}KB, limit: ${maxSizeKB}KB`);
+    // Check if image data exists and is valid
+    if (!imageData || typeof imageData !== 'string') {
+      throw new Error(`Invalid image data for ${imageName}: empty or non-string`);
+    }
+
+    // Check if it's a valid data URL
+    if (!imageData.startsWith('data:image/')) {
+      throw new Error(`Invalid image format for ${imageName}: must be a data URL starting with 'data:image/'`);
+    }
+
+    // Extract and validate base64 data
+    const [header, base64Data] = imageData.split(',');
+    if (!base64Data || base64Data.length === 0) {
+      throw new Error(`No base64 data found for ${imageName}`);
+    }
+
+    // Validate base64 format
+    try {
+      atob(base64Data);
+    } catch (error) {
+      throw new Error(`Invalid base64 encoding for ${imageName}`);
+    }
+
+    // Calculate and log size
+    const originalSize = Math.round((base64Data.length * 3) / 4 / 1024);
+    console.log(`${imageName} validated - Size: ${originalSize}KB, limit: ${maxSizeKB}KB`);
     
-    if (originalSize <= maxSizeKB) {
-      console.log('Image within acceptable size limits');
-      return imageData;
+    if (originalSize === 0) {
+      throw new Error(`Image ${imageName} appears to be empty (0KB)`);
+    }
+
+    if (originalSize > 20480) { // 20MB hard limit for Gemini
+      throw new Error(`Image ${imageName} (${originalSize}KB) exceeds Gemini's 20MB limit`);
     }
     
-    console.log(`Warning: Image (${originalSize}KB) exceeds recommended limit (${maxSizeKB}KB) but proceeding anyway`);
-    console.log('Consider using Tinify compression earlier in the pipeline for better results');
+    if (originalSize > maxSizeKB) {
+      console.log(`Warning: ${imageName} (${originalSize}KB) exceeds recommended limit (${maxSizeKB}KB)`);
+    }
     
-    // Return original image - let Gemini handle it
     return imageData;
     
   } catch (error) {
-    console.error('Error checking image size:', error);
-    return imageData;
+    console.error(`Image validation failed for ${imageName}:`, error);
+    throw error;
   }
+};
+
+// Retry logic with exponential backoff
+const retryWithBackoff = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Don't retry on certain error types
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('invalid image') || 
+            errorMessage.includes('unable to process input image') ||
+            errorMessage.includes('safety') ||
+            errorMessage.includes('policy')) {
+          console.log(`Non-retryable error, failing immediately: ${error.message}`);
+          throw error;
+        }
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Max retries reached');
 };
 
 const buildCompositingPrompt = (addBlur: boolean): string => {
@@ -102,15 +163,17 @@ serve(async (req) => {
       console.log(`Subject positioned data size: ${Math.round((subject.data.length * 3) / 4 / 1024)}KB`);
 
       try {
-        // Check image sizes for Gemini API (up to 20MB supported, 4MB recommended)
-        console.log('Checking image sizes for Gemini 2.5 Flash...');
-        const processedSubjectData = await checkImageSize(subject.data, 4096);
-        const processedBackdropData = await checkImageSize(backdropData, 4096);
+        // Validate and process images before sending to Gemini API
+        console.log('Validating images for Gemini 2.5 Flash...');
+        const processedSubjectData = await validateAndProcessImage(subject.data, subject.name, 4096);
+        const processedBackdropData = await validateAndProcessImage(backdropData, 'backdrop', 4096);
         
         // Extract base64 data and detect mime type
         const getImageInfo = (dataUrl: string) => {
           const [header, data] = dataUrl.split(',');
-          const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
+          const mimeType = header.includes('png') ? 'image/png' : 
+                          header.includes('jpeg') || header.includes('jpg') ? 'image/jpeg' :
+                          header.includes('webp') ? 'image/webp' : 'image/jpeg';
           return { data, mimeType };
         };
         
@@ -120,93 +183,102 @@ serve(async (req) => {
         console.log(`Subject image: ${subjectInfo.mimeType}`);
         console.log(`Backdrop image: ${backdropInfo.mimeType}`);
         
-        // Structure the prompt correctly for multi-image compositing
-        const contents = [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: subjectInfo.mimeType,
-              data: subjectInfo.data
+        // Composite with retry logic
+        const compositedData = await retryWithBackoff(async () => {
+          // Structure the prompt correctly for multi-image compositing
+          const contents = [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: subjectInfo.mimeType,
+                data: subjectInfo.data
+              }
+            },
+            {
+              inlineData: {
+                mimeType: backdropInfo.mimeType,
+                data: backdropInfo.data
+              }
             }
-          },
-          {
-            inlineData: {
-              mimeType: backdropInfo.mimeType,
-              data: backdropInfo.data
-            }
-          }
-        ];
+          ];
 
-        console.log('Calling Gemini 2.5 Flash for image compositing...');
-        const result = await model.generateContent(contents);
-        
-        console.log('Gemini 2.5 Flash API call completed');
-        
-        // Parse response for generated image
-        let compositedData = null;
-        
-        if (result && result.response) {
+          console.log(`Calling Gemini 2.5 Flash for image compositing (subject: ${subject.name})...`);
+          const result = await model.generateContent(contents);
+          
+          console.log('Gemini 2.5 Flash API call completed');
+          
+          // Parse response for generated image
+          if (!result || !result.response) {
+            throw new Error('No response received from Gemini');
+          }
+
           console.log('Response received from Gemini 2.5 Flash');
-          console.log('Full response structure:', JSON.stringify(result.response, null, 2));
           
           // Check for candidates with image data
-          if (result.response.candidates && Array.isArray(result.response.candidates) && result.response.candidates.length > 0) {
-            console.log('Candidates array exists with length:', result.response.candidates.length);
+          if (!result.response.candidates || !Array.isArray(result.response.candidates) || result.response.candidates.length === 0) {
+            console.log('No candidates found in response');
+            console.log('Full response structure:', JSON.stringify(result.response, null, 2));
+            throw new Error('Gemini returned no candidates');
+          }
+
+          console.log('Candidates array exists with length:', result.response.candidates.length);
+          
+          for (let i = 0; i < result.response.candidates.length; i++) {
+            const candidate = result.response.candidates[i];
             
-            for (let i = 0; i < result.response.candidates.length; i++) {
-              const candidate = result.response.candidates[i];
-              console.log(`Processing candidate ${i}:`, JSON.stringify(candidate, null, 2));
+            // Check for safety or policy blocks
+            if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+              console.log(`Candidate ${i} blocked with reason: ${candidate.finishReason}`);
+              if (candidate.finishReason === 'SAFETY') {
+                throw new Error('Content was blocked by safety filters');
+              }
+              continue;
+            }
+            
+            if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
+              console.log(`Candidate ${i} has ${candidate.content.parts.length} parts`);
               
-              if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
-                console.log(`Candidate ${i} has ${candidate.content.parts.length} parts`);
+              for (let j = 0; j < candidate.content.parts.length; j++) {
+                const part = candidate.content.parts[j];
                 
-                for (let j = 0; j < candidate.content.parts.length; j++) {
-                  const part = candidate.content.parts[j];
-                  console.log(`Part ${j}:`, JSON.stringify(part, null, 2));
-                  
-                  if (part.inlineData && part.inlineData.data) {
-                    console.log(`Found generated image data in candidate ${i}, part ${j}`);
-                    const mimeType = part.inlineData.mimeType || 'image/jpeg';
-                    compositedData = `data:${mimeType};base64,${part.inlineData.data}`;
-                    break;
-                  } else if (part.text) {
-                    console.log(`Found text response: ${part.text.substring(0, 200)}...`);
-                  }
+                if (part.inlineData && part.inlineData.data) {
+                  console.log(`Found generated image data in candidate ${i}, part ${j}`);
+                  const mimeType = part.inlineData.mimeType || 'image/jpeg';
+                  return `data:${mimeType};base64,${part.inlineData.data}`;
+                } else if (part.text) {
+                  console.log(`Found text response: ${part.text.substring(0, 200)}...`);
                 }
-                
-                if (compositedData) break;
-              }
-              
-              // Check for any error indicators
-              if (candidate.finishReason) {
-                console.log('Finish reason:', candidate.finishReason);
-              }
-              if (candidate.safetyRatings) {
-                console.log('Safety ratings:', JSON.stringify(candidate.safetyRatings));
               }
             }
-          } else {
-            console.log('No candidates found in response');
           }
-        } else {
-          console.log('No response received from Gemini');
-        }
-        
-        if (compositedData) {
-          results.push({
-            name: subject.name,
-            compositedData: compositedData
-          });
-          console.log(`Successfully composited ${subject.name} using Gemini 2.5 Flash`);
-        } else {
-          console.error('No image data generated by Gemini 2.5 Flash');
-          console.log('Full response structure:', JSON.stringify(result, null, 2));
-          throw new Error('Gemini 2.5 Flash did not generate composite image');
-        }
+          
+          throw new Error('No image data found in Gemini response');
+        }, 3, 2000);
+
+        results.push({
+          name: subject.name,
+          compositedData: compositedData
+        });
+        console.log(`Successfully composited ${subject.name} using Gemini 2.5 Flash`);
         
       } catch (error) {
         console.error(`Error compositing ${subject.name}:`, error);
-        throw new Error(`Failed to composite ${subject.name}: ${error instanceof Error ? error.message : String(error)}`);
+        
+        // Provide more specific error messages
+        let errorMessage = `Failed to composite ${subject.name}`;
+        if (error instanceof Error) {
+          if (error.message.includes('Unable to process input image')) {
+            errorMessage += ': Image format may be unsupported or corrupted. Try converting to JPG/PNG format.';
+          } else if (error.message.includes('safety')) {
+            errorMessage += ': Content was blocked by safety filters. Try adjusting the image content.';
+          } else if (error.message.includes('quota') || error.message.includes('limit')) {
+            errorMessage += ': API quota exceeded. Please try again later.';
+          } else {
+            errorMessage += `: ${error.message}`;
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
     }
 
