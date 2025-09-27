@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { processAndCompressImage } from "@/lib/image-resize-utils";
 import heic2any from "heic2any";
 
 interface UploadZoneProps {
@@ -51,19 +52,26 @@ export const UploadZone = ({ onFilesUploaded }: UploadZoneProps) => {
       file.size <= 20 * 1024 * 1024 // 20MB limit
     );
     
-    // Process files for HEIC conversion
+    // Process files for HEIC conversion and smart compression
     const processedFiles: File[] = [];
     for (const file of validFiles) {
       try {
+        let processedFile = file;
+        
+        // Step 1: Convert HEIC if needed
         if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
-          const convertedFile = await convertHeicToPng(file);
-          processedFiles.push(convertedFile);
-        } else {
-          processedFiles.push(file);
+          processedFile = await convertHeicToPng(file);
         }
+        
+        // Step 2: Smart resize and compress to 2048px max and under 5MB
+        if (processedFile.type.startsWith('image/')) {
+          processedFile = await processAndCompressImage(processedFile);
+        }
+        
+        processedFiles.push(processedFile);
       } catch (error) {
         console.error(`Error processing file ${file.name}:`, error);
-        // Skip files that fail to convert
+        // Skip files that fail to convert/process
       }
     }
     

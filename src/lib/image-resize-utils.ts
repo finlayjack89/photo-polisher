@@ -106,3 +106,86 @@ export const getImageDimensions = (file: File): Promise<{ width: number; height:
     img.src = URL.createObjectURL(file);
   });
 };
+
+/**
+ * Smart two-step image processing: resize to 2048px max, then compress iteratively if needed
+ * Ensures maximum quality while staying under 5MB
+ */
+export const processAndCompressImage = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = async () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Could not get canvas context'));
+
+        // Step A: Resize to 2048px max (longest side) while maintaining aspect ratio
+        const maxDimension = 2048;
+        let { width, height } = img.naturalWidth > img.naturalHeight 
+          ? { width: maxDimension, height: Math.round((img.naturalHeight * maxDimension) / img.naturalWidth) }
+          : { width: Math.round((img.naturalWidth * maxDimension) / img.naturalHeight), height: maxDimension };
+
+        // If image is already smaller than 2048px, keep original dimensions
+        if (img.naturalWidth <= maxDimension && img.naturalHeight <= maxDimension) {
+          width = img.naturalWidth;
+          height = img.naturalHeight;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw resized image
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to high-quality JPEG blob (0.98 quality)
+        canvas.toBlob(async (initialBlob) => {
+          if (!initialBlob) return reject(new Error('Failed to create initial blob'));
+          
+          const targetSizeBytes = 5 * 1024 * 1024; // 5MB
+
+          // Step B: Check if already under 5MB
+          if (initialBlob.size <= targetSizeBytes) {
+            const finalFile = new File([initialBlob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            resolve(finalFile);
+            return;
+          }
+
+          // Step B: Iterative compression if needed
+          let currentQuality = 0.96;
+          const qualityStep = 0.02;
+          let bestBlob = initialBlob;
+
+          while (currentQuality >= 0.5 && bestBlob.size > targetSizeBytes) {
+            await new Promise<void>((resolveCompress) => {
+              canvas.toBlob((compressedBlob) => {
+                if (compressedBlob && compressedBlob.size <= targetSizeBytes) {
+                  bestBlob = compressedBlob;
+                }
+                resolveCompress();
+              }, 'image/jpeg', currentQuality);
+            });
+
+            if (bestBlob.size <= targetSizeBytes) break;
+            currentQuality -= qualityStep;
+          }
+
+          const finalFile = new File([bestBlob], file.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+          
+          resolve(finalFile);
+        }, 'image/jpeg', 0.98);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+};
