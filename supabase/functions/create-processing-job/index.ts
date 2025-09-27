@@ -54,6 +54,7 @@ serve(async (req) => {
         user_id: user.id,
         status: 'pending',
         operation: 'composite',
+        original_image_url: 'composite-job', // Required field for composite operations
         metadata: {
           backgroundRemovedImages,
           backdrop,
