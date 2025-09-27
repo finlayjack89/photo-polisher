@@ -19,7 +19,7 @@ interface CommercialEditingWorkflowProps {
   onBack: () => void;
 }
 
-type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'client-compositing' | 'preview-results' | 'ai-enhancement' | 'complete';
+type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'client-compositing' | 'processing' | 'preview-results' | 'ai-enhancement' | 'complete';
 
 interface ProcessedImages {
   backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
@@ -28,6 +28,7 @@ interface ProcessedImages {
   addBlur?: boolean;
   clientComposited?: Array<{ name: string; compositedData: string; }>;
   aiEnhanced?: Array<{ name: string; enhancedData: string; }>;
+  finalResults?: Array<{ name: string; finalizedData: string; }>;
 }
 
 export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps> = ({
@@ -680,10 +681,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     const finalImages = processedImages.aiEnhanced || processedImages.clientComposited;
     return (
       <GalleryPreview
-        processedImages={finalImages.map((result, index) => ({
+        results={finalImages.map((result, index) => ({
           name: result.name,
           originalData: files[index] ? URL.createObjectURL(files[index]) : '',
-          processedData: processedImages.aiEnhanced 
+          finalizedData: processedImages.aiEnhanced 
             ? (result as any).enhancedData 
             : (result as any).compositedData,
           size: ((processedImages.aiEnhanced 
@@ -691,7 +692,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             : (result as any).compositedData) || '').length * 0.75
         }))}
         onBack={onBack}
-        onRetry={() => setCurrentStep('compression')}
+        title="Final Enhanced Images"
       />
     );
   }
