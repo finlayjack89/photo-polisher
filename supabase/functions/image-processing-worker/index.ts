@@ -37,10 +37,12 @@ serve(async (req) => {
     }
 
     const { backgroundRemovedImages } = job.metadata;
-    const { backdrop, placement } = job.processing_options || {};
-    console.log(`Found job ${job_id} with ${backgroundRemovedImages.length} images`);
-
-    if (backgroundRemovedImages.length === 0) {
+    const { backdrop, placement, addBlur } = job.processing_options || {};
+    
+    console.log(`Found job ${job_id} with ${backgroundRemovedImages?.length || 0} images`);
+    console.log('Job processing options:', { hasBackdrop: !!backdrop, placement, addBlur });
+    
+    if (!backgroundRemovedImages || backgroundRemovedImages.length === 0) {
       await supabase
         .from('processing_jobs')
         .update({ 
@@ -97,14 +99,24 @@ serve(async (req) => {
           .eq('id', job_id);
 
         // Process single image
+        const requestBody = {
+          imageUrl: image.backgroundRemovedData,
+          imageName: image.name,
+          backdrop: backdrop,
+          placement: placement || { x: 0.5, y: 0.5, scale: 1.0 },
+          addBlur: addBlur || false
+        };
+        
+        console.log('Sending to process-single-image:', {
+          imageName: requestBody.imageName,
+          hasImageUrl: !!requestBody.imageUrl,
+          hasBackdrop: !!requestBody.backdrop,
+          placement: requestBody.placement,
+          addBlur: requestBody.addBlur
+        });
+        
         const { data: result, error: processError } = await supabase.functions.invoke('process-single-image', {
-          body: {
-            imageUrl: image.backgroundRemovedData,
-            imageName: image.name,
-            backdrop: backdrop,
-            placement: placement || { x: 0.5, y: 0.5, scale: 1.0 },
-            addBlur: false
-          }
+          body: requestBody
         });
 
         if (processError) {

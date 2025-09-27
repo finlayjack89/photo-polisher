@@ -27,8 +27,22 @@ serve(async (req) => {
   try {
     const { imageUrl, imageName, backdrop, placement, addBlur }: ProcessSingleImageRequest = await req.json();
     
+    console.log('Received parameters:', { 
+      hasImageUrl: !!imageUrl, 
+      imageName, 
+      hasBackdrop: !!backdrop, 
+      placement,
+      addBlur 
+    });
+    
     if (!imageUrl || !imageName || !backdrop || !placement) {
-      throw new Error('Missing required parameters');
+      console.error('Missing parameters:', {
+        imageUrl: !!imageUrl,
+        imageName: !!imageName,
+        backdrop: !!backdrop,
+        placement: !!placement
+      });
+      throw new Error(`Missing required parameters. Got: imageUrl=${!!imageUrl}, imageName=${!!imageName}, backdrop=${!!backdrop}, placement=${!!placement}`);
     }
 
     console.log(`Processing single image: ${imageName}`);
