@@ -230,6 +230,7 @@ export type Database = {
         | "thumbnail"
         | "format_convert"
         | "batch"
+        | "composite"
       processing_status:
         | "pending"
         | "processing"
@@ -369,6 +370,7 @@ export const Constants = {
         "thumbnail",
         "format_convert",
         "batch",
+        "composite",
       ],
       processing_status: [
         "pending",
