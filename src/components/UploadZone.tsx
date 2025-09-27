@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import heic2any from "heic2any";
 
 interface UploadZoneProps {
   onFilesUploaded: (files: File[]) => void;
@@ -14,15 +15,62 @@ export const UploadZone = ({ onFilesUploaded }: UploadZoneProps) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<string[]>([]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  // Convert HEIC to PNG with quality preservation
+  const convertHeicToPng = useCallback(async (file: File): Promise<File> => {
+    try {
+      console.log(`Converting HEIC file: ${file.name}`);
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: "image/png",
+        quality: 1.0 // Maximum quality preservation
+      });
+      
+      // Handle the result which might be an array of blobs
+      const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      
+      // Create new file with PNG extension
+      const originalName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+      const newFileName = `${originalName}.png`;
+      
+      const convertedFile = new File([blob], newFileName, { 
+        type: 'image/png',
+        lastModified: file.lastModified 
+      });
+      
+      console.log(`Successfully converted ${file.name} to ${newFileName}`);
+      return convertedFile;
+    } catch (error) {
+      console.error(`Failed to convert HEIC file ${file.name}:`, error);
+      throw new Error(`Failed to convert ${file.name}. Please try converting to PNG manually.`);
+    }
+  }, []);
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const validFiles = acceptedFiles.filter(file => 
-      file.type.startsWith('image/') && file.size <= 20 * 1024 * 1024 // 20MB limit
+      (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.heic')) && 
+      file.size <= 20 * 1024 * 1024 // 20MB limit
     );
     
-    setSelectedFiles(prev => [...prev, ...validFiles].slice(0, 20)); // Max 20 files
+    // Process files for HEIC conversion
+    const processedFiles: File[] = [];
+    for (const file of validFiles) {
+      try {
+        if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+          const convertedFile = await convertHeicToPng(file);
+          processedFiles.push(convertedFile);
+        } else {
+          processedFiles.push(file);
+        }
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        // Skip files that fail to convert
+      }
+    }
     
-    // Generate previews
-    validFiles.forEach(file => {
+    setSelectedFiles(prev => [...prev, ...processedFiles].slice(0, 20)); // Max 20 files
+    
+    // Generate previews for processed files
+    processedFiles.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result) {
@@ -31,12 +79,12 @@ export const UploadZone = ({ onFilesUploaded }: UploadZoneProps) => {
       };
       reader.readAsDataURL(file);
     });
-  }, []);
+  }, [convertHeicToPng]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp']
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic']
     },
     maxFiles: 20,
     maxSize: 20 * 1024 * 1024 // 20MB
@@ -81,7 +129,7 @@ export const UploadZone = ({ onFilesUploaded }: UploadZoneProps) => {
                     Drop product photos or click to browse
                   </h3>
                   <p className="text-muted-foreground">
-                    Upload up to 20 images • PNG, JPG, WEBP • Max 20MB each
+                    Upload up to 20 images • PNG, JPG, WEBP, HEIC • Max 20MB each
                   </p>
                 </>
               )}

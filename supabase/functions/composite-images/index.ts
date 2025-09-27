@@ -148,9 +148,9 @@ serve(async (req) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-2.5-flash-image-preview",
       generationConfig: {
-        temperature: 0.4,
+        temperature: 0.2,
         responseMimeType: "image/png",
       },
     });
@@ -169,7 +169,7 @@ serve(async (req) => {
 
       try {
         // Validate and process images before sending to Gemini API
-        console.log('Validating images for Gemini 2.5 Flash...');
+        console.log('Validating images for Gemini 2.5 Flash Image Preview...');
         const processedSubjectData = await validateAndProcessImage(subject.data, subject.name, 4096);
         const processedBackdropData = await validateAndProcessImage(backdropData, 'backdrop', 4096);
         
@@ -207,17 +207,17 @@ serve(async (req) => {
             }
           ];
 
-          console.log(`Calling Gemini 2.5 Flash for image compositing (subject: ${subject.name})...`);
+          console.log(`Calling Gemini 2.5 Flash Image Preview for image compositing (subject: ${subject.name})...`);
           const result = await model.generateContent(contents);
           
-          console.log('Gemini 2.5 Flash API call completed');
+          console.log('Gemini 2.5 Flash Image Preview API call completed');
           
           // Parse response for generated image
           if (!result || !result.response) {
             throw new Error('No response received from Gemini');
           }
 
-          console.log('Response received from Gemini 2.5 Flash');
+          console.log('Response received from Gemini 2.5 Flash Image Preview');
           
           // Check for candidates with image data
           if (!result.response.candidates || !Array.isArray(result.response.candidates) || result.response.candidates.length === 0) {
@@ -264,7 +264,7 @@ serve(async (req) => {
           name: subject.name,
           compositedData: compositedData
         });
-        console.log(`Successfully composited ${subject.name} using Gemini 2.5 Flash`);
+        console.log(`Successfully composited ${subject.name} using Gemini 2.5 Flash Image Preview`);
         
       } catch (error) {
         console.error(`Error compositing ${subject.name}:`, error);
@@ -287,7 +287,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Successfully composited all ${results.length} subjects using Gemini 2.5 Flash`);
+    console.log(`Successfully composited all ${results.length} subjects using Gemini 2.5 Flash Image Preview`);
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

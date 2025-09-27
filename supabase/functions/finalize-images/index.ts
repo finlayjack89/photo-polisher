@@ -48,9 +48,9 @@ serve(async (req) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-2.5-flash-image-preview",
       generationConfig: {
-        temperature: 0.4,
+        temperature: 0.2,
         responseMimeType: "image/png",
       },
     });
@@ -116,16 +116,16 @@ serve(async (req) => {
           }
         ];
 
-        console.log('Calling Gemini 2.5 Flash for image finalization...');
+        console.log('Calling Gemini 2.5 Flash Image Preview for image finalization...');
         const result = await model.generateContent(contents);
         
-        console.log('Gemini 2.5 Flash finalization completed');
+        console.log('Gemini 2.5 Flash Image Preview finalization completed');
         
         // Parse response for generated image
         let finalizedData = null;
         
         if (result && result.response) {
-          console.log('Response received from Gemini 2.5 Flash');
+          console.log('Response received from Gemini 2.5 Flash Image Preview');
           console.log('Full response structure:', JSON.stringify(result.response, null, 2));
           
           // Check for candidates with image data
@@ -176,10 +176,10 @@ serve(async (req) => {
             name: compositedImage.name,
             finalizedData: finalizedData
           });
-          console.log(`Successfully finalized ${compositedImage.name} using Gemini 2.5 Flash`);
+          console.log(`Successfully finalized ${compositedImage.name} using Gemini 2.5 Flash Image Preview`);
         } else {
           // Fallback: If Gemini doesn't generate image, use the original composited image
-          console.warn(`Gemini 2.5 Flash didn't generate image for ${compositedImage.name}, using original composited image as fallback`);
+          console.warn(`Gemini 2.5 Flash Image Preview didn't generate image for ${compositedImage.name}, using original composited image as fallback`);
           results.push({
             name: compositedImage.name,
             finalizedData: compositedImage.data

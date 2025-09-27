@@ -76,7 +76,11 @@ serve(async (req) => {
     
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash"
+      model: "gemini-2.5-flash-image-preview",
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "image/png",
+      }
     });
     
     const compositePrompt = `🚨 CRITICAL COMPOSITING TASK - SUBJECT PRESERVATION IS MANDATORY 🚨

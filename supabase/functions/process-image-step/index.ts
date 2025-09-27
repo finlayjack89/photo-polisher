@@ -203,7 +203,11 @@ async function performComposite(imageData: string, backdrop: string, placement: 
   
   const genAI = new GoogleGenerativeAI(geminiApiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash"
+    model: "gemini-2.5-flash-image-preview",
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "image/png",
+    }
   });
   
   const compositePrompt = `🚨 CRITICAL COMPOSITING TASK - SUBJECT PRESERVATION IS MANDATORY 🚨
@@ -270,7 +274,11 @@ async function performFinalize(compositedData: string, guidanceData: string) {
 
   const genAI = new GoogleGenerativeAI(geminiApiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash"
+    model: "gemini-2.5-flash-image-preview",
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "image/png",
+    }
   });
   
   const finalizationPrompt = `Edit this composited product image to add professional finishing touches.

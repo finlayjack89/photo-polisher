@@ -100,7 +100,13 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash-image-preview",
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "image/png",
+      }
+    });
 
     const prompt = buildSubjectMaskPrompt(productType, features);
     const results = [];
