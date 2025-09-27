@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { Upload, Sparkles, Image as ImageIcon, Zap, Settings } from "lucide-react";
+import { Upload, Sparkles, Image as ImageIcon, Zap, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { ProcessingWorkflow } from "@/components/ProcessingWorkflow";
 import { CommercialEditingWorkflow } from "@/components/CommercialEditingWorkflow";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import heroImage from "@/assets/hero-studio.jpg";
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'commercial'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const navigate = useNavigate();
+  const { user, signOut, loading } = useAuth();
 
   const handleFilesUploaded = (files: File[]) => {
     setUploadedFiles(files);
@@ -29,16 +31,39 @@ const Index = () => {
             <h1 className="text-xl font-bold text-foreground">LuxSnap</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => navigate("/settings")}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-            <Button variant="ghost" size="sm">Sign In</Button>
-            <Button variant="electric" size="sm">Get Started</Button>
+            {user && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate("/settings")}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            )}
+            {user ? (
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            ) : (
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => navigate("/auth")}
+                >
+                  Sign In
+                </Button>
+                <Button 
+                  variant="electric" 
+                  size="sm"
+                  onClick={() => navigate("/auth?mode=signup")}
+                >
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
