@@ -66,7 +66,6 @@ serve(async (req) => {
       model: "gemini-2.5-flash-image-preview",
       generationConfig: {
         temperature: 0.2,
-        responseMimeType: "image/png",
       }
     });
 
