@@ -56,7 +56,7 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
           
           setJobStatus(updatedJob.status);
           
-          if (updatedJob.status === 'complete' && updatedJob.results) {
+          if (updatedJob.status === 'completed' && updatedJob.results) {
             const results = Array.isArray(updatedJob.results) ? updatedJob.results.map((result: any) => ({
               name: result.name,
               originalData: '', 
@@ -94,7 +94,7 @@ export const GalleryPreview = ({ processedImages, jobId, onBack, onRetry }: Gall
       if (job && job.status) {
         setJobStatus(job.status);
         
-        if (job.status === 'complete' && (job as any).results) {
+        if (job.status === 'completed' && (job as any).results) {
           const results = Array.isArray((job as any).results) ? (job as any).results.map((result: any) => ({
             name: result.name,
             originalData: '',

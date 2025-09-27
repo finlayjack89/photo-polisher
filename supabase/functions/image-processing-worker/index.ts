@@ -205,7 +205,7 @@ Generate the final edited image with these improvements.`;
       await supabase
         .from('processing_jobs')
         .update({ 
-          status: 'complete',
+          status: 'completed',
           results: results
         })
         .eq('id', job_id);
