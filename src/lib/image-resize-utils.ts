@@ -57,11 +57,14 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Determine target size: for files originally over 5MB, minimum should be 4.5MB
+        // Determine compression strategy based on original file size
         const originalSize = originalFileSize || file.size;
-        const targetSizeInBytes = originalSize > 5 * 1024 * 1024 
-          ? 4.5 * 1024 * 1024  // 4.5MB minimum for files over 5MB
-          : 5 * 1024 * 1024;   // 5MB for smaller files
+        const wasOriginallyLarge = originalSize > 5 * 1024 * 1024;
+        
+        // For files originally over 5MB, aim to keep them between 4.5-5MB
+        // For smaller files, keep them under 5MB
+        const maxTargetSize = 5 * 1024 * 1024;  // 5MB max
+        const minTargetSize = wasOriginallyLarge ? 4.5 * 1024 * 1024 : 0;  // 4.5MB min for large files
         
         // First, attempt to get a high-quality blob
         canvas.toBlob(
@@ -69,13 +72,25 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
             if (!blob) {
               return reject(new Error('Canvas toBlob returned null'));
             }
-            if (blob.size <= targetSizeInBytes) {
-              // If it's already under the target, we're done
+            
+            // If it's already in the target range, we're done
+            if (blob.size <= maxTargetSize && blob.size >= minTargetSize) {
               return resolve(blob);
             }
-            // If it's too large, start iterative compression
+            
+            // If it's under the minimum for large files, return it anyway (better quality)
+            if (wasOriginallyLarge && blob.size < minTargetSize) {
+              return resolve(blob);
+            }
+            
+            // Only compress if it's over the max target
+            if (blob.size <= maxTargetSize) {
+              return resolve(blob);
+            }
+            
+            // If it's too large, start gentle compression
             const compressLoop = async () => {
-              for (let quality = 0.96; quality > 0.1; quality -= 0.02) {
+              for (let quality = 0.95; quality > 0.1; quality -= 0.05) {
                 const compressedBlob: Blob = await new Promise((res) => {
                   canvas.toBlob(
                     (b) => res(b as Blob),
@@ -83,11 +98,24 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
                     quality
                   );
                 });
-                if (compressedBlob.size <= targetSizeInBytes) {
+                
+                // Stop when we're in the target range
+                if (compressedBlob.size <= maxTargetSize && compressedBlob.size >= minTargetSize) {
+                  return resolve(compressedBlob);
+                }
+                
+                // For large files, don't compress below 4.5MB
+                if (wasOriginallyLarge && compressedBlob.size <= minTargetSize) {
+                  return resolve(compressedBlob);
+                }
+                
+                // For smaller files, stop when under 5MB
+                if (!wasOriginallyLarge && compressedBlob.size <= maxTargetSize) {
                   return resolve(compressedBlob);
                 }
               }
-              // If loop finishes, return the last (smallest) blob
+              
+              // If loop finishes, return the last blob
               const lastBlob: Blob = await new Promise((res) => {
                 canvas.toBlob((b) => res(b as Blob), 'image/jpeg', 0.1);
               });
