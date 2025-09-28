@@ -179,17 +179,17 @@ export const fileToDataUrl = (file: File): Promise<string> => {
  */
 export const compositeLayers = async (
   backdropUrl: string,
-  shadowLayerUrl: string,
+  shadowLayerUrl: string | null,
   subjectUrl: string,
   placement: SubjectPlacement
 ): Promise<string> => {
   console.log('🎨 SECURE COMPOSITING: Starting pure layer composition');
   console.log('📊 Input validation:', {
     backdropLength: backdropUrl?.length,
-    shadowLayerLength: shadowLayerUrl?.length,
+    shadowLayerLength: shadowLayerUrl?.length || 0,
     subjectLength: subjectUrl?.length,
     backdropFormat: backdropUrl?.substring(0, 50),
-    shadowLayerFormat: shadowLayerUrl?.substring(0, 50),
+    shadowLayerFormat: shadowLayerUrl?.substring(0, 50) || 'N/A (no shadow layer)',
     subjectFormat: subjectUrl?.substring(0, 50),
     placement
   });
@@ -207,7 +207,7 @@ export const compositeLayers = async (
     throw new Error(error);
   }
   
-  if (!shadowLayerUrl?.startsWith('data:image/')) {
+  if (shadowLayerUrl && !shadowLayerUrl.startsWith('data:image/')) {
     const error = 'CRITICAL ERROR: Invalid shadow layer data format';
     console.error('🚨', error);
     throw new Error(error);
@@ -215,6 +215,7 @@ export const compositeLayers = async (
   
   console.log('✅ SECURITY CHECK PASSED: All inputs are valid image data URLs');
   console.log('✅ TRANSPARENCY CHECK PASSED: Subject is PNG with transparency');
+  console.log(shadowLayerUrl ? '✅ Shadow layer provided' : '⚠️ No shadow layer provided');
 
   // Helper function to load image
   const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {
@@ -237,15 +238,25 @@ export const compositeLayers = async (
   };
 
   try {
-    // Load all images in parallel
-    console.log('compositeLayers - Loading all images in parallel...');
-    const [backdrop, shadowLayer, subject] = await Promise.all([
+    // Load backdrop and subject images
+    console.log('compositeLayers - Loading backdrop and subject images...');
+    const loadPromises = [
       loadImage(backdropUrl, 'backdrop'),
-      loadImage(shadowLayerUrl, 'shadow layer'),
       loadImage(subjectUrl, 'subject')
-    ]);
+    ];
+    
+    // Add shadow layer to loading if provided
+    if (shadowLayerUrl) {
+      console.log('compositeLayers - Adding shadow layer to loading queue...');
+      loadPromises.push(loadImage(shadowLayerUrl, 'shadow layer'));
+    }
+    
+    const loadedImages = await Promise.all(loadPromises);
+    const backdrop = loadedImages[0];
+    const subject = loadedImages[1];
+    const shadowLayer = shadowLayerUrl ? loadedImages[2] : null;
 
-    console.log('compositeLayers - All images loaded successfully');
+    console.log('compositeLayers - All required images loaded successfully');
 
     // Create canvas with backdrop dimensions
     const canvas = document.createElement('canvas');
@@ -263,8 +274,13 @@ export const compositeLayers = async (
     console.log('compositeLayers - Drawing backdrop...');
     ctx.drawImage(backdrop, 0, 0);
 
-    console.log('compositeLayers - Drawing shadow layer (scaled to backdrop size)...');
-    ctx.drawImage(shadowLayer, 0, 0, canvas.width, canvas.height);
+    // Draw shadow layer if available
+    if (shadowLayer) {
+      console.log('compositeLayers - Drawing shadow layer (scaled to backdrop size)...');
+      ctx.drawImage(shadowLayer, 0, 0, canvas.width, canvas.height);
+    } else {
+      console.log('compositeLayers - Skipping shadow layer (not provided)');
+    }
 
     console.log('compositeLayers - Drawing subject with placement:', placement);
     // Calculate subject positioning based on placement settings

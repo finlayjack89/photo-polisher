@@ -133,14 +133,39 @@ serve(async (req) => {
     const shadowResult = await Promise.race([shadowPromise, timeoutPromise]);
     const shadowResponse = await (shadowResult as any).response;
 
-    if (!shadowResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-      console.warn(`❌ Shadow generation failed for ${imageName} - no data returned`);
-      throw new Error(`Shadow generation failed for ${imageName}`);
+    console.log(`🔍 Full Gemini response structure:`, JSON.stringify(shadowResponse, null, 2));
+    
+    // Check various possible response structures
+    let shadowBase64, shadowMimeType;
+    
+    if (shadowResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+      // Standard inline data response
+      shadowBase64 = shadowResponse.candidates[0].content.parts[0].inlineData.data;
+      shadowMimeType = shadowResponse.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
+    } else if (shadowResponse.candidates?.[0]?.content?.parts?.[0]?.text) {
+      // Text response with base64 data
+      const textResponse = shadowResponse.candidates[0].content.parts[0].text;
+      console.log(`📝 Text response from Gemini:`, textResponse);
+      
+      // Try to extract base64 data from text if present
+      const base64Match = textResponse.match(/data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/);
+      if (base64Match) {
+        shadowBase64 = base64Match[1];
+        shadowMimeType = 'image/png';
+      } else {
+        throw new Error(`No valid image data found in Gemini response for ${imageName}`);
+      }
+    } else {
+      console.warn(`❌ Shadow generation failed for ${imageName} - unexpected response structure`);
+      console.log(`Response candidates:`, shadowResponse.candidates);
+      throw new Error(`Shadow generation failed for ${imageName} - no valid data in response`);
     }
 
-    // Extract shadow layer data
-    const shadowBase64 = shadowResponse.candidates[0].content.parts[0].inlineData.data;
-    const shadowMimeType = shadowResponse.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
+    if (!shadowBase64) {
+      throw new Error(`Shadow generation failed for ${imageName} - no shadow data extracted`);
+    }
+
+    // Create shadow data URL
     const shadowDataUrl = `data:${shadowMimeType};base64,${shadowBase64}`;
 
     console.log(`✅ Successfully generated shadow layer for ${imageName}`);

@@ -331,8 +331,32 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
         } catch (imageError) {
           console.error(`Failed to process ${image.name}:`, imageError);
-          // Continue with other images instead of failing entirely
-          setCurrentProcessingStep(`⚠ Failed to process ${image.name}, continuing with others...`);
+          logDataFlow(`⚠️ Attempting fallback client-side compositing for ${image.name}...`);
+          
+          try {
+            // Fallback: Simple client-side compositing without AI shadows
+            setCurrentProcessingStep(`Creating fallback composite for ${image.name}...`);
+            
+            const fallbackComposite = await compositeLayers(
+              pureBackdropData,
+              null, // No shadow layer
+              image.backgroundRemovedData,
+              processedImages.placement
+            );
+            
+            results.push({
+              name: image.name,
+              finalizedData: fallbackComposite
+            });
+            
+            logDataFlow(`✅ Fallback composite created for ${image.name}`);
+            setCurrentProcessingStep(`✓ Completed ${image.name} with fallback (${i + 1}/${totalImages})`);
+            
+          } catch (fallbackError) {
+            console.error(`Fallback also failed for ${image.name}:`, fallbackError);
+            logDataFlow(`❌ Both primary and fallback processing failed for ${image.name}`);
+            setCurrentProcessingStep(`⚠ Failed to process ${image.name}, continuing with others...`);
+          }
         }
 
         // Update progress after each image
@@ -871,47 +895,72 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
-  if (currentStep === 'preview-results' && processedImages.finalResults) {
+  if (currentStep === 'preview-results') {
+    // Handle V5 processing results
+    if (processedImages.finalResults && processedImages.finalResults.length > 0) {
+      return (
+        <div className="max-w-4xl mx-auto p-6">
+          <h2 className="text-2xl font-bold mb-4">Your Images Are Ready!</h2>
+          <p className="text-muted-foreground mb-6">
+            Your images have been processed successfully. You can download them now or enhance them further with AI.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {processedImages.finalResults.map((result, index) => (
+              <div key={index} className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">{result.name}</h3>
+                <img 
+                  src={result.finalizedData} 
+                  alt={result.name}
+                  className="w-full h-48 object-contain bg-gray-50 rounded"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => setCurrentStep('complete')}
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+            >
+              Download Images
+            </button>
+            <button
+              onClick={startAIEnhancement}
+              disabled={isProcessing}
+              className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 disabled:opacity-50"
+            >
+              Enhance with AI
+            </button>
+            <button
+              onClick={() => setCurrentStep('positioning')}
+              className="px-6 py-2 border rounded-lg hover:bg-gray-50"
+            >
+              Try Different Position
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Handle case where processing failed or no results
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <h2 className="text-2xl font-bold mb-4">Your Images Are Ready!</h2>
-        <p className="text-muted-foreground mb-6">
-          Your images have been processed successfully. You can download them now or enhance them further with AI.
-        </p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {processedImages.finalResults.map((result, index) => (
-            <div key={index} className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-2">{result.name}</h3>
-              <img 
-                src={result.finalizedData} 
-                alt={result.name}
-                className="w-full h-48 object-contain bg-gray-50 rounded"
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-4 justify-center">
-          <button
-            onClick={() => setCurrentStep('complete')}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-          >
-            Download Images
-          </button>
-          <button
-            onClick={startAIEnhancement}
-            disabled={isProcessing}
-            className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 disabled:opacity-50"
-          >
-            Enhance with AI
-          </button>
-          <button
-            onClick={() => setCurrentStep('positioning')}
-            className="px-6 py-2 border rounded-lg hover:bg-gray-50"
-          >
-            Try Different Position
-          </button>
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold">Processing Results</h2>
+          <p className="text-muted-foreground">
+            {processedImages.finalResults?.length === 0 
+              ? "No images were successfully processed. Please try again."
+              : "Processing completed with some issues."}
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Button onClick={onBack} variant="outline">
+              Start Over
+            </Button>
+            <Button onClick={() => setCurrentStep('positioning')} variant="outline">
+              Try Different Position
+            </Button>
+          </div>
         </div>
       </div>
     );
