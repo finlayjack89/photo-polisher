@@ -37,7 +37,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   const [placement, setPlacement] = useState<SubjectPlacement>({
     x: 0.5, // center
     y: 0.7, // slightly below center (typical product placement)
-    scale: 0.4 // 40% of backdrop width
+    scale: 0.8 // 80% of backdrop width
   });
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -497,7 +497,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                     <Slider
                       value={[placement.scale]}
                       onValueChange={handleScaleChange}
-                      max={0.8}
+                      max={1.0}
                       min={0.1}
                       step={0.05}
                       className="w-full"

@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink } from "lucide-react";
+import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink, Edit3, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +21,9 @@ interface ProcessedImage {
   originalSize?: number;
   compressionRatio?: string;
   qualityPercentage?: number;
+  retryStatus?: 'idle' | 'processing' | 'completed' | 'error';
+  retryEnhancedData?: string;
+  customFilename?: string;
 }
 
 interface GalleryPreviewProps {
@@ -31,6 +37,9 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledImages, setUpscaledImages] = useState<ProcessedImage[]>([]);
+  const [isEditingNames, setIsEditingNames] = useState(false);
+  const [temperature, setTemperature] = useState<number>(0.7);
+  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>(results);
   const { toast } = useToast();
 
   const formatFileSize = (bytes: number) => {
@@ -42,7 +51,7 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
   };
 
   // Use results from V5 architecture or upscaled images
-  const displayImages = upscaledImages.length > 0 ? upscaledImages : results;
+  const displayImages = upscaledImages.length > 0 ? upscaledImages : processedImages;
 
   const handleUpscaleAndCompress = async () => {
     setIsUpscaling(true);
@@ -126,6 +135,85 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
     }
   };
 
+  const handleRetryIndividual = async (imageIndex: number) => {
+    const image = displayImages[imageIndex];
+    if (!image.processedData && !image.finalizedData) return;
+
+    // Update retry status
+    const updatedImages = [...displayImages];
+    updatedImages[imageIndex] = { ...image, retryStatus: 'processing' };
+    if (upscaledImages.length > 0) {
+      setUpscaledImages(updatedImages);
+    } else {
+      setProcessedImages(updatedImages);
+    }
+
+    try {
+      const compositedImageData = image.finalizedData || image.processedData || '';
+      
+      const { data, error } = await supabase.functions.invoke('retry-single-image-enhancement', {
+        body: {
+          compositedImageData: compositedImageData.replace(/^data:image\/[a-z]+;base64,/, ''),
+          temperature: temperature,
+          imageName: image.name
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        // Update image with retry result
+        updatedImages[imageIndex] = {
+          ...image,
+          retryStatus: 'completed',
+          retryEnhancedData: data.enhancedImageData
+        };
+
+        toast({
+          title: "Enhancement Complete",
+          description: `${image.name} has been enhanced with temperature ${temperature}`
+        });
+      } else {
+        throw new Error(data.error || 'Enhancement failed');
+      }
+    } catch (error) {
+      console.error('Retry enhancement error:', error);
+      updatedImages[imageIndex] = { ...image, retryStatus: 'error' };
+      
+      toast({
+        title: "Enhancement Failed",
+        description: `Failed to enhance ${image.name}. Please try again.`,
+        variant: "destructive"
+      });
+    }
+
+    // Update state
+    if (upscaledImages.length > 0) {
+      setUpscaledImages(updatedImages);
+    } else {
+      setProcessedImages(updatedImages);
+    }
+  };
+
+  const handleFilenameChange = (index: number, newName: string) => {
+    const updatedImages = [...displayImages];
+    updatedImages[index] = { ...updatedImages[index], customFilename: newName };
+    
+    if (upscaledImages.length > 0) {
+      setUpscaledImages(updatedImages);
+    } else {
+      setProcessedImages(updatedImages);
+    }
+  };
+
+  const getDisplayFilename = (image: ProcessedImage) => {
+    return image.customFilename || image.name;
+  };
+
+  const getCurrentImageData = (image: ProcessedImage) => {
+    return image.retryEnhancedData || image.finalizedData || image.processedData || image.originalData;
+  };
+
   const downloadFile = (dataUrl: string, filename: string) => {
     const link = document.createElement('a');
     link.href = dataUrl;
@@ -140,10 +228,11 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
       const zip = new JSZip();
       
       displayImages.forEach((image) => {
-        const imageData = image.finalizedData || image.processedData;
+        const imageData = getCurrentImageData(image);
         if (imageData) {
           const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
-          zip.file(`${image.name}`, base64Data, { base64: true });
+          const filename = getDisplayFilename(image);
+          zip.file(filename, base64Data, { base64: true });
         }
       });
 
@@ -195,10 +284,17 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
             {displayImages.length} image{displayImages.length !== 1 ? 's' : ''} processed
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={onBack} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
+          </Button>
+          <Button 
+            onClick={() => setIsEditingNames(!isEditingNames)}
+            variant="outline"
+          >
+            <Edit3 className="w-4 h-4 mr-2" />
+            {isEditingNames ? 'Done Editing' : 'Edit Names'}
           </Button>
           <Button 
             onClick={handleUpscaleAndCompress} 
@@ -215,6 +311,26 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
         </div>
       </div>
 
+      {/* AI Temperature Control */}
+      <Card className="p-4">
+        <div className="flex items-center gap-4">
+          <Label className="text-sm font-medium">AI Enhancement Temperature:</Label>
+          <div className="flex-1 max-w-xs">
+            <Slider
+              value={[temperature]}
+              onValueChange={(value) => setTemperature(value[0])}
+              min={0.01}
+              max={0.99}
+              step={0.05}
+              className="w-full"
+            />
+          </div>
+          <div className="text-sm text-muted-foreground min-w-[80px]">
+            {temperature.toFixed(2)} ({temperature <= 0.3 ? 'Conservative' : temperature <= 0.7 ? 'Balanced' : 'Creative'})
+          </div>
+        </div>
+      </Card>
+
       <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'grid' | 'comparison')}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="grid">Grid View</TabsTrigger>
@@ -228,7 +344,15 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <ImageIcon className="w-5 h-5" />
-                    {image.name}
+                    {isEditingNames ? (
+                      <Input
+                        value={getDisplayFilename(image)}
+                        onChange={(e) => handleFilenameChange(index, e.target.value)}
+                        className="text-lg font-semibold"
+                      />
+                    ) : (
+                      getDisplayFilename(image)
+                    )}
                   </CardTitle>
                   {image.size && (
                     <div className="flex gap-2">
@@ -244,33 +368,53 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                  <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted relative">
                     <img
-                      src={image.finalizedData || image.processedData || image.originalData}
+                      src={getCurrentImageData(image)}
                       alt={image.name}
                       className="w-full h-full object-cover transition-transform hover:scale-105"
                       loading="lazy"
                     />
+                    {image.retryStatus === 'processing' && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="text-white text-sm">Enhancing...</div>
+                      </div>
+                    )}
+                    {image.retryEnhancedData && (
+                      <Badge className="absolute top-2 right-2 bg-green-500">Enhanced</Badge>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => downloadFile(
+                          getCurrentImageData(image) || '',
+                          getDisplayFilename(image)
+                        )}
+                        className="flex-1"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedImage(selectedImage === index ? null : index)}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    </div>
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => downloadFile(
-                        image.finalizedData || image.processedData || image.originalData || '',
-                        image.name
-                      )}
-                      className="flex-1"
+                      variant="secondary"
+                      onClick={() => handleRetryIndividual(index)}
+                      disabled={image.retryStatus === 'processing'}
+                      className="w-full"
                     >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setSelectedImage(selectedImage === index ? null : index)}
-                    >
-                      <ExternalLink className="w-4 h-4" />
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      {image.retryStatus === 'processing' ? 'Enhancing...' : 'Retry Enhancement'}
                     </Button>
                   </div>
                 </CardContent>
@@ -308,10 +452,10 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
                     </div>
                   )}
                   <div className="space-y-2">
-                    <h4 className="font-medium">Processed</h4>
+                    <h4 className="font-medium">Processed {image.retryEnhancedData ? '(Enhanced)' : ''}</h4>
                     <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
                       <img
-                        src={image.finalizedData || image.processedData || image.originalData}
+                        src={getCurrentImageData(image)}
                         alt={`${image.name} - Processed`}
                         className="w-full h-full object-cover"
                       />
@@ -322,12 +466,21 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
                   <Button
                     size="sm"
                     onClick={() => downloadFile(
-                      image.finalizedData || image.processedData || image.originalData || '',
-                      image.name
+                      getCurrentImageData(image) || '',
+                      getDisplayFilename(image)
                     )}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Download
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleRetryIndividual(index)}
+                    disabled={image.retryStatus === 'processing'}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {image.retryStatus === 'processing' ? 'Enhancing...' : 'Retry Enhancement'}
                   </Button>
                 </div>
               </CardContent>
@@ -343,7 +496,7 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
         >
           <div className="max-w-4xl max-h-full">
             <img
-              src={displayImages[selectedImage].finalizedData || displayImages[selectedImage].processedData || displayImages[selectedImage].originalData}
+              src={getCurrentImageData(displayImages[selectedImage])}
               alt={displayImages[selectedImage].name}
               className="max-w-full max-h-full object-contain"
               onClick={(e) => e.stopPropagation()}

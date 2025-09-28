@@ -129,8 +129,16 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
         // Process and compress the image
         console.log(`Processing image: ${processedFile.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
         const compressedBlob = await processAndCompressImage(processedFile, originalSize);
-        const finalFile = new File([compressedBlob], processedFile.name, {
-          type: 'image/jpeg',
+        
+        // Determine correct file type and name
+        const wasCompressed = originalSize > 5 * 1024 * 1024;
+        const mimeType = wasCompressed ? 'image/png' : processedFile.type;
+        const fileName = wasCompressed && !processedFile.name.toLowerCase().endsWith('.png') 
+          ? processedFile.name.replace(/\.[^/.]+$/, '.png')
+          : processedFile.name;
+        
+        const finalFile = new File([compressedBlob], fileName, {
+          type: mimeType,
           lastModified: Date.now()
         }) as FileWithOriginalSize;
         finalFile.originalSize = originalSize;
