@@ -155,58 +155,90 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     
     try {
       const subject = processedSubjects[subjectIndex];
-      // Convert backdrop URL to data URL to avoid CORS issues
+      
+      // Handle backdrop data - it might be a URL, base64, or object with url property
       let backdropDataUrl: string;
-      if (backdrop.url.startsWith('data:')) {
-        backdropDataUrl = backdrop.url;
+      console.log('🔍 DATA FLOW: Processing backdrop data...', typeof backdrop);
+      
+      if (typeof backdrop === 'string') {
+        // Backdrop is already a string (URL or base64)
+        if (backdrop.startsWith('data:')) {
+          backdropDataUrl = backdrop;
+        } else {
+          // Fetch URL and convert to data URL
+          console.log('🔍 DATA FLOW: Fetching backdrop URL...');
+          const response = await fetch(backdrop);
+          if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
+          const blob = await response.blob();
+          backdropDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
+      } else if (backdrop && typeof backdrop === 'object') {
+        // Backdrop is an object - check for url property or dataUrl property
+        const url = backdrop.url || backdrop.dataUrl || backdrop.data;
+        if (!url) {
+          throw new Error('Backdrop object does not contain valid image data');
+        }
+        
+        if (url.startsWith('data:')) {
+          backdropDataUrl = url;
+        } else {
+          // Fetch URL and convert to data URL
+          console.log('🔍 DATA FLOW: Fetching backdrop URL from object...');
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
+          const blob = await response.blob();
+          backdropDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
       } else {
-        // Fetch the backdrop and convert to data URL
-        console.log('🔍 Converting backdrop URL to data URL for AI processing...');
-        const response = await fetch(backdrop.url);
-        if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
-        const blob = await response.blob();
-        backdropDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
+        throw new Error('Invalid backdrop data format');
       }
       
+      // Get the subject data (must be transparent PNG)
       const subjectUrl = subject.backgroundRemovedData;
+      console.log(`🔍 DATA FLOW: Processing subject ${subject.name} with transparent PNG data`);
       
-      // Get rotation from the CommercialEditingWorkflow if available
-      const rotation = 0; // Default rotation, this should come from the workflow state
-      
-      const subjectConfig = {
-        position: { x: 0.5, y: 0.5 }, // Default center position
-        size: { width: 400, height: 400 }, // Default size
-        rotation: rotation
+      // Validate that subject is transparent PNG (security check)
+      if (!subjectUrl?.includes('data:image/png')) {
+        throw new Error('Subject must be transparent PNG format');
+      }
+
+      // --- STEP 1: Generate ONLY shadow layer (transparent PNG) ---
+      console.log(`🎭 Generating shadow layer for ${subject.name}...`);
+      const placementConfig = {
+        x: 0.515,
+        y: 0.55,
+        scale: 0.8
       };
-
-      // --- STEP 1: Create the high-quality context image for the AI ---
-      console.log("Creating AI context image as PNG...");
-      const contextImage = await createAiContextImage(backdropDataUrl, subjectUrl, subjectConfig);
-
-      // --- STEP 2: Call the AI to generate the shadow layer ---
-      console.log("Invoking AI to generate shadow layer...");
-      const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
+      
+      const { data, error } = await supabase.functions.invoke('generate-shadow-layer', {
         body: {
-          contextImageUrl: contextImage,
-          dimensions: { width: backdrop.width || 1024, height: backdrop.height || 1024 }
+          backdrop: backdropDataUrl,
+          subjectData: subjectUrl,
+          placement: placementConfig,
+          imageName: subject.name
         },
       });
 
-      if (error) throw error;
-      const shadowLayerUrl = data.imageData;
+      if (error) {
+        console.error(`❌ Shadow generation failed for ${subject.name}:`, error);
+        throw new Error(`Shadow generation failed: ${error.message}`);
+      }
+      
+      const shadowLayerUrl = data.result.shadowLayerData;
+      console.log(`✅ Shadow layer generated for ${subject.name} (${shadowLayerUrl.length} chars)`);
 
-      // --- STEP 3: Composite the final image using all three layers ---
-      console.log("Compositing final image...");
-      const placementConfig = {
-        x: 0.5,
-        y: 0.5,
-        scale: 0.4
-      };
+      // --- STEP 2: Client-side secure compositing ---
+      console.log(`🎨 Starting secure client-side compositing for ${subject.name}...`);
       
       const finalImage = await compositeLayers(
         backdropDataUrl,
@@ -214,6 +246,8 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         subjectUrl,
         placementConfig
       );
+      
+      console.log(`✅ Client compositing complete for ${subject.name} (${finalImage.length} chars)`);
       
       // Update the processed subject with the final enhanced image
       processedSubjects[subjectIndex] = {
