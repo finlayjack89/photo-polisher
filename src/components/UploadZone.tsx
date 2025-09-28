@@ -82,89 +82,65 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
     }
   };
 
+// src/components/UploadZone.tsx
+
 const onDrop = async (acceptedFiles: File[]) => {
   const validFiles = acceptedFiles.filter(file => {
-    const isValidType = file.type.startsWith('image/') || 
-                        file.name.toLowerCase().endsWith('.heic') ||
-                        file.name.toLowerCase().endsWith('.cr2') ||
-                        file.name.toLowerCase().endsWith('.nef') ||
-                        file.name.toLowerCase().endsWith('.arw');
-    const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB limit
+    // Your existing validation logic is good
+    const isValidType = file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.heic');
+    const isValidSize = file.size <= 50 * 1024 * 1024;
     return isValidType && isValidSize;
   });
 
   if (validFiles.length + selectedFiles.length > 20) {
     console.error("Cannot upload more than 20 images.");
-    // Consider adding a toast notification for the user here
     return;
   }
 
   try {
-    const processedFiles: FileWithOriginalSize[] = [];
+    const newFilesToProcess: FileWithOriginalSize[] = [];
     const newPreviews: string[] = [];
 
     for (const file of validFiles) {
       let fileToProcess: File | Blob = file;
       const originalSize = file.size;
 
-      // --- CORRECTED LOGIC ---
-      // Define standard web formats that do NOT need conversion
-      const isStandardWebFormat = file.type === 'image/jpeg' || 
-                                  file.type === 'image/png' || 
-                                  file.type === 'image/webp';
-
-      const needsConversion = !isStandardWebFormat;
-
-      if (needsConversion) {
-        console.log(`Conversion needed for ${file.name} (${file.type})`);
-        try {
-          if (file.name.toLowerCase().endsWith('.heic')) {
-            // Convert HEIC to a lossless PNG to preserve quality for the next step
-            fileToProcess = await heic2any({ blob: file, toType: "image/png" });
-          } else {
-            console.warn(`File type ${file.type} requires a server-side converter.`);
-            // Here you would ideally call a server-side function for RAW files.
-            // For now, we will skip these files.
-            toast({
-              title: "Unsupported File Type",
-              description: `Automatic conversion for ${file.name} is not yet supported.`,
-              variant: "destructive"
-            });
-            continue; 
-          }
-        } catch (conversionError) {
-          console.error(`Failed to convert ${file.name}:`, conversionError);
-          toast({
-            title: "Conversion Failed",
-            description: `Could not process ${file.name}. Please try a different file.`,
-            variant: "destructive"
-          });
-          continue; // Skip to the next file
-        }
+      if (file.name.toLowerCase().endsWith('.heic')) {
+        fileToProcess = await heic2any({ blob: file, toType: "image/png" });
       }
 
-      // --- All files (original or converted) now go through the proper compression logic ---
+      // --- THIS IS THE FIX ---
+      const dimensions = await getImageDimensions(fileToProcess);
+      const FIVE_MB = 5 * 1024 * 1024;
+      const needsProcessing = originalSize > FIVE_MB || dimensions.width > 2048 || dimensions.height > 2048;
+
       let finalFile: FileWithOriginalSize;
-const FIVE_MB = 5 * 1024 * 1024;
 
-// --- THIS IS THE FIX ---
-// Only process the image if it's larger than 5MB.
-// Your processAndCompressImage function already handles the 2048px resize,
-// so we only need to check the file size here.
-if (originalSize > FIVE_MB) {
-  console.log(`Processing image: ${file.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
-  const compressedBlob = await processAndCompressImage(fileToProcess as File);
+      if (needsProcessing) {
+        console.log(`Processing needed for ${file.name}. Size: ${(originalSize / (1024*1024)).toFixed(2)}MB, Dimensions: ${dimensions.width}x${dimensions.height}`);
+        const compressedBlob = await processAndCompressImage(fileToProcess as File);
+        finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        }) as FileWithOriginalSize;
+      } else {
+        console.log(`Skipping processing for ${file.name}, already compliant.`);
+        finalFile = fileToProcess as FileWithOriginalSize;
+      }
+      
+      finalFile.originalSize = originalSize;
+      newFilesToProcess.push(finalFile);
+      
+      const previewUrl = URL.createObjectURL(finalFile);
+      newPreviews.push(previewUrl);
+    }
 
-  finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
-    type: 'image/jpeg',
-    lastModified: Date.now()
-  }) as FileWithOriginalSize;
-
-} else {
-  // If the file is already under 5MB, just use it as is.
-  console.log(`Skipping compression for ${file.name}, size is already acceptable.`);
-  finalFile = fileToProcess as FileWithOriginalSize;
-}
+    setSelectedFiles(prev => [...prev, ...newFilesToProcess]);
+    setPreviews(prev => [...prev, ...newPreviews]);
+  } catch (error) {
+    console.error('Error processing files:', error);
+  }
+};
 
 finalFile.originalSize = originalSize;
 console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
