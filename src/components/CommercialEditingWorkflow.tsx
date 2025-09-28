@@ -154,7 +154,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             const finalImageUrl = await compositeLayers(
               data.result.backdropData,
               data.result.shadowLayerData,
-              data.result.subjectData
+              data.result.subjectData,
+              processedImages.placement
             );
             
             results.push({

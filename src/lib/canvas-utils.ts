@@ -180,7 +180,8 @@ export const fileToDataUrl = (file: File): Promise<string> => {
 export const compositeLayers = async (
   backdropUrl: string,
   shadowLayerUrl: string,
-  subjectUrl: string
+  subjectUrl: string,
+  placement: SubjectPlacement
 ): Promise<string> => {
   console.log('compositeLayers - Starting compositing process');
   console.log('compositeLayers - Data URLs received:', {
@@ -239,11 +240,25 @@ export const compositeLayers = async (
     console.log('compositeLayers - Drawing backdrop...');
     ctx.drawImage(backdrop, 0, 0);
 
-    console.log('compositeLayers - Drawing shadow layer...');
-    ctx.drawImage(shadowLayer, 0, 0);
+    console.log('compositeLayers - Drawing shadow layer (scaled to backdrop size)...');
+    ctx.drawImage(shadowLayer, 0, 0, canvas.width, canvas.height);
 
-    console.log('compositeLayers - Drawing subject...');
-    ctx.drawImage(subject, 0, 0);
+    console.log('compositeLayers - Drawing subject with placement:', placement);
+    // Calculate subject positioning based on placement settings
+    const subjectAspectRatio = subject.naturalWidth / subject.naturalHeight;
+    const scaledWidth = canvas.width * placement.scale;
+    const scaledHeight = scaledWidth / subjectAspectRatio;
+    const dx = (placement.x * canvas.width) - (scaledWidth / 2);
+    const dy = (placement.y * canvas.height) - (scaledHeight / 2);
+    
+    console.log('compositeLayers - Subject positioning:', {
+      originalSize: `${subject.naturalWidth}x${subject.naturalHeight}`,
+      scaledSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+      position: `${Math.round(dx)}, ${Math.round(dy)}`,
+      placement
+    });
+    
+    ctx.drawImage(subject, dx, dy, scaledWidth, scaledHeight);
 
     // Return the final composited image as a high-quality data URL
     const finalDataUrl = canvas.toDataURL('image/png');
