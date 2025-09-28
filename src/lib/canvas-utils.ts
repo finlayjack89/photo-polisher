@@ -193,6 +193,11 @@ export const compositeLayers = async (
     subjectFormat: subjectUrl?.substring(0, 50)
   });
 
+  // Verify the subject image is a PNG with transparency
+  if (!subjectUrl?.includes('data:image/png')) {
+    console.warn('Subject image is not PNG format - transparency may not work correctly');
+  }
+
   // Helper function to load image
   const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {

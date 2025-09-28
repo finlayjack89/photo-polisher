@@ -151,10 +151,30 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             // Composite the layers on the frontend for maximum quality
             setCurrentProcessingStep(`Compositing ${image.name} with high quality...`);
             
+            // Debug: Verify we're using the transparent subject
+            console.log(`Compositing ${image.name}:`, {
+              hasBackdrop: !!data.result.backdropData,
+              hasShadow: !!data.result.shadowLayerData,
+              hasSubject: !!image.backgroundRemovedData,
+              subjectDataLength: image.backgroundRemovedData?.length,
+              subjectPreview: image.backgroundRemovedData?.substring(0, 100)
+            });
+            
+            // Ensure we're using only the transparent subject (never the original image)
+            let transparentSubjectData = image.backgroundRemovedData;
+            
+            // Verify this is actually transparent PNG data
+            if (!transparentSubjectData?.includes('data:image/png')) {
+              console.error(`Invalid subject data for ${image.name} - not PNG format`);
+              throw new Error(`Subject image for ${image.name} is not in PNG format with transparency`);
+            }
+            
+            console.log(`Using transparent subject data for ${image.name} (length: ${transparentSubjectData.length})`);
+            
             const finalImageUrl = await compositeLayers(
               data.result.backdropData,
               data.result.shadowLayerData,
-              image.backgroundRemovedData, // Use the original background-removed transparent PNG
+              transparentSubjectData, // Guaranteed transparent PNG from background removal
               processedImages.placement
             );
             
