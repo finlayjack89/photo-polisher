@@ -38,6 +38,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
   isProcessing = false
 }) => {
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
+  const [failedImages, setFailedImages] = useState<{name: string, error: string, data: string, originalSize: number}[]>([]);
   const [isProcessingLocal, setIsProcessingLocal] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
@@ -51,9 +52,49 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const processImageWithRetry = async (image: {data: string, name: string, originalSize: number}, maxRetries = 3): Promise<ProcessedImage | null> => {
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Processing ${image.name} - Attempt ${attempt}/${maxRetries}`);
+        
+        const { data: result, error } = await supabase.functions.invoke('remove-backgrounds', {
+          body: { images: [{ data: image.data, name: image.name }] }
+        });
+
+        if (error) {
+          lastError = error;
+          if (attempt < maxRetries) {
+            // Wait with exponential backoff before retry
+            const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+            console.log(`Retrying ${image.name} in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        } else if (result?.results && result.results.length > 0) {
+          return {
+            ...result.results[0],
+            originalSize: image.originalSize
+          };
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt - 1) * 1000;
+          console.log(`Retrying ${image.name} in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    return null;
+  };
+
   const handleRemoveBackgrounds = async () => {
     setIsProcessingLocal(true);
     setProgress(0);
+    setFailedImages([]);
     setCurrentProcessingStep('Converting images...');
 
     try {
@@ -77,6 +118,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
 
       // Process images one by one to avoid CPU timeouts
       const allResults: ProcessedImage[] = [];
+      const failed: {name: string, error: string, data: string, originalSize: number}[] = [];
       
       for (let i = 0; i < imageData.length; i++) {
         const image = imageData[i];
@@ -85,26 +127,22 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
         setCurrentProcessingStep(`Processing image ${i + 1} of ${imageData.length}: ${image.name}...`);
         setProgress(imageProgress);
 
-        const { data: result, error } = await supabase.functions.invoke('remove-backgrounds', {
-          body: { images: [{ data: image.data, name: image.name }] }
-        });
-
-        if (error) {
-          console.error(`Error processing ${image.name}:`, error);
+        const result = await processImageWithRetry(image);
+        
+        if (result) {
+          allResults.push(result);
+        } else {
+          failed.push({
+            name: image.name,
+            error: 'Failed after 3 attempts',
+            data: image.data,
+            originalSize: image.originalSize
+          });
           toast({
-            title: "Processing Error",
-            description: `Failed to process ${image.name}: ${error.message}`,
+            title: "Processing Failed",
+            description: `${image.name} failed after 3 attempts. You can retry individual images.`,
             variant: "destructive",
           });
-          continue; // Skip this image and continue with others
-        }
-
-        if (result?.results && result.results.length > 0) {
-          const processedImage = {
-            ...result.results[0],
-            originalSize: image.originalSize
-          };
-          allResults.push(processedImage);
         }
       }
 
@@ -112,15 +150,51 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       setCurrentProcessingStep('Complete!');
       
       setProcessedImages(allResults);
+      setFailedImages(failed);
       
       // Call the new onProcessingComplete prop with the processed subjects
       onProcessingComplete(allResults);
       
     } catch (error) {
       console.error('Error removing backgrounds:', error);
-      alert(`Error: ${error.message}`);
+      toast({
+        title: "Processing Error",
+        description: `Error: ${error.message}`,
+        variant: "destructive",
+      });
     } finally {
       setIsProcessingLocal(false);
+    }
+  };
+
+  const retryFailedImage = async (failedImage: {name: string, error: string, data: string, originalSize: number}) => {
+    setCurrentProcessingStep(`Retrying ${failedImage.name}...`);
+    
+    const result = await processImageWithRetry({
+      data: failedImage.data,
+      name: failedImage.name,
+      originalSize: failedImage.originalSize
+    });
+    
+    if (result) {
+      // Move from failed to processed
+      setProcessedImages(prev => [...prev, result]);
+      setFailedImages(prev => prev.filter(f => f.name !== failedImage.name));
+      
+      // Update the parent component
+      const updatedProcessed = [...processedImages, result];
+      onProcessingComplete(updatedProcessed);
+      
+      toast({
+        title: "Success!",
+        description: `${failedImage.name} processed successfully`,
+      });
+    } else {
+      toast({
+        title: "Retry Failed",
+        description: `${failedImage.name} still failed after retry`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -167,6 +241,15 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
               <AlertDescription>
                 {largeImages.length} image(s) are larger than 5MB and may need compression for optimal AI processing.
                 Large images can cause processing delays or failures.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {failedImages.length > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {failedImages.length} image(s) failed to process. You can retry them individually below.
               </AlertDescription>
             </Alert>
           )}
@@ -270,6 +353,49 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
             ))}
           </div>
 
+          {/* Failed Images Section */}
+          {failedImages.length > 0 && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h2 className="text-xl font-semibold text-destructive">Failed Images</h2>
+                <p className="text-muted-foreground">These images failed to process. Click retry to try again.</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {failedImages.map((image, index) => (
+                  <Card key={index} className="border-destructive">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm truncate">{image.name}</CardTitle>
+                        <Badge variant="destructive">
+                          Failed
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <img
+                          src={image.data}
+                          alt={`Failed ${image.name}`}
+                          className="w-full h-24 object-cover rounded border"
+                        />
+                        <p className="text-xs text-destructive">{image.error}</p>
+                        <Button
+                          size="sm"
+                          onClick={() => retryFailedImage(image)}
+                          className="w-full"
+                        >
+                          <Loader2 className="h-3 w-3 mr-1" />
+                          Retry
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-center gap-4">
             <Button variant="outline" onClick={onBack}>
               Back
@@ -277,8 +403,9 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
             <Button 
               onClick={() => onContinue(processedImages)}
               className="min-w-[200px]"
+              disabled={processedImages.length === 0}
             >
-              Continue to Backdrop Selection
+              Continue to Backdrop Selection ({processedImages.length} images)
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
