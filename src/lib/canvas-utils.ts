@@ -182,51 +182,79 @@ export const compositeLayers = async (
   shadowLayerUrl: string,
   subjectUrl: string
 ): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const backdrop = new Image();
-    const shadowLayer = new Image();
-    const subject = new Image();
-
-    // Set crossOrigin to anonymous to prevent canvas tainting with images from Supabase storage
-    backdrop.crossOrigin = "anonymous";
-    shadowLayer.crossOrigin = "anonymous";
-    subject.crossOrigin = "anonymous";
-
-    backdrop.src = backdropUrl;
-
-    backdrop.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = backdrop.width;
-      canvas.height = backdrop.height;
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        return reject(new Error('Failed to get canvas context'));
-      }
-
-      // 1. Draw the backdrop
-      ctx.drawImage(backdrop, 0, 0);
-
-      shadowLayer.src = shadowLayerUrl;
-      shadowLayer.onload = () => {
-        // 2. Draw the shadow/reflection layer
-        ctx.drawImage(shadowLayer, 0, 0);
-
-        subject.src = subjectUrl;
-        subject.onload = () => {
-          // 3. Draw the subject on top
-          ctx.drawImage(subject, 0, 0);
-
-          // Return the final composited image as a high-quality data URL
-          resolve(canvas.toDataURL('image/png'));
-        };
-      };
-    };
-
-    backdrop.onerror = () => reject(new Error('Failed to load backdrop image.'));
-    shadowLayer.onerror = () => reject(new Error('Failed to load shadow layer.'));
-    subject.onerror = () => reject(new Error('Failed to load subject image.'));
+  console.log('compositeLayers - Starting compositing process');
+  console.log('compositeLayers - Data URLs received:', {
+    backdropLength: backdropUrl?.length,
+    shadowLayerLength: shadowLayerUrl?.length,
+    subjectLength: subjectUrl?.length,
+    backdropFormat: backdropUrl?.substring(0, 50),
+    shadowLayerFormat: shadowLayerUrl?.substring(0, 50),
+    subjectFormat: subjectUrl?.substring(0, 50)
   });
+
+  // Helper function to load image
+  const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      
+      img.onload = () => {
+        console.log(`compositeLayers - Successfully loaded ${name}: ${img.width}x${img.height}`);
+        resolve(img);
+      };
+      
+      img.onerror = (error) => {
+        console.error(`compositeLayers - Failed to load ${name}:`, error);
+        reject(new Error(`Failed to load ${name} image`));
+      };
+      
+      img.src = src;
+    });
+  };
+
+  try {
+    // Load all images in parallel
+    console.log('compositeLayers - Loading all images in parallel...');
+    const [backdrop, shadowLayer, subject] = await Promise.all([
+      loadImage(backdropUrl, 'backdrop'),
+      loadImage(shadowLayerUrl, 'shadow layer'),
+      loadImage(subjectUrl, 'subject')
+    ]);
+
+    console.log('compositeLayers - All images loaded successfully');
+
+    // Create canvas with backdrop dimensions
+    const canvas = document.createElement('canvas');
+    canvas.width = backdrop.width;
+    canvas.height = backdrop.height;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('Failed to get canvas context');
+    }
+
+    console.log('compositeLayers - Canvas created:', `${canvas.width}x${canvas.height}`);
+
+    // Composite the layers
+    console.log('compositeLayers - Drawing backdrop...');
+    ctx.drawImage(backdrop, 0, 0);
+
+    console.log('compositeLayers - Drawing shadow layer...');
+    ctx.drawImage(shadowLayer, 0, 0);
+
+    console.log('compositeLayers - Drawing subject...');
+    ctx.drawImage(subject, 0, 0);
+
+    // Return the final composited image as a high-quality data URL
+    const finalDataUrl = canvas.toDataURL('image/png');
+    console.log('compositeLayers - Compositing complete, final image size:', finalDataUrl.length);
+    
+    return finalDataUrl;
+
+  } catch (error) {
+    console.error('compositeLayers - Error during compositing:', error);
+    throw error;
+  }
 };
 
 /**
