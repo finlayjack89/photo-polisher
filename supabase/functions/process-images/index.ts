@@ -57,7 +57,7 @@ serve(async (req) => {
               }
             },
             'export-file': {
-              operation: 'export/base64',
+              operation: 'export/url',
               input: 'convert-file',
             }
           }
@@ -102,11 +102,25 @@ serve(async (req) => {
         if (exportTask && exportTask.result && exportTask.result.files && exportTask.result.files.length > 0) {
           const resultFile = exportTask.result.files[0];
           
+          // Download the file from CloudConvert and convert to base64
+          const fileResponse = await fetch(resultFile.url, {
+            headers: {
+              'Authorization': `Bearer ${CLOUDCONVERT_API_KEY}`,
+            },
+          });
+          
+          if (!fileResponse.ok) {
+            throw new Error(`Failed to download processed file: ${fileResponse.status}`);
+          }
+          
+          const fileBuffer = await fileResponse.arrayBuffer();
+          const base64Data = `data:image/png;base64,${btoa(String.fromCharCode(...new Uint8Array(fileBuffer)))}`;
+          
           processedFiles.push({
             originalName: name,
             processedName: name.replace(/\.[^/.]+$/, '.png'),
-            data: resultFile.data,
-            size: resultFile.size,
+            data: base64Data,
+            size: fileBuffer.byteLength,
             format: 'png'
           });
         } else {

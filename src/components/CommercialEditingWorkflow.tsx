@@ -699,7 +699,10 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   if (currentStep === 'positioning') {
     return (
       <BackdropPositioning
-        cutoutImages={processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)}
+        cutoutImages={processedSubjects.length > 0 
+          ? processedSubjects.map(subject => subject.backgroundRemovedData || subject.processedImageUrl)
+          : processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)
+        }
         onPositioningComplete={handlePositioningComplete}
         onBack={() => setCurrentStep('rotation')}
       />
@@ -709,10 +712,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   if (currentStep === 'processing') {
     return (
       <ProcessingWorkflow
-        processedSubjects={processedSubjects}
+        processedSubjects={processedSubjects.length > 0 ? processedSubjects : []}
         backdrop={processedImages.backdrop}
         files={currentFiles}
-        onComplete={() => {
+        onComplete={(processedFiles) => {
+          console.log('Processing complete, received files:', processedFiles);
           setCurrentStep('preview-results');
           setIsProcessing(false);
         }}

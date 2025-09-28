@@ -309,7 +309,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
               const isUrl = typeof item === 'string';
               const fileName = isUrl 
                 ? (processedSubjects?.[index]?.name || processedSubjects?.[index]?.original_filename || `Image ${index + 1}`)
-                : item.name;
+                : (item as File)?.name || `Image ${index + 1}`;
               
               return (
                 <div key={index} className="relative group cursor-pointer" onClick={() => setCurrentSubjectIndex(index)}>
