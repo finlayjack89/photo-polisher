@@ -8,8 +8,15 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+interface ProcessedSubject {
+  original_filename: string;
+  processedImageUrl: string;
+  name: string;
+  backgroundRemovedData: string;
+}
+
 interface ProcessingWorkflowProps {
-  processedSubjects?: any[];
+  processedSubjects?: ProcessedSubject[];
   backdrop?: any;
   files: File[];
   onComplete: (processedFiles: ProcessedFile[]) => void;
@@ -45,7 +52,18 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
   const [completedFiles, setCompletedFiles] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subjectUrls, setSubjectUrls] = useState<string[]>([]);
+  const [currentSubjectIndex, setCurrentSubjectIndex] = useState(0);
   const { toast } = useToast();
+
+  // Extract image URLs from processedSubjects
+  useEffect(() => {
+    if (processedSubjects && processedSubjects.length > 0) {
+      const urls = processedSubjects.map(subject => subject.backgroundRemovedData || subject.processedImageUrl);
+      setSubjectUrls(urls);
+      console.log('Extracted subject URLs:', urls);
+    }
+  }, [processedSubjects]);
 
   // Convert File objects to base64 for API
   const fileToBase64 = (file: File): Promise<string> => {
@@ -285,29 +303,42 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {files.map((file, index) => {
+            {(subjectUrls.length > 0 ? subjectUrls : files).map((item, index) => {
               const isProcessed = index < completedFiles;
               const isProcessing = index === completedFiles;
+              const isUrl = typeof item === 'string';
+              const fileName = isUrl 
+                ? (processedSubjects?.[index]?.name || processedSubjects?.[index]?.original_filename || `Image ${index + 1}`)
+                : item.name;
               
               return (
-                <div key={index} className="relative group">
+                <div key={index} className="relative group cursor-pointer" onClick={() => setCurrentSubjectIndex(index)}>
                   <div className={cn(
-                    "aspect-square rounded-lg border-2 border-dashed flex items-center justify-center transition-smooth",
+                    "aspect-square rounded-lg border-2 flex items-center justify-center transition-smooth overflow-hidden",
+                    currentSubjectIndex === index && subjectUrls.length > 0 && "border-electric bg-electric/5 ring-2 ring-electric/20",
                     isProcessed && "border-success bg-success/5",
                     isProcessing && "border-electric bg-electric/5",
-                    !isProcessed && !isProcessing && "border-muted bg-muted/30"
+                    !isProcessed && !isProcessing && !isUrl && "border-dashed border-muted bg-muted/30"
                   )}>
-                    <div className="text-center space-y-2">
-                      <ImageIcon className={cn(
-                        "w-8 h-8 mx-auto",
-                        isProcessed && "text-success",
-                        isProcessing && "text-electric animate-pulse",
-                        !isProcessed && !isProcessing && "text-muted-foreground"
-                      )} />
-                      <p className="text-xs text-muted-foreground truncate px-2">
-                        {file.name}
-                      </p>
-                    </div>
+                    {isUrl ? (
+                      <img 
+                        src={item}
+                        alt={fileName}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <div className="text-center space-y-2">
+                        <ImageIcon className={cn(
+                          "w-8 h-8 mx-auto",
+                          isProcessed && "text-success",
+                          isProcessing && "text-electric animate-pulse",
+                          !isProcessed && !isProcessing && "text-muted-foreground"
+                        )} />
+                        <p className="text-xs text-muted-foreground truncate px-2">
+                          {fileName}
+                        </p>
+                      </div>
+                    )}
                     
                     {isProcessed && (
                       <div className="absolute -top-2 -right-2 w-6 h-6 bg-success rounded-full flex items-center justify-center">
