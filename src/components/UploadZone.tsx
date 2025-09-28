@@ -6,6 +6,7 @@ import { useDropzone } from 'react-dropzone';
 import { X, Upload, FileImage, Scissors } from 'lucide-react';
 import { processAndCompressImage } from "@/lib/image-resize-utils";
 import { detectImageTransparency } from "@/lib/transparency-utils";
+import { correctImageOrientation } from '@/lib/image-orientation-utils';
 import { supabase } from "@/integrations/supabase/client";
 // @ts-ignore - HEIC library types not available
 import heic2any from 'heic2any';
@@ -104,8 +105,13 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
       const newPreviews = [];
 
       for (const file of validFiles) {
-        let processedFile = file;
-        const originalSize = file.size;
+        // --- CORRECT ORIENTATION FIRST ---
+        // Correct the orientation before any other processing happens.
+        const orientationCorrectedFile = await correctImageOrientation(file);
+        // --- END ORIENTATION CORRECTION ---
+
+        let processedFile = orientationCorrectedFile; // Use the corrected file from now on
+        const originalSize = orientationCorrectedFile.size;
         
         // Check if file needs conversion (HEIC, CR2, NEF, ARW, etc.)
         const needsConversion = file.name.toLowerCase().endsWith('.heic') || 

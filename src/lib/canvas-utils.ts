@@ -312,6 +312,55 @@ export const compositeLayers = async (
 };
 
 /**
+ * Create AI context image for shadow generation
+ * Composites subject on backdrop to create context for AI analysis
+ */
+export const createAiContextImage = async (
+  backdropUrl: string,
+  subjectUrl: string,
+  config: {
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    rotation: number;
+  }
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const backdrop = new Image();
+    backdrop.crossOrigin = "anonymous";
+    backdrop.src = backdropUrl;
+
+    backdrop.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context failed'));
+
+      canvas.width = backdrop.width;
+      canvas.height = backdrop.height;
+
+      ctx.drawImage(backdrop, 0, 0, canvas.width, canvas.height);
+
+      const subject = new Image();
+      subject.crossOrigin = "anonymous";
+      subject.src = subjectUrl;
+
+      subject.onload = () => {
+        ctx.save();
+        ctx.translate(config.position.x + config.size.width / 2, config.position.y + config.size.height / 2);
+        ctx.rotate(config.rotation * (Math.PI / 180));
+        ctx.translate(-(config.position.x + config.size.width / 2), -(config.position.y + config.size.height / 2));
+        ctx.drawImage(subject, config.position.x, config.position.y, config.size.width, config.size.height);
+        ctx.restore();
+        
+        // Return this composited view as a high-quality PNG data URL for the AI
+        resolve(canvas.toDataURL('image/png'));
+      };
+      subject.onerror = () => reject(new Error('Failed to load subject for AI context.'));
+    };
+    backdrop.onerror = () => reject(new Error('Failed to load backdrop for AI context.'));
+  });
+};
+
+/**
  * Create a preview image for display purposes (with max dimensions)
  */
 export const createPreviewImage = (dataUrl: string, maxWidth: number = 400, maxHeight: number = 400): Promise<string> => {

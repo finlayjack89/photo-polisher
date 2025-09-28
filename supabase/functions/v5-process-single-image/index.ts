@@ -8,15 +8,11 @@ const corsHeaders = {
 };
 
 interface V5ProcessRequest {
-  imageData: string; // base64 background-removed image
-  imageName: string;
-  backdrop: string; // base64 backdrop image
-  placement: {
-    x: number;
-    y: number;
-    scale: number;
+  contextImageUrl: string; // base64 composited context image for AI analysis
+  dimensions: {
+    width: number;
+    height: number;
   };
-  addBlur: boolean;
 }
 
 // HEIC detection and conversion utility
@@ -39,19 +35,16 @@ serve(async (req) => {
   }
 
   try {
-    const { imageData, imageName, backdrop, placement, addBlur }: V5ProcessRequest = await req.json();
+    const { contextImageUrl, dimensions }: V5ProcessRequest = await req.json();
     
-    console.log(`=== V5 Processing Started: ${imageName} ===`);
+    console.log(`=== V5 Processing Started ===`);
     console.log('Parameters:', { 
-      hasImageData: !!imageData, 
-      imageName, 
-      hasBackdrop: !!backdrop, 
-      placement,
-      addBlur 
+      hasContextImage: !!contextImageUrl,
+      dimensions
     });
     
-    if (!imageData || !imageName || !backdrop || !placement) {
-      throw new Error(`Missing required parameters for ${imageName}`);
+    if (!contextImageUrl || !dimensions) {
+      throw new Error('Missing required parameters: contextImageUrl and dimensions');
     }
 
     // Get Gemini API key
@@ -63,56 +56,28 @@ serve(async (req) => {
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-image-preview",
+      model: "gemini-2.0-flash-exp",
       generationConfig: {
         temperature: 0.2,
       }
     });
 
-    console.log(`Using Gemini 2.5 Flash Image Preview for ${imageName}`);
+    console.log(`Using Gemini 2.0 Flash Exp for shadow layer generation`);
 
-    // Step 1: Background Removal (Already done on frontend)
-    console.log(`✓ Background removal complete for ${imageName}`);
-    
-    // Ensure PNG format for quality preservation
-    const processedImageData = ensurePngFormat(imageData, imageName);
-    
-    // Step 2: Position subject on canvas (simplified for server)
-    console.log(`Step 2: Positioning ${imageName}...`);
-    const positionedData = await positionSubjectOnCanvas(
-      processedImageData,
-      1024,
-      1024,
-      placement
-    );
-    console.log(`✓ Positioning complete for ${imageName}`);
-
-    // Step 3: Generate shadow/reflection layer
-    console.log(`Step 3: Generating shadow layer for ${imageName}...`);
-    const shadowLayerData = await performComposite(
+    // Generate shadow layer using the context image
+    console.log(`Generating shadow layer from context image...`);
+    const shadowLayerData = await generateShadowLayer(
       model, 
-      positionedData, 
-      backdrop, 
-      imageName, 
-      addBlur
+      contextImageUrl, 
+      dimensions
     );
-    console.log(`✓ Shadow layer generation complete for ${imageName}`);
+    console.log(`✓ Shadow layer generation complete`);
 
-    console.log(`=== V5 Processing Complete: ${imageName} ===`);
+    console.log(`=== V5 Processing Complete ===`);
 
     return new Response(JSON.stringify({ 
       success: true,
-      result: {
-        name: imageName,
-        shadowLayerData: shadowLayerData,
-        subjectData: positionedData,
-        backdropData: backdrop,
-        processingSteps: {
-          backgroundRemoval: "✓ Complete",
-          positioning: "✓ Complete", 
-          shadowGeneration: "✓ Complete"
-        }
-      }
+      imageData: shadowLayerData
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -134,81 +99,41 @@ serve(async (req) => {
   }
 });
 
-// Position subject on canvas (simplified for server environment)
-async function positionSubjectOnCanvas(
-  subjectDataUrl: string,
-  canvasWidth: number,
-  canvasHeight: number,
-  placement: any
-): Promise<string> {
-  // In a production environment, this would use server-side canvas manipulation
-  // For now, we return the subject data as positioned (frontend handles actual positioning)
-  console.log(`Positioning subject on ${canvasWidth}x${canvasHeight} canvas with placement:`, placement);
-  return subjectDataUrl;
-}
-
-// Generate shadow/reflection layer using Gemini 2.5 Flash Image Preview
-async function performComposite(
+// Generate shadow/reflection layer using Gemini 2.0 Flash Exp
+async function generateShadowLayer(
   model: any,
-  positionedData: string,
-  backdrop: string,
-  imageName: string,
-  addBlur: boolean
+  contextImageUrl: string,
+  dimensions: { width: number; height: number }
 ): Promise<string> {
   
-  const compositePrompt = `Analyze the two provided images: an isolated subject on a transparent background and a backdrop scene.
+  const prompt = `
+    Analyze the provided composited image. Your task is to generate a new, separate image containing ONLY the realistic shadows and reflections that the subject would cast in that scene.
 
-Your task is to generate a new, third image that contains ONLY the realistic shadows and reflections the subject would cast onto the backdrop.
+    **CRITICAL INSTRUCTIONS:**
+    1.  **You MUST output a PNG file with a fully transparent background.** Do not include the original subject or backdrop from the input image. The output must be a layer that can be placed between the subject and the backdrop.
+    2.  The dimensions of your output PNG must be exactly ${dimensions.width}x${dimensions.height} to ensure perfect alignment.
+    3.  The shadows and reflections should be physically accurate based on the lighting in the provided context image.
+  `;
 
-**CRITICAL INSTRUCTIONS:**
-1. **Output a PNG file with a fully transparent background.** Do not include the original subject or the backdrop in the output. The output must be a layer that can be placed between the subject and the backdrop.
-2. The generated shadows and reflections must be accurately positioned and scaled to match the subject's placement and the lighting of the backdrop.
-3. The dimensions of the output image must exactly match the dimensions of the input backdrop image to ensure perfect alignment.
-4. The shadow should be soft and diffuse, appropriate for a studio environment.
-5. The reflection should be subtle and placed directly beneath the subject, fading with distance.
-
-The goal is to create a physically realistic "effects layer" that can be used to composite the final image. Do not generate the final composite yourself.`;
-  
-  const getImageInfo = (dataUrl: string) => {
-    const [header, data] = dataUrl.split(',');
-    const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
-    return { data, mimeType };
-  };
-  
-  const subjectInfo = getImageInfo(positionedData);
-  const backdropInfo = getImageInfo(backdrop);
-  
-  const compositeContents = [
-    { text: compositePrompt },
-    {
-      inlineData: {
-        mimeType: subjectInfo.mimeType,
-        data: subjectInfo.data
-      }
-    },
-    {
-      inlineData: {
-        mimeType: backdropInfo.mimeType,
-        data: backdropInfo.data
-      }
+  const imagePart = {
+    inlineData: {
+      data: contextImageUrl.split(",")[1], // Remove the "data:image/png;base64," prefix
+      mimeType: 'image/png' // We are now sending a PNG for max quality
     }
-  ];
+  };
 
-  console.log(`Calling Gemini 2.5 Flash Image Preview for shadow layer generation for ${imageName}...`);
-  const compositeResult = await model.generateContent(compositeContents);
+  console.log(`Calling Gemini 2.0 Flash Exp for shadow layer generation...`);
+  const result = await model.generateContent([prompt, imagePart]);
   
   let shadowLayerData = null;
-  if (compositeResult?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-    const mimeType = compositeResult.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-    shadowLayerData = `data:${mimeType};base64,${compositeResult.response.candidates[0].content.parts[0].inlineData.data}`;
+  if (result?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+    const mimeType = result.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
+    shadowLayerData = `data:${mimeType};base64,${result.response.candidates[0].content.parts[0].inlineData.data}`;
   }
 
   if (!shadowLayerData) {
-    throw new Error(`Failed to generate shadow layer for ${imageName}`);
+    throw new Error('Failed to generate shadow layer');
   }
 
   return shadowLayerData;
 }
-
-// This function is no longer needed as we only generate shadow layers
-// Removed to simplify the workflow
