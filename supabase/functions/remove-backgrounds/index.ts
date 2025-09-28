@@ -41,12 +41,14 @@ serve(async (req) => {
       try {
         console.log(`Image data length: ${image.data.length}`);
         
-        // Use Bria Background Remove model (confirmed working)
+        // Use 851-labs Background Remover model
         const output = await replicate.run(
-          "bria/remove-background",
+          "851-labs/background-remover:a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc",
           {
             input: {
-              image: image.data
+              image: image.data,
+              format: "png",
+              background_type: "rgba"
             }
           }
         );
