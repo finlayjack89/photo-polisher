@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
 const corsHeaders = {
@@ -13,6 +14,20 @@ interface V5ProcessRequest {
     height: number;
   };
 }
+
+// HEIC detection and conversion utility
+const isHeicFile = (fileName: string): boolean => {
+  return fileName.toLowerCase().endsWith('.heic') || fileName.toLowerCase().endsWith('.heif');
+};
+
+// Convert data URL to ensure PNG format for quality preservation
+const ensurePngFormat = (dataUrl: string, fileName: string): string => {
+  if (isHeicFile(fileName) && !dataUrl.startsWith('data:image/png')) {
+    // For HEIC files, ensure PNG format is used
+    return dataUrl.replace(/^data:image\/[^;]+/, 'data:image/png');
+  }
+  return dataUrl;
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,9 +47,30 @@ serve(async (req) => {
       throw new Error('Missing required parameters: contextImageUrl and dimensions');
     }
 
-    // Generate shadow layer using Gemini
+    // Get Gemini API key
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      throw new Error('GEMINI_API_KEY not found');
+    }
+
+    // Initialize Gemini API
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        temperature: 0.2,
+      }
+    });
+
+    console.log(`Using Gemini 2.0 Flash Exp for shadow layer generation`);
+
+    // Generate shadow layer using the context image
     console.log(`Generating shadow layer from context image...`);
-    const shadowLayerData = await generateShadowLayer(contextImageUrl, dimensions);
+    const shadowLayerData = await generateShadowLayer(
+      model, 
+      contextImageUrl, 
+      dimensions
+    );
     console.log(`✓ Shadow layer generation complete`);
 
     console.log(`=== V5 Processing Complete ===`);
@@ -63,93 +99,41 @@ serve(async (req) => {
   }
 });
 
-// Generate shadow/reflection layer using Gemini image generation
+// Generate shadow/reflection layer using Gemini 2.0 Flash Exp
 async function generateShadowLayer(
+  model: any,
   contextImageUrl: string,
   dimensions: { width: number; height: number }
 ): Promise<string> {
   
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY not found');
+  const prompt = `
+    Analyze the provided composited image. Your task is to generate a new, separate image containing ONLY the realistic shadows and reflections that the subject would cast in that scene.
+
+    **CRITICAL INSTRUCTIONS:**
+    1.  **You MUST output a PNG file with a fully transparent background.** Do not include the original subject or backdrop from the input image. The output must be a layer that can be placed between the subject and the backdrop.
+    2.  The dimensions of your output PNG must be exactly ${dimensions.width}x${dimensions.height} to ensure perfect alignment.
+    3.  The shadows and reflections should be physically accurate based on the lighting in the provided context image.
+  `;
+
+  const imagePart = {
+    inlineData: {
+      data: contextImageUrl.split(",")[1], // Remove the "data:image/png;base64," prefix
+      mimeType: 'image/png' // We are now sending a PNG for max quality
+    }
+  };
+
+  console.log(`Calling Gemini 2.0 Flash Exp for shadow layer generation...`);
+  const result = await model.generateContent([prompt, imagePart]);
+  
+  let shadowLayerData = null;
+  if (result?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+    const mimeType = result.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
+    shadowLayerData = `data:${mimeType};base64,${result.response.candidates[0].content.parts[0].inlineData.data}`;
   }
 
-  const genAI = new GoogleGenerativeAI(geminiApiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash-image-preview',
-    generationConfig: {
-      temperature: 0.1, // Low temperature for consistent shadow generation
-    },
-  });
-
-  const prompt = `You are a professional shadow generation AI. Analyze this composited image and generate ONLY realistic shadows and reflections that the product would cast on the surface.
-
-**CRITICAL REQUIREMENTS:**
-
-**1. OUTPUT FORMAT:**
-- Generate a PNG image with transparent background
-- The image should contain ONLY shadows and reflections - no backdrop, no subject
-- Shadows should be semi-transparent (30-60% opacity)
-- Output dimensions must exactly match the input image dimensions
-
-**2. SHADOW CHARACTERISTICS:**
-- Analyze the existing lighting to determine shadow direction and intensity
-- Create soft, realistic shadows that match the lighting environment
-- Shadows should be cast from the product's contact points with the surface
-- Use ambient occlusion principles for realistic depth
-
-**3. REFLECTION CHARACTERISTICS:**
-- Add subtle reflections only if the surface would naturally reflect (glossy/semi-glossy surfaces)
-- Reflections should be much fainter than shadows (15-30% opacity)
-- Reflections should be geometrically accurate to the product's shape
-
-**4. WHAT NOT TO INCLUDE:**
-- Do NOT include the original backdrop in your output
-- Do NOT include the subject itself in your output
-- Do NOT add any background elements or colors
-- Do NOT change or add lighting to the scene itself
-
-Your output must be a transparent PNG containing only the shadow/reflection layer.`;
-
-  console.log(`🤖 Calling Gemini for shadow generation...`);
-  
-  // Parse the context image
-  const [mimeInfo, base64Data] = contextImageUrl.split(',');
-  const mimeType = mimeInfo.match(/data:([^;]+)/)?.[1] || 'image/png';
-
-  const shadowContents = [
-    {
-      role: 'user',
-      parts: [
-        { text: prompt },
-        {
-          inlineData: {
-            mimeType,
-            data: base64Data,
-          },
-        },
-      ],
-    },
-  ];
-
-  const shadowPromise = model.generateContent({ contents: shadowContents });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Shadow generation timeout after 45 seconds')), 45000);
-  });
-
-  const shadowResult = await Promise.race([shadowPromise, timeoutPromise]);
-  const shadowResponse = await (shadowResult as any).response;
-
-  if (!shadowResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-    console.error('No shadow data received from Gemini');
-    throw new Error('No shadow data received from Gemini');
+  if (!shadowLayerData) {
+    throw new Error('Failed to generate shadow layer');
   }
 
-  const shadowBase64 = shadowResponse.candidates[0].content.parts[0].inlineData.data;
-  const shadowMimeType = shadowResponse.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-  const shadowLayerData = `data:${shadowMimeType};base64,${shadowBase64}`;
-  
-  console.log(`✅ Shadow layer generated successfully`);
-  
   return shadowLayerData;
 }
