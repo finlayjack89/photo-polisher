@@ -155,7 +155,24 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     
     try {
       const subject = processedSubjects[subjectIndex];
-      const backdropUrl = backdrop.url;
+      // Convert backdrop URL to data URL to avoid CORS issues
+      let backdropDataUrl: string;
+      if (backdrop.url.startsWith('data:')) {
+        backdropDataUrl = backdrop.url;
+      } else {
+        // Fetch the backdrop and convert to data URL
+        console.log('🔍 Converting backdrop URL to data URL for AI processing...');
+        const response = await fetch(backdrop.url);
+        if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
+        const blob = await response.blob();
+        backdropDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+      
       const subjectUrl = subject.backgroundRemovedData;
       
       // Get rotation from the CommercialEditingWorkflow if available
@@ -169,7 +186,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
 
       // --- STEP 1: Create the high-quality context image for the AI ---
       console.log("Creating AI context image as PNG...");
-      const contextImage = await createAiContextImage(backdropUrl, subjectUrl, subjectConfig);
+      const contextImage = await createAiContextImage(backdropDataUrl, subjectUrl, subjectConfig);
 
       // --- STEP 2: Call the AI to generate the shadow layer ---
       console.log("Invoking AI to generate shadow layer...");
@@ -192,7 +209,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
       };
       
       const finalImage = await compositeLayers(
-        backdropUrl,
+        backdropDataUrl,
         shadowLayerUrl,
         subjectUrl,
         placementConfig
