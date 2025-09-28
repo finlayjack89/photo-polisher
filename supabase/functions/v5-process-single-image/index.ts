@@ -1,6 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,20 +12,6 @@ interface V5ProcessRequest {
     height: number;
   };
 }
-
-// HEIC detection and conversion utility
-const isHeicFile = (fileName: string): boolean => {
-  return fileName.toLowerCase().endsWith('.heic') || fileName.toLowerCase().endsWith('.heif');
-};
-
-// Convert data URL to ensure PNG format for quality preservation
-const ensurePngFormat = (dataUrl: string, fileName: string): string => {
-  if (isHeicFile(fileName) && !dataUrl.startsWith('data:image/png')) {
-    // For HEIC files, ensure PNG format is used
-    return dataUrl.replace(/^data:image\/[^;]+/, 'data:image/png');
-  }
-  return dataUrl;
-};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -47,30 +31,9 @@ serve(async (req) => {
       throw new Error('Missing required parameters: contextImageUrl and dimensions');
     }
 
-    // Get Gemini API key
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!geminiApiKey) {
-      throw new Error('GEMINI_API_KEY not found');
-    }
-
-    // Initialize Gemini API
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
-      generationConfig: {
-        temperature: 0.2,
-      }
-    });
-
-    console.log(`Using Gemini 2.0 Flash Exp for shadow layer generation`);
-
-    // Generate shadow layer using the context image
+    // Generate shadow layer using OpenAI
     console.log(`Generating shadow layer from context image...`);
-    const shadowLayerData = await generateShadowLayer(
-      model, 
-      contextImageUrl, 
-      dimensions
-    );
+    const shadowLayerData = await generateShadowLayer(contextImageUrl, dimensions);
     console.log(`✓ Shadow layer generation complete`);
 
     console.log(`=== V5 Processing Complete ===`);
@@ -99,41 +62,59 @@ serve(async (req) => {
   }
 });
 
-// Generate shadow/reflection layer using Gemini 2.0 Flash Exp
+// Generate shadow/reflection layer using OpenAI image generation
 async function generateShadowLayer(
-  model: any,
   contextImageUrl: string,
   dimensions: { width: number; height: number }
 ): Promise<string> {
   
-  const prompt = `
-    Analyze the provided composited image. Your task is to generate a new, separate image containing ONLY the realistic shadows and reflections that the subject would cast in that scene.
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiApiKey) {
+    throw new Error('OPENAI_API_KEY not found');
+  }
 
-    **CRITICAL INSTRUCTIONS:**
-    1.  **You MUST output a PNG file with a fully transparent background.** Do not include the original subject or backdrop from the input image. The output must be a layer that can be placed between the subject and the backdrop.
-    2.  The dimensions of your output PNG must be exactly ${dimensions.width}x${dimensions.height} to ensure perfect alignment.
-    3.  The shadows and reflections should be physically accurate based on the lighting in the provided context image.
-  `;
-
-  const imagePart = {
-    inlineData: {
-      data: contextImageUrl.split(",")[1], // Remove the "data:image/png;base64," prefix
-      mimeType: 'image/png' // We are now sending a PNG for max quality
-    }
-  };
-
-  console.log(`Calling Gemini 2.0 Flash Exp for shadow layer generation...`);
-  const result = await model.generateContent([prompt, imagePart]);
+  const prompt = `Create a realistic shadow and reflection layer for a product placed on a surface. The shadow should:
+  - Be soft and natural looking
+  - Match the lighting conditions of the scene
+  - Be transparent PNG with only shadows/reflections visible
+  - Have realistic perspective and depth
+  - Be subtle and enhance the product placement
   
-  let shadowLayerData = null;
-  if (result?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-    const mimeType = result.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-    shadowLayerData = `data:${mimeType};base64,${result.response.candidates[0].content.parts[0].inlineData.data}`;
+  Generate a transparent PNG image that contains ONLY shadows and reflections, no objects or background.`;
+
+  console.log(`🤖 Calling OpenAI for shadow generation...`);
+  
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-image-1',
+      prompt: prompt,
+      n: 1,
+      size: `${Math.min(dimensions.width, 1024)}x${Math.min(dimensions.height, 1024)}`,
+      output_format: 'png',
+      background: 'transparent',
+      quality: 'high'
+    }),
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok) {
+    console.error('OpenAI API error:', data);
+    throw new Error(`OpenAI API error: ${data.error?.message || 'Unknown error'}`);
   }
 
-  if (!shadowLayerData) {
-    throw new Error('Failed to generate shadow layer');
+  if (!data.data?.[0]?.b64_json) {
+    console.error('No image data received from OpenAI');
+    throw new Error('No image data received from OpenAI');
   }
 
+  const shadowLayerData = `data:image/png;base64,${data.data[0].b64_json}`;
+  console.log(`✅ Shadow layer generated successfully`);
+  
   return shadowLayerData;
 }

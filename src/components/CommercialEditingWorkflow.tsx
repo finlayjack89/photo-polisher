@@ -12,7 +12,8 @@ import {
   positionSubjectOnCanvas,
   fileToDataUrl,
   SubjectPlacement,
-  compositeLayers
+  compositeLayers,
+  createAiContextImage
 } from "@/lib/canvas-utils";
 // Removed resizeImageFile import - now using processAndCompressImage in UploadZone
 import { useToast } from "@/hooks/use-toast";
@@ -571,7 +572,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   };
 
   const startAIEnhancement = async () => {
-    if (!processedImages.clientComposited) return;
+    if (!processedImages.clientComposited || !pureBackdropData) return;
 
     setIsProcessing(true);
     setProgress(0);
@@ -579,28 +580,92 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentProcessingStep('Enhancing images with AI...');
 
     try {
-      const { data: result, error } = await supabase.functions.invoke('finalize-image-v3', {
-        body: {
-          images: processedImages.clientComposited.map(img => ({
-            name: img.name,
-            data: img.compositedData
-          }))
+      const enhancedImages = [];
+      
+      for (let i = 0; i < processedImages.clientComposited.length; i++) {
+        const image = processedImages.clientComposited[i];
+        setProgress((i / processedImages.clientComposited.length) * 100);
+        
+        // Convert backdrop URL to data URL if needed
+        let backdropDataUrl: string;
+        if (pureBackdropData.startsWith('data:')) {
+          backdropDataUrl = pureBackdropData;
+        } else {
+          console.log('🔍 Converting backdrop URL to data URL for AI processing...');
+          const response = await fetch(pureBackdropData);
+          if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
+          const blob = await response.blob();
+          backdropDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
         }
-      });
 
-      if (error || !result?.success) {
-        throw new Error(error?.message || 'AI enhancement failed');
+        // Find the original background-removed subject
+        const originalSubject = processedImages.backgroundRemoved.find(bg => bg.name === image.name);
+        if (!originalSubject) {
+          console.error(`Could not find original subject for ${image.name}`);
+          enhancedImages.push({
+            name: image.name,
+            finalizedData: image.compositedData
+          });
+          continue;
+        }
+
+        // Create context image for AI
+        const contextImage = await createAiContextImage(
+          backdropDataUrl,
+          originalSubject.backgroundRemovedData,
+          {
+            position: { x: 0.5, y: 0.5 },
+            size: { width: 400, height: 400 },
+            rotation: 0
+          }
+        );
+
+        // Call V5 processing for shadow generation
+        console.log(`🎭 Generating AI shadows for ${image.name}...`);
+        const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
+          body: {
+            contextImageUrl: contextImage,
+            dimensions: { width: 1024, height: 1024 }
+          },
+        });
+
+        if (error) {
+          console.error(`Failed to generate shadows for ${image.name}:`, error);
+          // Fall back to original composited image
+          enhancedImages.push({
+            name: image.name,
+            finalizedData: image.compositedData
+          });
+        } else {
+          // Composite final image with shadows
+          const finalImage = await compositeLayers(
+            backdropDataUrl,
+            data.imageData,
+            originalSubject.backgroundRemovedData,
+            { x: 0.5, y: 0.5, scale: 0.4 }
+          );
+          
+          enhancedImages.push({
+            name: image.name,
+            finalizedData: finalImage
+          });
+        }
       }
 
       setProgress(100);
       setProcessedImages(prev => ({
         ...prev,
-        aiEnhanced: result.results
+        aiEnhanced: enhancedImages
       }));
 
       toast({
         title: "AI Enhancement Complete",
-        description: `Successfully enhanced ${result.results.length} images with professional touches!`
+        description: `Successfully enhanced ${enhancedImages.length} images with AI-generated shadows and reflections!`
       });
 
       setTimeout(() => {

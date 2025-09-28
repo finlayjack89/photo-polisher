@@ -151,45 +151,46 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
     try {
       const compositedImageData = image.finalizedData || image.processedData || '';
       
-      const { data, error } = await supabase.functions.invoke('retry-single-image-enhancement', {
+      if (!compositedImageData) {
+        throw new Error('No image data available for enhancement');
+      }
+
+      // For retry enhancement, we'll use the V5 processing with a simpler approach
+      const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
         body: {
-          compositedImageData: compositedImageData.replace(/^data:image\/[a-z]+;base64,/, ''),
-          temperature: temperature,
-          imageName: image.name
-        }
+          contextImageUrl: compositedImageData,
+          dimensions: { width: 1024, height: 1024 }
+        },
       });
 
       if (error) throw error;
 
       if (data.success) {
-        // Update image with retry result - handle both enhanced and fallback cases
+        // Update image with retry result
         updatedImages[imageIndex] = {
           ...image,
           retryStatus: 'completed',
-          retryEnhancedData: data.enhancedImageData
+          retryEnhancedData: data.imageData || compositedImageData
         };
 
-        if (data.fallback) {
-          toast({
-            title: "Enhancement Complete",
-            description: `${image.name} - AI enhancement returned to original quality (no changes needed)`
-          });
-        } else {
-          toast({
-            title: "Enhancement Complete",
-            description: `${image.name} has been enhanced with temperature ${temperature}`
-          });
-        }
+        toast({
+          title: "Enhancement Complete",
+          description: `${image.name} has been processed with AI enhancement`
+        });
       } else {
         throw new Error(data.error || 'Enhancement failed');
       }
     } catch (error) {
       console.error('Retry enhancement error:', error);
-      updatedImages[imageIndex] = { ...image, retryStatus: 'error' };
+      updatedImages[imageIndex] = { 
+        ...image, 
+        retryStatus: 'error',
+        retryEnhancedData: image.finalizedData || image.processedData // Keep original on error
+      };
       
       toast({
         title: "Enhancement Failed",
-        description: `Failed to enhance ${image.name}. Please try again.`,
+        description: `Failed to enhance ${image.name}. Keeping original version.`,
         variant: "destructive"
       });
     }
