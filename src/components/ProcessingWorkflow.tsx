@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProcessingWorkflowProps {
+  processedSubjects?: any[];
+  backdrop?: any;
   files: File[];
   onComplete: (processedFiles: ProcessedFile[]) => void;
 }
@@ -37,7 +39,7 @@ const processingSteps = [
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
-export const ProcessingWorkflow = ({ files, onComplete }: ProcessingWorkflowProps) => {
+export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onComplete }: ProcessingWorkflowProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [completedFiles, setCompletedFiles] = useState(0);

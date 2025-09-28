@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface BackgroundRemovalStepProps {
   files: File[];
+  onProcessingComplete: (processedSubjects: any[]) => void;
   onContinue: (backgroundRemovedImages: Array<{
     name: string;
     originalData: string;
@@ -31,6 +32,7 @@ interface ProcessedImage {
 
 export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
   files,
+  onProcessingComplete,
   onContinue,
   onBack,
   isProcessing = false
@@ -106,6 +108,9 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       setCurrentProcessingStep('Complete!');
       
       setProcessedImages(allResults);
+      
+      // Call the new onProcessingComplete prop with the processed subjects
+      onProcessingComplete(allResults);
       
     } catch (error) {
       console.error('Error removing backgrounds:', error);

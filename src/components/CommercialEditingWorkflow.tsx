@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { BackdropPositioning } from './BackdropPositioning';
 import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
+import { ProcessingWorkflow } from './ProcessingWorkflow';
 import { ImagePreviewStep } from './ImagePreviewStep';
 import { BackgroundRemovalStep } from './BackgroundRemovalStep';
 import { ImageRotationStep } from './ImageRotationStep';
@@ -39,6 +40,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 }) => {
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('analysis');
   const [processedImages, setProcessedImages] = useState<ProcessedImages>({ backgroundRemoved: [] });
+  const [processedSubjects, setProcessedSubjects] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
@@ -125,24 +127,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentStep('background-removal');
   };
 
-  const handleBackgroundRemovalComplete = async (backgroundRemovedImages: Array<{
-    name: string;
-    originalData: string;
-    backgroundRemovedData: string;
-    size: number;
-  }>) => {
-    // CRITICAL: Discard original image data completely to prevent it from being used in final composition
-    // Only keep the transparent background-removed data
-    const transparentOnlyImages = backgroundRemovedImages.map(img => ({
-      name: img.name,
-      originalData: '', // Completely remove original data to prevent accidental usage
-      backgroundRemovedData: img.backgroundRemovedData, // Keep only transparent subject
-      size: img.size
-    }));
-    
-    console.log('Background removal complete - original images discarded, keeping only transparent subjects');
-    setProcessedImages({ backgroundRemoved: transparentOnlyImages });
-    setCurrentStep('rotation');
+  const handleBackgroundRemovalComplete = (subjects: any[]) => {
+    console.log("Background removal complete. Received subjects:", subjects);
+    setProcessedSubjects(subjects);
+    // We also advance to the next step in the workflow here
+    setCurrentStep('rotation'); 
   };
 
   const handleRotationComplete = async (rotatedImages: Array<{
@@ -677,6 +666,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     return (
       <BackgroundRemovalStep
         files={currentFiles}
+        onProcessingComplete={handleBackgroundRemovalComplete}
         onContinue={handleBackgroundRemovalComplete}
         onBack={() => setCurrentStep('preview')}
       />
@@ -718,12 +708,14 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   if (currentStep === 'processing') {
     return (
-      <ProcessingStep
-        title="Processing Images"
-        description="Creating your professional product images..."
-        progress={progress}
-        currentStep={currentProcessingStep}
+      <ProcessingWorkflow
+        processedSubjects={processedSubjects}
+        backdrop={processedImages.backdrop}
         files={currentFiles}
+        onComplete={() => {
+          setCurrentStep('preview-results');
+          setIsProcessing(false);
+        }}
       />
     );
   }
