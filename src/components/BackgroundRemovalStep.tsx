@@ -39,6 +39,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
   const [isProcessingLocal, setIsProcessingLocal] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const formatFileSize = (bytes: number) => {
@@ -52,6 +53,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
   const handleRemoveBackgrounds = async () => {
     setIsProcessingLocal(true);
     setProgress(0);
+    setError(null); // Clear previous errors
     setCurrentProcessingStep('Converting images...');
 
     try {
@@ -89,27 +91,85 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
         });
 
         if (error) {
-          throw new Error(error.message);
+          console.error('Supabase function error:', error);
+          throw new Error(`Background removal failed: ${error.message || 'Unknown error occurred'}`);
         }
 
-        if (result?.results) {
-          // Add original size to each result
-          const resultsWithOriginalSize = result.results.map((res: any, index: number) => ({
-            ...res,
-            originalSize: batch[index].originalSize
-          }));
-          allResults.push(...resultsWithOriginalSize);
+        if (!result) {
+          throw new Error('No response received from background removal service');
         }
+
+        if (result.error) {
+          console.error('Function returned error:', result.error);
+          throw new Error(`Background removal error: ${result.error}`);
+        }
+
+        if (!result.results || !Array.isArray(result.results)) {
+          console.error('Invalid response format:', result);
+          throw new Error('Invalid response format from background removal service');
+        }
+
+        // Check for any failed images in the batch
+        const failed = result.results.filter((res: any) => res.error);
+        if (failed.length > 0) {
+          console.warn('Some images failed:', failed);
+          toast({
+            title: "Partial Processing",
+            description: `${failed.length} out of ${batch.length} images failed to process in this batch`,
+            variant: "destructive",
+          });
+        }
+
+        // Add original size to successful results only
+        const successfulResults = result.results.filter((res: any) => !res.error);
+        const resultsWithOriginalSize = successfulResults.map((res: any, index: number) => {
+          const originalIndex = result.results.indexOf(res);
+          return {
+            ...res,
+            originalSize: batch[originalIndex]?.originalSize || 0
+          };
+        });
+        
+        allResults.push(...resultsWithOriginalSize);
+      }
+
+      if (allResults.length === 0) {
+        throw new Error('All images failed to process. Please try again or check your image formats.');
       }
 
       setProgress(100);
       setCurrentProcessingStep('Complete!');
       
       setProcessedImages(allResults);
+
+      if (allResults.length < imageData.length) {
+        toast({
+          title: "Partial Success",
+          description: `${allResults.length} out of ${imageData.length} images processed successfully`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `All ${allResults.length} images processed successfully`,
+        });
+      }
       
     } catch (error) {
       console.error('Error removing backgrounds:', error);
-      alert(`Error: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      setError(errorMessage);
+      
+      toast({
+        title: "Background Removal Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+
+      // Reset progress on error
+      setProgress(0);
+      setCurrentProcessingStep('');
     } finally {
       setIsProcessingLocal(false);
     }
@@ -364,20 +424,44 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
               </div>
             </div>
           </CardContent>
-        </Card>
+         </Card>
 
-        <div className="flex justify-center gap-4">
-          <Button variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          <Button 
-            onClick={handleRemoveBackgrounds}
-            className="min-w-[200px]"
-          >
-            <Scissors className="mr-2 h-4 w-4" />
-            Remove Backgrounds
-          </Button>
-        </div>
+         {error && (
+           <Alert variant="destructive">
+             <AlertCircle className="h-4 w-4" />
+             <AlertDescription>
+               {error}
+             </AlertDescription>
+           </Alert>
+         )}
+
+         <div className="flex justify-center gap-4">
+           <Button variant="outline" onClick={onBack}>
+             Back
+           </Button>
+           <Button 
+             onClick={handleRemoveBackgrounds}
+             className="min-w-[200px]"
+             disabled={isProcessingLocal}
+           >
+             {isProcessingLocal ? (
+               <>
+                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                 Processing...
+               </>
+             ) : error ? (
+               <>
+                 <Scissors className="mr-2 h-4 w-4" />
+                 Retry Background Removal
+               </>
+             ) : (
+               <>
+                 <Scissors className="mr-2 h-4 w-4" />
+                 Remove Backgrounds
+               </>
+             )}
+           </Button>
+         </div>
       </div>
     </div>
   );
