@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useDropzone } from 'react-dropzone';
 import { X, Upload, FileImage } from 'lucide-react';
 import { processAndCompressImage } from "@/lib/image-resize-utils";
+import { useToast } from "@/components/ui/use-toast"; // Ensure toast is imported
 import { supabase } from "@/integrations/supabase/client";
 // @ts-ignore - HEIC library types not available
 import heic2any from 'heic2any';
@@ -84,9 +85,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
 
 // src/components/UploadZone.tsx
 
+// src/components/UploadZone.tsx
+
 const onDrop = async (acceptedFiles: File[]) => {
+  const { toast } = useToast();
   const validFiles = acceptedFiles.filter(file => {
-    // Your existing validation logic is good
     const isValidType = file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.heic');
     const isValidSize = file.size <= 50 * 1024 * 1024;
     return isValidType && isValidSize;
@@ -97,19 +100,19 @@ const onDrop = async (acceptedFiles: File[]) => {
     return;
   }
 
-  try {
-    const newFilesToProcess: FileWithOriginalSize[] = [];
-    const newPreviews: string[] = [];
+  const newFilesToProcess: FileWithOriginalSize[] = [];
+  const newPreviews: string[] = [];
 
-    for (const file of validFiles) {
+  for (const file of validFiles) {
+    try {
       let fileToProcess: File | Blob = file;
       const originalSize = file.size;
 
       if (file.name.toLowerCase().endsWith('.heic')) {
+        console.log(`Converting HEIC file: ${file.name}`);
         fileToProcess = await heic2any({ blob: file, toType: "image/png" });
       }
 
-      // --- THIS IS THE FIX ---
       const dimensions = await getImageDimensions(fileToProcess);
       const FIVE_MB = 5 * 1024 * 1024;
       const needsProcessing = originalSize > FIVE_MB || dimensions.width > 2048 || dimensions.height > 2048;
@@ -117,7 +120,7 @@ const onDrop = async (acceptedFiles: File[]) => {
       let finalFile: FileWithOriginalSize;
 
       if (needsProcessing) {
-        console.log(`Processing needed for ${file.name}. Size: ${(originalSize / (1024*1024)).toFixed(2)}MB, Dimensions: ${dimensions.width}x${dimensions.height}`);
+        console.log(`Processing needed for ${file.name}.`);
         const compressedBlob = await processAndCompressImage(fileToProcess as File);
         finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
           type: 'image/jpeg',
@@ -133,13 +136,19 @@ const onDrop = async (acceptedFiles: File[]) => {
       
       const previewUrl = URL.createObjectURL(finalFile);
       newPreviews.push(previewUrl);
-    }
 
-    setSelectedFiles(prev => [...prev, ...newFilesToProcess]);
-    setPreviews(prev => [...prev, ...newPreviews]);
-  } catch (error) {
-    console.error('Error processing files:', error);
+    } catch (error) {
+      console.error(`Error processing file ${file.name}:`, error);
+      toast({
+        title: "Processing Error",
+        description: `Could not process ${file.name}. It may be corrupt or an unsupported format.`,
+        variant: "destructive"
+      });
+    }
   }
+
+  setSelectedFiles(prev => [...prev, ...newFilesToProcess]);
+  setPreviews(prev => [...prev, ...newPreviews]);
 };
 
 finalFile.originalSize = originalSize;
