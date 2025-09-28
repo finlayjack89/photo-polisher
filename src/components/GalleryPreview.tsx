@@ -162,17 +162,24 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
       if (error) throw error;
 
       if (data.success) {
-        // Update image with retry result
+        // Update image with retry result - handle both enhanced and fallback cases
         updatedImages[imageIndex] = {
           ...image,
           retryStatus: 'completed',
           retryEnhancedData: data.enhancedImageData
         };
 
-        toast({
-          title: "Enhancement Complete",
-          description: `${image.name} has been enhanced with temperature ${temperature}`
-        });
+        if (data.fallback) {
+          toast({
+            title: "Enhancement Complete",
+            description: `${image.name} - AI enhancement returned to original quality (no changes needed)`
+          });
+        } else {
+          toast({
+            title: "Enhancement Complete",
+            description: `${image.name} has been enhanced with temperature ${temperature}`
+          });
+        }
       } else {
         throw new Error(data.error || 'Enhancement failed');
       }

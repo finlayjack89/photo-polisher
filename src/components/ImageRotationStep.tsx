@@ -94,7 +94,12 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
   };
 
   const getImageDataToDisplay = (image: typeof currentImages[0]) => {
-    return isPreCut ? (image.originalData || image.backgroundRemovedData) : image.backgroundRemovedData;
+    // Try different property names to handle various data structures
+    const candidateData = image.backgroundRemovedData || 
+                           (image as any).processedImageUrl ||
+                           image.originalData ||
+                           (image as any).data;
+    return candidateData || '';
   };
 
   const getOriginalImageToDisplay = (image: typeof currentImages[0]) => {

@@ -40,7 +40,6 @@ interface ProcessedFile {
 const processingSteps = [
   { id: 'upload', label: 'Uploading Files', icon: ImageIcon },
   { id: 'analyze', label: 'AI Analysis', icon: Sparkles },
-  { id: 'upscale', label: 'AI Upscaling', icon: Sparkles },
   { id: 'convert', label: 'Converting Images', icon: Scissors },
   { id: 'compress', label: 'Smart Compression', icon: Scissors },
   { id: 'complete', label: 'Processing Complete', icon: Download },
@@ -117,32 +116,26 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         console.warn('AI analysis failed, continuing with processing:', analysisError);
       }
 
-      // Step 3: AI Upscaling
+      // Step 3: Converting step - Only use background-removed transparent PNGs
       setCurrentStep(2);
       setProgress(35);
-
-      const { data: upscaleData, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
-        body: { files: filesData }
-      });
-
-      if (upscaleError) {
-        console.warn('Upscaling failed, continuing with original images:', upscaleError);
-      }
-
-      // Use upscaled images if available, otherwise use original
-      const imagesToProcess = upscaleData?.success ? upscaleData.upscaledFiles : filesData;
-
-      // Step 4: Converting step
-      setCurrentStep(3);
-      setProgress(55);
+      
+      // Use the transparent PNG data from background removal instead of original files
+      const imagesToProcess = processedSubjects && processedSubjects.length > 0 
+        ? processedSubjects.map(subject => ({
+            data: subject.backgroundRemovedData ? subject.backgroundRemovedData.split(',')[1] : '', // Remove data URL prefix
+            name: subject.original_filename || subject.name,
+            type: 'image/png'
+          }))
+        : filesData;
 
       // Call the CloudConvert edge function
       const { data, error: supabaseError } = await supabase.functions.invoke('process-images', {
         body: {
           files: imagesToProcess.map(file => ({
             data: file.data,
-            name: file.originalName || file.name,
-            type: file.type || `image/${file.format}`
+            name: file.name,
+            type: file.type || 'image/png'
           })),
           processingOptions: {
             quality: 90
@@ -158,8 +151,8 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         throw new Error(data.error || 'Processing failed');
       }
 
-      // Step 5: Smart Compression
-      setCurrentStep(4);
+      // Step 4: Smart Compression
+      setCurrentStep(3);
       setProgress(75);
 
       const { data: compressData, error: compressError } = await supabase.functions.invoke('compress-images', {
@@ -173,8 +166,8 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
       // Use compressed images if available, otherwise use processed images
       const finalFiles = compressData?.success ? compressData.compressedFiles : data.processedFiles;
 
-      // Step 6: Complete
-      setCurrentStep(5);
+      // Step 5: Complete
+      setCurrentStep(4);
       setProgress(90);
 
       // Merge AI analysis with final processed files
@@ -235,7 +228,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Step Indicators */}
-          <div className="grid grid-cols-6 gap-2 md:gap-4">
+          <div className="grid grid-cols-5 gap-2 md:gap-4">
             {processingSteps.map((step, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;

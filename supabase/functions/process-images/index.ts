@@ -123,8 +123,17 @@ serve(async (req) => {
           const fileBuffer = await fileResponse.arrayBuffer();
           console.log(`Downloaded ${name}: ${fileBuffer.byteLength} bytes`);
           
-          // Convert to base64
-          const base64Data = `data:image/png;base64,${btoa(String.fromCharCode(...new Uint8Array(fileBuffer)))}`;
+          // Convert to base64 - using chunk-based approach to avoid stack overflow
+          const uint8Array = new Uint8Array(fileBuffer);
+          let binaryString = '';
+          const chunkSize = 8192; // Process in chunks to avoid stack overflow
+          
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.slice(i, i + chunkSize);
+            binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          
+          const base64Data = `data:image/png;base64,${btoa(binaryString)}`;
           
           processedFiles.push({
             originalName: name,
