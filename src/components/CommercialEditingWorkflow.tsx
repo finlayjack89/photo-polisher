@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Button } from "@/components/ui/button";
 import { BackdropPositioning } from './BackdropPositioning';
 import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
@@ -15,11 +16,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 interface CommercialEditingWorkflowProps {
-  files: File[];
+  files: (File & { isPreCut?: boolean })[];
   onBack: () => void;
 }
 
-type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'client-compositing' | 'processing' | 'preview-results' | 'ai-enhancement' | 'complete';
+type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'client-compositing' | 'processing' | 'preview-results' | 'ai-enhancement' | 'complete' | 'precut-enhancement';
 
 interface ProcessedImages {
   backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
@@ -41,7 +42,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const [progress, setProgress] = useState(0);
   const [currentProcessingStep, setCurrentProcessingStep] = useState('');
   const [needsCompression, setNeedsCompression] = useState(false);
-  const [currentFiles, setCurrentFiles] = useState<File[]>(files);
+  const [currentFiles, setCurrentFiles] = useState<(File & { isPreCut?: boolean })[]>(files);
   const [compressionAnalysis, setCompressionAnalysis] = useState<{
     totalSize: number, 
     largeFiles: number,
@@ -63,6 +64,21 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }, [currentStep, processedImages.backdrop, processedImages.placement, processedImages.backgroundRemoved.length]);
 
   const analyzeImages = () => {
+    // Check if all images are pre-cut (transparent backgrounds already removed)
+    const allPreCut = files.every(file => file.isPreCut);
+    const hasPreCut = files.some(file => file.isPreCut);
+
+    if (allPreCut) {
+      console.log('All images are pre-cut, skipping to AI enhancement workflow');
+      setCurrentStep('precut-enhancement');
+      return;
+    }
+
+    if (hasPreCut) {
+      console.log('Mixed pre-cut and regular images detected');
+      // Handle mixed workflow - will need to process differently
+    }
+
     // Images are now pre-processed during upload to be 2048px max and under 5MB
     // Skip compression step and go directly to background removal
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
@@ -467,6 +483,102 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     }
   };
 
+  // AI Enhancement for pre-cut images (skip background removal and positioning)
+  const startPreCutEnhancement = async () => {
+    setCurrentStep('precut-enhancement');
+    setIsProcessing(true);
+    setProgress(0);
+    setCurrentProcessingStep('Enhancing pre-cut images with AI...');
+
+    try {
+      // Convert files to data URLs for processing
+      const imageData = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setCurrentProcessingStep(`Processing ${file.name} (${i + 1}/${files.length})...`);
+        
+        const dataUrl = await fileToDataUrl(file);
+        imageData.push({
+          name: file.name,
+          data: dataUrl
+        });
+        
+        setProgress((i / files.length) * 50);
+      }
+
+      setCurrentProcessingStep('Applying AI enhancement...');
+      setProgress(50);
+
+      // Use the retry-single-image-enhancement function for better quality
+      const enhancedResults = [];
+      for (let i = 0; i < imageData.length; i++) {
+        const image = imageData[i];
+        setCurrentProcessingStep(`Enhancing ${image.name} (${i + 1}/${imageData.length})...`);
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('retry-single-image-enhancement', {
+            body: {
+              compositedImageData: image.data,
+              temperature: 0.3, // Lower temperature for more consistent results
+              imageName: image.name
+            }
+          });
+
+          if (error || !data?.success) {
+            console.error(`Enhancement failed for ${image.name}:`, error);
+            // Fall back to original image if enhancement fails
+            enhancedResults.push({
+              name: image.name,
+              enhancedData: image.data
+            });
+          } else {
+            enhancedResults.push({
+              name: image.name,
+              enhancedData: data.enhancedImageData
+            });
+          }
+        } catch (enhanceError) {
+          console.error(`Enhancement error for ${image.name}:`, enhanceError);
+          // Fall back to original image
+          enhancedResults.push({
+            name: image.name,
+            enhancedData: image.data
+          });
+        }
+        
+        setProgress(50 + ((i + 1) / imageData.length) * 50);
+      }
+
+      setProcessedImages(prev => ({
+        ...prev,
+        aiEnhanced: enhancedResults // Keep original structure with enhancedData
+      }));
+
+      setProgress(100);
+      setCurrentProcessingStep('Enhancement complete!');
+      
+      toast({
+        title: "AI Enhancement Complete",
+        description: `Successfully enhanced ${enhancedResults.length} pre-cut images!`
+      });
+
+      setTimeout(() => {
+        setIsProcessing(false);
+        setCurrentStep('complete');
+      }, 1500);
+
+    } catch (error) {
+      console.error('Error in pre-cut enhancement:', error);
+      toast({
+        title: "Enhancement Error",
+        description: "Failed to enhance images. Please try again.",
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+      setCurrentStep('precut-enhancement');
+    }
+  };
+
   if (currentStep === 'analysis') {
     return null; // Auto-analysis in useEffect
   }
@@ -589,6 +701,73 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         }))}
         onBack={onBack}
         title="Final Enhanced Images"
+      />
+    );
+  }
+
+  if (currentStep === 'precut-enhancement') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 p-6">
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold">AI Enhancement</h2>
+          <p className="text-muted-foreground">
+            Enhancing your pre-cut images with professional AI touches
+          </p>
+        </div>
+        
+        {!isProcessing ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {files.map((file, index) => (
+                <div key={index} className="relative border rounded-lg p-2">
+                  <img 
+                    src={URL.createObjectURL(file)} 
+                    alt={file.name}
+                    className="w-full h-32 object-cover rounded"
+                  />
+                  <p className="text-sm font-medium truncate mt-2">{file.name}</p>
+                  <p className="text-xs text-electric">Pre-cut image</p>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex justify-center space-x-4">
+              <Button variant="outline" onClick={onBack}>
+                Back to Upload
+              </Button>
+              <Button onClick={startPreCutEnhancement}>
+                Start AI Enhancement
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <ProcessingStep
+            title="AI Enhancement"
+            description="Enhancing your pre-cut images with professional AI touches"
+            currentStep={currentProcessingStep}
+            progress={progress}
+            files={files}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (currentStep === 'complete') {
+    // Convert enhanced results to the format expected by GalleryPreview
+    const finalResults = processedImages.aiEnhanced?.map(result => ({
+      name: result.name,
+      finalizedData: result.enhancedData // Convert enhancedData to finalizedData for display
+    })) || processedImages.finalResults || processedImages.clientComposited?.map(result => ({
+      name: result.name,
+      finalizedData: result.compositedData
+    }));
+    
+    return (
+      <GalleryPreview
+        results={finalResults || []}
+        onBack={onBack}
+        title="Enhancement Complete!"
       />
     );
   }

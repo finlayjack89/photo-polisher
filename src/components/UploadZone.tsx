@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useDropzone } from 'react-dropzone';
-import { X, Upload, FileImage } from 'lucide-react';
+import { X, Upload, FileImage, Scissors } from 'lucide-react';
 import { processAndCompressImage } from "@/lib/image-resize-utils";
+import { detectImageTransparency } from "@/lib/transparency-utils";
 import { supabase } from "@/integrations/supabase/client";
 // @ts-ignore - HEIC library types not available
 import heic2any from 'heic2any';
@@ -14,6 +16,7 @@ interface UploadZoneProps {
 
 interface FileWithOriginalSize extends File {
   originalSize?: number;
+  isPreCut?: boolean;
 }
 
 export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
@@ -142,7 +145,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
           lastModified: Date.now()
         }) as FileWithOriginalSize;
         finalFile.originalSize = originalSize;
-        console.log(`Processed size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
+        
+        // Auto-detect transparency for PNG files using improved utility
+        finalFile.isPreCut = await detectImageTransparency(finalFile);
+        console.log(`Processed size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`, 
+                   finalFile.isPreCut ? '(Transparent PNG detected - auto-marked as pre-cut)' : '');
         
         processedFiles.push(finalFile);
         
@@ -170,6 +177,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const togglePreCut = (index: number) => {
+    setSelectedFiles(prev => prev.map((file, i) => 
+      i === index ? { ...file, isPreCut: !file.isPreCut } : file
+    ));
   };
 
   return (
@@ -232,7 +245,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
                     />
                   )}
                   
-                   <div className="space-y-1">
+                   <div className="space-y-2">
                      <p className="text-sm font-medium truncate">{file.name}</p>
                      <div className="text-xs text-muted-foreground">
                        Original: {((file.originalSize || file.size) / (1024 * 1024)).toFixed(2)}MB
@@ -240,18 +253,41 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
                      <div className="text-xs text-green-600">
                        Optimized: {(file.size / (1024 * 1024)).toFixed(2)}MB
                      </div>
-                    <div className="text-xs text-muted-foreground">
-                      {file.type}
-                    </div>
-                  </div>
+                     <div className="text-xs text-muted-foreground">
+                       {file.type}
+                     </div>
+                     
+                     {/* Pre-cut toggle */}
+                     <div className="flex items-center space-x-2 pt-1">
+                       <Checkbox
+                         id={`precut-${index}`}
+                         checked={file.isPreCut || false}
+                         onCheckedChange={() => togglePreCut(index)}
+                       />
+                       <label 
+                         htmlFor={`precut-${index}`} 
+                         className="text-xs text-muted-foreground cursor-pointer flex items-center space-x-1"
+                       >
+                         <Scissors className="h-3 w-3" />
+                         <span>Background already removed</span>
+                       </label>
+                     </div>
+                   </div>
                 </div>
               ))}
             </div>
             
             <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">
-                All images are automatically optimized to 2048px max and under 5MB
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  All images are automatically optimized to 2048px max and under 5MB
+                </p>
+                {selectedFiles.some(f => f.isPreCut) && (
+                  <p className="text-sm text-electric">
+                    {selectedFiles.filter(f => f.isPreCut).length} image(s) marked as pre-cut - will skip background removal
+                  </p>
+                )}
+              </div>
               <Button 
                 onClick={() => onFilesUploaded(selectedFiles)}
                 disabled={selectedFiles.length === 0}
