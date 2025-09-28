@@ -1,10 +1,10 @@
-import { v4 as uuidv4 } from 'uuid';
+
 import React, { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDropzone } from 'react-dropzone';
 import { X, Upload, FileImage } from 'lucide-react';
-import { processAndCompressImage } from "@/lib/image-resize-utils";
+import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/components/ui/use-toast"; // Ensure toast is imported
 import { supabase } from "@/integrations/supabase/client";
 // @ts-ignore - HEIC library types not available
@@ -110,7 +110,12 @@ const onDrop = async (acceptedFiles: File[]) => {
 
       if (file.name.toLowerCase().endsWith('.heic')) {
         console.log(`Converting HEIC file: ${file.name}`);
-        fileToProcess = await heic2any({ blob: file, toType: "image/png" });
+        const convertedBlob = await heic2any({ blob: file, toType: "image/png" });
+        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        fileToProcess = new File([blob], file.name.replace(/\.[^/.]+$/, '.png'), {
+          type: 'image/png',
+          lastModified: Date.now(),
+        });
       }
 
       const dimensions = await getImageDimensions(fileToProcess);
@@ -149,30 +154,6 @@ const onDrop = async (acceptedFiles: File[]) => {
 
   setSelectedFiles(prev => [...prev, ...newFilesToProcess]);
   setPreviews(prev => [...prev, ...newPreviews]);
-};
-
-finalFile.originalSize = originalSize;
-console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
-
-      finalFile.originalSize = originalSize;
-      console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
-
-      processedFiles.push(finalFile);
-
-      const previewUrl = URL.createObjectURL(finalFile);
-      newPreviews.push(previewUrl);
-    }
-
-    setSelectedFiles(prev => [...prev, ...processedFiles]);
-    setPreviews(prev => [...prev, ...newPreviews]);
-  } catch (error) {
-    console.error('Error processing files:', error);
-    toast({
-      title: "Processing Error",
-      description: "An unexpected error occurred while preparing your files.",
-      variant: "destructive"
-    });
-  }
 };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
