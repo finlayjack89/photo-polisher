@@ -674,9 +674,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }
 
   if (currentStep === 'rotation') {
+    // Use processedSubjects if available, otherwise fall back to processedImages.backgroundRemoved
+    const rotationImages = processedSubjects.length > 0 
+      ? processedSubjects.map(subject => ({
+          name: subject.original_filename || subject.name || 'Processed Image',
+          originalData: '', // Don't pass original data
+          backgroundRemovedData: subject.backgroundRemovedData || subject.processedImageUrl,
+          size: subject.size || 0
+        }))
+      : processedImages.backgroundRemoved;
+
     return (
       <ImageRotationStep
-        images={processedImages.backgroundRemoved}
+        images={rotationImages}
         onContinue={handleRotationComplete}
         onBack={() => setCurrentStep('background-removal')}
         isPreCut={false}
@@ -685,9 +695,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   }
 
   if (currentStep === 'precut-rotation') {
+    // For pre-cut images, also check processedSubjects
+    const rotationImages = processedSubjects.length > 0 
+      ? processedSubjects.map(subject => ({
+          name: subject.original_filename || subject.name || 'Pre-cut Image',
+          originalData: subject.backgroundRemovedData || subject.processedImageUrl,
+          backgroundRemovedData: subject.backgroundRemovedData || subject.processedImageUrl,
+          size: subject.size || 0
+        }))
+      : processedImages.backgroundRemoved;
+
     return (
       <ImageRotationStep
-        images={processedImages.backgroundRemoved}
+        images={rotationImages}
         onContinue={handlePreCutRotationComplete}
         onBack={onBack}
         isPreCut={true}

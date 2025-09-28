@@ -32,7 +32,7 @@ serve(async (req) => {
       
       console.log(`Processing file: ${name}, type: ${type}`);
       
-      // Create a job in CloudConvert
+      // Create a job in CloudConvert - simplified workflow
       const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
         method: 'POST',
         headers: {
@@ -52,13 +52,14 @@ serve(async (req) => {
               output_format: 'png',
               engine: 'imagemagick',
               engine_options: {
-                quality: processingOptions.quality || 90,
-                strip: true, // Remove metadata
+                quality: processingOptions.quality || 95,
+                strip: true,
+                background: 'transparent'
               }
             },
             'export-file': {
               operation: 'export/url',
-              input: 'convert-file',
+              input: 'convert-file'
             }
           }
         }),
@@ -101,19 +102,28 @@ serve(async (req) => {
         
         if (exportTask && exportTask.result && exportTask.result.files && exportTask.result.files.length > 0) {
           const resultFile = exportTask.result.files[0];
-          
-          // Download the file from CloudConvert and convert to base64
-          const fileResponse = await fetch(resultFile.url, {
-            headers: {
-              'Authorization': `Bearer ${CLOUDCONVERT_API_KEY}`,
-            },
+          console.log(`Export task result for ${name}:`, { 
+            filename: resultFile.filename, 
+            size: resultFile.size,
+            url: resultFile.url ? 'URL provided' : 'No URL'
           });
           
+          if (!resultFile.url) {
+            throw new Error(`No download URL provided for ${name}`);
+          }
+          
+          // Download the file from CloudConvert
+          const fileResponse = await fetch(resultFile.url);
+          
           if (!fileResponse.ok) {
-            throw new Error(`Failed to download processed file: ${fileResponse.status}`);
+            console.error(`Download failed for ${name}: ${fileResponse.status} ${fileResponse.statusText}`);
+            throw new Error(`Failed to download processed file for ${name}: ${fileResponse.status}`);
           }
           
           const fileBuffer = await fileResponse.arrayBuffer();
+          console.log(`Downloaded ${name}: ${fileBuffer.byteLength} bytes`);
+          
+          // Convert to base64
           const base64Data = `data:image/png;base64,${btoa(String.fromCharCode(...new Uint8Array(fileBuffer)))}`;
           
           processedFiles.push({
@@ -123,6 +133,8 @@ serve(async (req) => {
             size: fileBuffer.byteLength,
             format: 'png'
           });
+          
+          console.log(`Successfully processed ${name} to PNG format`);
         } else {
           console.error(`No result file found for job ${jobStatus.id}`);
           throw new Error(`No result file found for ${name}`);
