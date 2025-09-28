@@ -1,12 +1,5 @@
 export const processAndCompressImage = (file: File): Promise<Blob> => {
   return new Promise((resolve, reject) => {
-    const targetSizeInBytes = 5 * 1024 * 1024; // 5MB Target
-
-    // If the file is already under the target size, return it immediately without changes.
-    if (file.size <= targetSizeInBytes) {
-      return resolve(file);
-    }
-
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
@@ -19,35 +12,67 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
           return reject(new Error('Failed to get canvas context'));
         }
 
-        // Use the image's original dimensions. No forced resizing.
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0, img.width, img.height);
+        // --- THIS IS THE CORRECTED PART ---
+        const MAX_DIMENSION = 2048; // Set the correct, higher resolution target
+        let { width, height } = img;
 
-        // Start the iterative compression loop.
-        const compressLoop = async () => {
-          for (let quality = 0.98; quality >= 0.1; quality -= 0.02) {
-            const compressedBlob: Blob = await new Promise((res) => {
-              canvas.toBlob(
-                (b) => res(b as Blob),
-                'image/jpeg',
-                quality
-              );
-            });
-
-            if (compressedBlob.size <= targetSizeInBytes) {
-              return resolve(compressedBlob);
-            }
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
           }
-          
-          // If the loop finishes, return the smallest version possible.
-          const lastBlob: Blob = await new Promise((res) => {
-              canvas.toBlob((b) => res(b as Blob), 'image/jpeg', 0.1);
-          });
-          resolve(lastBlob);
-        };
+        } else {
+          if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
+          }
+        }
 
-        compressLoop();
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const targetSizeInBytes = 5 * 1024 * 1024; // 5MB Target
+
+        // First, get a high-quality blob from the resized canvas
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              return reject(new Error('Canvas toBlob returned null'));
+            }
+
+            // If the resized image is already under the target, we're done.
+            if (blob.size <= targetSizeInBytes) {
+              return resolve(blob);
+            }
+
+            // If it's still too large, start the iterative compression loop.
+            const compressLoop = async () => {
+              for (let quality = 0.96; quality >= 0.1; quality -= 0.02) {
+                const compressedBlob: Blob = await new Promise((res) => {
+                  canvas.toBlob(
+                    (b) => res(b as Blob),
+                    'image/jpeg',
+                    quality
+                  );
+                });
+
+                if (compressedBlob.size <= targetSizeInBytes) {
+                  return resolve(compressedBlob);
+                }
+              }
+              // If the loop finishes, return the smallest version.
+              const lastBlob: Blob = await new Promise((res) => {
+                  canvas.toBlob((b) => res(b as Blob), 'image/jpeg', 0.1);
+              });
+              resolve(lastBlob);
+            };
+
+            compressLoop();
+          },
+          'image/jpeg',
+          0.98 // Start with very high quality
+        );
       };
       img.onerror = (error) => reject(new Error('Failed to load image: ' + error));
     };
