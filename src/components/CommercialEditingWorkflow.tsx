@@ -8,7 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   positionSubjectOnCanvas,
   fileToDataUrl,
-  SubjectPlacement
+  SubjectPlacement,
+  compositeLayers
 } from "@/lib/canvas-utils";
 // Removed resizeImageFile import - now using processAndCompressImage in UploadZone
 import { useToast } from "@/hooks/use-toast";
@@ -147,12 +148,21 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           }
 
           if (data?.success && data.result) {
+            // Composite the layers on the frontend for maximum quality
+            setCurrentProcessingStep(`Compositing ${image.name} with high quality...`);
+            
+            const finalImageUrl = await compositeLayers(
+              data.result.backdropData,
+              data.result.shadowLayerData,
+              data.result.subjectData
+            );
+            
             results.push({
               name: data.result.name,
-              finalizedData: data.result.finalizedData
+              finalizedData: finalImageUrl
             });
             
-            console.log(`✓ Successfully processed ${image.name} with V5 architecture`);
+            console.log(`✓ Successfully processed and composited ${image.name} with V5 architecture`);
             setCurrentProcessingStep(`✓ Completed ${image.name} (${i + 1}/${totalImages})`);
           } else {
             throw new Error(`Invalid response for ${image.name}`);

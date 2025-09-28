@@ -87,26 +87,16 @@ serve(async (req) => {
     );
     console.log(`✓ Positioning complete for ${imageName}`);
 
-    // Step 3: Composite with backdrop
-    console.log(`Step 3: Compositing ${imageName}...`);
-    const compositedData = await performComposite(
+    // Step 3: Generate shadow/reflection layer
+    console.log(`Step 3: Generating shadow layer for ${imageName}...`);
+    const shadowLayerData = await performComposite(
       model, 
       positionedData, 
       backdrop, 
       imageName, 
       addBlur
     );
-    console.log(`✓ Compositing complete for ${imageName}`);
-
-    // Step 4: AI Enhancement/Finalization
-    console.log(`Step 4: AI Enhancement for ${imageName}...`);
-    const finalizedData = await performFinalization(
-      model,
-      compositedData,
-      positionedData,
-      imageName
-    );
-    console.log(`✓ AI Enhancement complete for ${imageName}`);
+    console.log(`✓ Shadow layer generation complete for ${imageName}`);
 
     console.log(`=== V5 Processing Complete: ${imageName} ===`);
 
@@ -114,12 +104,13 @@ serve(async (req) => {
       success: true,
       result: {
         name: imageName,
-        finalizedData: finalizedData,
+        shadowLayerData: shadowLayerData,
+        subjectData: positionedData,
+        backdropData: backdrop,
         processingSteps: {
           backgroundRemoval: "✓ Complete",
           positioning: "✓ Complete", 
-          compositing: "✓ Complete",
-          aiEnhancement: "✓ Complete"
+          shadowGeneration: "✓ Complete"
         }
       }
     }), {
@@ -156,7 +147,7 @@ async function positionSubjectOnCanvas(
   return subjectDataUrl;
 }
 
-// Perform compositing using Gemini 2.5 Flash Image Preview
+// Generate shadow/reflection layer using Gemini 2.5 Flash Image Preview
 async function performComposite(
   model: any,
   positionedData: string,
@@ -165,30 +156,18 @@ async function performComposite(
   addBlur: boolean
 ): Promise<string> {
   
-  const compositePrompt = `🚨 CRITICAL COMPOSITING TASK - SUBJECT PRESERVATION IS MANDATORY 🚨
+  const compositePrompt = `Analyze the two provided images: an isolated subject on a transparent background and a backdrop scene.
 
-You are a photo background replacement specialist. Your ONLY task is background replacement while maintaining ABSOLUTE SUBJECT INTEGRITY.
+Your task is to generate a new, third image that contains ONLY the realistic shadows and reflections the subject would cast onto the backdrop.
 
-⛔ FORBIDDEN ALTERATIONS - YOU MUST NOT:
-- Change the subject's appearance, color, texture, material, or finish in ANY way
-- Modify the subject's shape, size, form, proportions, or any physical aspects
-- Add, remove, or alter any details, patterns, logos, markings, or features on the subject
-- Change the subject's lighting, reflections, shine, or surface properties
-- Reposition, move, rotate, scale, resize, or transform the subject spatially
-- Apply any filters, effects, adjustments, enhancements, or modifications to the subject
+**CRITICAL INSTRUCTIONS:**
+1. **Output a PNG file with a fully transparent background.** Do not include the original subject or the backdrop in the output. The output must be a layer that can be placed between the subject and the backdrop.
+2. The generated shadows and reflections must be accurately positioned and scaled to match the subject's placement and the lighting of the backdrop.
+3. The dimensions of the output image must exactly match the dimensions of the input backdrop image to ensure perfect alignment.
+4. The shadow should be soft and diffuse, appropriate for a studio environment.
+5. The reflection should be subtle and placed directly beneath the subject, fading with distance.
 
-✅ REQUIRED ACTIONS - YOU MUST:
-- Keep the subject EXACTLY as it appears in the input image - pixel-perfect preservation
-- Replace ONLY the background/backdrop pixels around the subject
-- Preserve every single detail of the subject's original appearance and characteristics
-- Create realistic contact shadows beneath the subject on the new backdrop surface
-- ${addBlur ? 'Apply subtle background blur ONLY to backdrop areas behind the subject (keep subject sharp)' : 'Keep the backdrop sharp and detailed'}
-- Ensure natural lighting integration between unchanged subject and new background
-
-🎯 TASK FORMULA: 
-UNCHANGED SUBJECT (from image 1) + NEW BACKGROUND (from image 2) = FINAL COMPOSITE
-
-Output only the final composited image - no text or explanations.`;
+The goal is to create a physically realistic "effects layer" that can be used to composite the final image. Do not generate the final composite yourself.`;
   
   const getImageInfo = (dataUrl: string) => {
     const [header, data] = dataUrl.split(',');
@@ -215,106 +194,21 @@ Output only the final composited image - no text or explanations.`;
     }
   ];
 
-  console.log(`Calling Gemini 2.5 Flash Image Preview for compositing ${imageName}...`);
+  console.log(`Calling Gemini 2.5 Flash Image Preview for shadow layer generation for ${imageName}...`);
   const compositeResult = await model.generateContent(compositeContents);
   
-  let compositedData = null;
+  let shadowLayerData = null;
   if (compositeResult?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
     const mimeType = compositeResult.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-    compositedData = `data:${mimeType};base64,${compositeResult.response.candidates[0].content.parts[0].inlineData.data}`;
+    shadowLayerData = `data:${mimeType};base64,${compositeResult.response.candidates[0].content.parts[0].inlineData.data}`;
   }
 
-  if (!compositedData) {
-    throw new Error(`Failed to generate composited image for ${imageName}`);
+  if (!shadowLayerData) {
+    throw new Error(`Failed to generate shadow layer for ${imageName}`);
   }
 
-  return compositedData;
+  return shadowLayerData;
 }
 
-// Perform AI enhancement/finalization using Gemini 2.5 Flash Image Preview
-async function performFinalization(
-  model: any,
-  compositedData: string,
-  guidanceData: string,
-  imageName: string
-): Promise<string> {
-  
-  const finalizationPrompt = `🎨 PROFESSIONAL IMAGE ENHANCEMENT - FINAL POLISH 🎨
-
-You are a professional photo editor adding final touches to a product composite image.
-
-TASK: You are given two images:
-1. Main image: A product composited onto a backdrop 
-2. Reference image: Shows the original subject positioning for guidance
-
-🎯 ENHANCEMENT OBJECTIVES:
-- Add realistic shadows that match the lighting environment
-- Create subtle reflections on reflective surfaces where appropriate  
-- Apply professional color grading for commercial photography appeal
-- Enhance lighting consistency between subject and background
-- Add depth and dimension through proper shadow work
-- Ensure all elements look naturally integrated
-
-⛔ CRITICAL RESTRICTIONS:
-- Keep the subject/product EXACTLY as it appears - DO NOT alter its appearance
-- Only enhance shadows, reflections, lighting, and color harmony
-- Maintain the exact positioning and scale of all elements
-- Preserve all product details, textures, and materials
-
-✅ SPECIFIC ENHANCEMENTS TO APPLY:
-- Refine contact shadows beneath the product for realism
-- Add subtle ambient shadows for depth
-- Create appropriate reflections on glossy surfaces
-- Balance color temperature between subject and background
-- Enhance overall image quality and professional appearance
-- Apply subtle vignetting if it improves composition
-
-Generate the final professionally enhanced image.`;
-  
-  const getImageInfo = (dataUrl: string) => {
-    const [header, data] = dataUrl.split(',');
-    const mimeType = header.includes('png') ? 'image/png' : 'image/jpeg';
-    return { data, mimeType };
-  };
-  
-  const compositedInfo = getImageInfo(compositedData);
-  const guidanceInfo = getImageInfo(guidanceData);
-  
-  const finalizeContents = [
-    { text: finalizationPrompt },
-    {
-      inlineData: {
-        mimeType: compositedInfo.mimeType,
-        data: compositedInfo.data
-      }
-    },
-    {
-      inlineData: {
-        mimeType: guidanceInfo.mimeType,
-        data: guidanceInfo.data
-      }
-    }
-  ];
-
-  console.log(`Calling Gemini 2.5 Flash Image Preview for finalization of ${imageName}...`);
-  
-  try {
-    const finalizeResult = await model.generateContent(finalizeContents);
-    
-    let finalizedData = null;
-    if (finalizeResult?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-      const mimeType = finalizeResult.response.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-      finalizedData = `data:${mimeType};base64,${finalizeResult.response.candidates[0].content.parts[0].inlineData.data}`;
-    }
-
-    // Use composited image as fallback if finalization fails
-    const finalImage = finalizedData || compositedData;
-    console.log(`Finalization ${finalizedData ? 'succeeded' : 'failed - using composited image'} for ${imageName}`);
-    
-    return finalImage;
-    
-  } catch (error) {
-    console.warn(`Finalization failed for ${imageName}, using composited image:`, error);
-    return compositedData;
-  }
-}
+// This function is no longer needed as we only generate shadow layers
+// Removed to simplify the workflow

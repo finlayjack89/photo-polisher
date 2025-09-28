@@ -175,6 +175,61 @@ export const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 /**
+ * Composite shadow layer with backdrop and subject to create final high-quality image
+ */
+export const compositeLayers = async (
+  backdropUrl: string,
+  shadowLayerUrl: string,
+  subjectUrl: string
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const backdrop = new Image();
+    const shadowLayer = new Image();
+    const subject = new Image();
+
+    // Set crossOrigin to anonymous to prevent canvas tainting with images from Supabase storage
+    backdrop.crossOrigin = "anonymous";
+    shadowLayer.crossOrigin = "anonymous";
+    subject.crossOrigin = "anonymous";
+
+    backdrop.src = backdropUrl;
+
+    backdrop.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = backdrop.width;
+      canvas.height = backdrop.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        return reject(new Error('Failed to get canvas context'));
+      }
+
+      // 1. Draw the backdrop
+      ctx.drawImage(backdrop, 0, 0);
+
+      shadowLayer.src = shadowLayerUrl;
+      shadowLayer.onload = () => {
+        // 2. Draw the shadow/reflection layer
+        ctx.drawImage(shadowLayer, 0, 0);
+
+        subject.src = subjectUrl;
+        subject.onload = () => {
+          // 3. Draw the subject on top
+          ctx.drawImage(subject, 0, 0);
+
+          // Return the final composited image as a high-quality data URL
+          resolve(canvas.toDataURL('image/png'));
+        };
+      };
+    };
+
+    backdrop.onerror = () => reject(new Error('Failed to load backdrop image.'));
+    shadowLayer.onerror = () => reject(new Error('Failed to load shadow layer.'));
+    subject.onerror = () => reject(new Error('Failed to load subject image.'));
+  });
+};
+
+/**
  * Create a preview image for display purposes (with max dimensions)
  */
 export const createPreviewImage = (dataUrl: string, maxWidth: number = 400, maxHeight: number = 400): Promise<string> => {
