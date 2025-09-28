@@ -5,6 +5,7 @@ import { GalleryPreview } from './GalleryPreview';
 import { ProcessingStep } from './ProcessingStep';
 import { ImagePreviewStep } from './ImagePreviewStep';
 import { BackgroundRemovalStep } from './BackgroundRemovalStep';
+import { ImageRotationStep } from './ImageRotationStep';
 import { supabase } from "@/integrations/supabase/client";
 import { 
   positionSubjectOnCanvas,
@@ -20,7 +21,7 @@ interface CommercialEditingWorkflowProps {
   onBack: () => void;
 }
 
-type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'positioning' | 'client-compositing' | 'processing' | 'preview-results' | 'ai-enhancement' | 'complete' | 'precut-enhancement';
+type WorkflowStep = 'analysis' | 'compression' | 'preview' | 'background-removal' | 'rotation' | 'positioning' | 'client-compositing' | 'processing' | 'preview-results' | 'ai-enhancement' | 'complete' | 'precut-enhancement' | 'precut-rotation';
 
 interface ProcessedImages {
   backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
@@ -69,8 +70,31 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     const hasPreCut = files.some(file => file.isPreCut);
 
     if (allPreCut) {
-      console.log('All images are pre-cut, skipping to AI enhancement workflow');
-      setCurrentStep('precut-enhancement');
+      console.log('All images are pre-cut, skipping to rotation step');
+      // Convert files to processed image format for rotation
+      const preCutImages = files.map(file => ({
+        name: file.name,
+        originalData: '', // Will be set when image is loaded
+        backgroundRemovedData: '', // Will be set when image is loaded
+        size: file.size
+      }));
+      
+      // Load file data for rotation step
+      Promise.all(files.map(file => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+      })).then(dataUrls => {
+        const processedPreCutImages = preCutImages.map((img, index) => ({
+          ...img,
+          originalData: dataUrls[index],
+          backgroundRemovedData: dataUrls[index]
+        }));
+        setProcessedImages({ backgroundRemoved: processedPreCutImages });
+        setCurrentStep('precut-rotation');
+      });
       return;
     }
 
@@ -108,7 +132,41 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     size: number;
   }>) => {
     setProcessedImages({ backgroundRemoved: backgroundRemovedImages });
+    setCurrentStep('rotation');
+  };
+
+  const handleRotationComplete = async (rotatedImages: Array<{
+    name: string;
+    originalData?: string;
+    backgroundRemovedData?: string;
+    size: number;
+  }>) => {
+    // Ensure all required properties are present
+    const processedRotatedImages = rotatedImages.map(img => ({
+      name: img.name,
+      originalData: img.originalData || '',
+      backgroundRemovedData: img.backgroundRemovedData || '',
+      size: img.size
+    }));
+    setProcessedImages({ backgroundRemoved: processedRotatedImages });
     setCurrentStep('positioning');
+  };
+
+  const handlePreCutRotationComplete = async (rotatedImages: Array<{
+    name: string;
+    originalData?: string;
+    backgroundRemovedData?: string;
+    size: number;
+  }>) => {
+    // Ensure all required properties are present for pre-cut images
+    const processedRotatedImages = rotatedImages.map(img => ({
+      name: img.name,
+      originalData: img.originalData || img.backgroundRemovedData || '',
+      backgroundRemovedData: img.backgroundRemovedData || img.originalData || '',
+      size: img.size
+    }));
+    setProcessedImages({ backgroundRemoved: processedRotatedImages });
+    setCurrentStep('precut-enhancement');
   };
 
   const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
@@ -604,13 +662,35 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
+  if (currentStep === 'rotation') {
+    return (
+      <ImageRotationStep
+        images={processedImages.backgroundRemoved}
+        onContinue={handleRotationComplete}
+        onBack={() => setCurrentStep('background-removal')}
+        isPreCut={false}
+      />
+    );
+  }
+
+  if (currentStep === 'precut-rotation') {
+    return (
+      <ImageRotationStep
+        images={processedImages.backgroundRemoved}
+        onContinue={handlePreCutRotationComplete}
+        onBack={onBack}
+        isPreCut={true}
+      />
+    );
+  }
+
 
   if (currentStep === 'positioning') {
     return (
       <BackdropPositioning
         cutoutImages={processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)}
         onPositioningComplete={handlePositioningComplete}
-        onBack={() => setCurrentStep('background-removal')}
+        onBack={() => setCurrentStep('rotation')}
       />
     );
   }
