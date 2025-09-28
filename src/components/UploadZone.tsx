@@ -114,7 +114,7 @@ const onDrop = async (acceptedFiles: File[]) => {
           try {
             // Placeholder for your actual conversion functions
             if (file.name.toLowerCase().endsWith('.heic')) {
-              fileToProcess = await heic2any({ blob: file, toType: "image/jpeg" });
+              fileToProcess = await heic2any({ blob: file, toType: "image/png" });
             } else {
               // Here you would call your CloudConvert function for CR2, etc.
               // For now, we'll log a warning and skip.
