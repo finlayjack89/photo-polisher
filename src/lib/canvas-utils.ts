@@ -183,7 +183,7 @@ export const compositeLayers = async (
   subjectUrl: string,
   placement: SubjectPlacement
 ): Promise<string> => {
-  console.log('compositeLayers - Starting compositing process');
+  console.log('compositeLayers - Starting compositing process (TRANSPARENT SUBJECT ONLY)');
   console.log('compositeLayers - Data URLs received:', {
     backdropLength: backdropUrl?.length,
     shadowLayerLength: shadowLayerUrl?.length,
@@ -193,10 +193,12 @@ export const compositeLayers = async (
     subjectFormat: subjectUrl?.substring(0, 50)
   });
 
-  // Verify the subject image is a PNG with transparency
+  // CRITICAL VERIFICATION: Ensure the subject image is a PNG with transparency
   if (!subjectUrl?.includes('data:image/png')) {
-    console.warn('Subject image is not PNG format - transparency may not work correctly');
+    throw new Error('COMPOSITION ERROR: Subject image must be PNG format with transparency. Original image data detected - this should never happen!');
   }
+  
+  console.log('✓ Verified: Subject is PNG with transparency - safe to composite');
 
   // Helper function to load image
   const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {

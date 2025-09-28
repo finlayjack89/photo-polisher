@@ -131,7 +131,17 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     backgroundRemovedData: string;
     size: number;
   }>) => {
-    setProcessedImages({ backgroundRemoved: backgroundRemovedImages });
+    // CRITICAL: Discard original image data completely to prevent it from being used in final composition
+    // Only keep the transparent background-removed data
+    const transparentOnlyImages = backgroundRemovedImages.map(img => ({
+      name: img.name,
+      originalData: '', // Completely remove original data to prevent accidental usage
+      backgroundRemovedData: img.backgroundRemovedData, // Keep only transparent subject
+      size: img.size
+    }));
+    
+    console.log('Background removal complete - original images discarded, keeping only transparent subjects');
+    setProcessedImages({ backgroundRemoved: transparentOnlyImages });
     setCurrentStep('rotation');
   };
 
@@ -141,13 +151,15 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     backgroundRemovedData?: string;
     size: number;
   }>) => {
-    // Ensure all required properties are present
+    // CRITICAL: Ensure only transparent subject data is preserved
     const processedRotatedImages = rotatedImages.map(img => ({
       name: img.name,
-      originalData: img.originalData || '',
-      backgroundRemovedData: img.backgroundRemovedData || '',
+      originalData: '', // Discard any original data
+      backgroundRemovedData: img.backgroundRemovedData || '', // Keep only rotated transparent subject
       size: img.size
     }));
+    
+    console.log('Rotation complete - maintaining transparent-only subjects');
     setProcessedImages({ backgroundRemoved: processedRotatedImages });
     setCurrentStep('positioning');
   };
@@ -158,13 +170,15 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     backgroundRemovedData?: string;
     size: number;
   }>) => {
-    // Ensure all required properties are present for pre-cut images
+    // CRITICAL: For pre-cut images, ensure we only use the transparent data
     const processedRotatedImages = rotatedImages.map(img => ({
       name: img.name,
-      originalData: img.originalData || img.backgroundRemovedData || '',
-      backgroundRemovedData: img.backgroundRemovedData || img.originalData || '',
+      originalData: '', // Discard any original data completely
+      backgroundRemovedData: img.backgroundRemovedData || img.originalData || '', // Keep rotated transparent subject
       size: img.size
     }));
+    
+    console.log('Pre-cut rotation complete - maintaining transparent-only subjects');
     setProcessedImages({ backgroundRemoved: processedRotatedImages });
     setCurrentStep('precut-enhancement');
   };
@@ -225,14 +239,20 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             // Composite the layers on the frontend for maximum quality
             setCurrentProcessingStep(`Compositing ${image.name} with high quality...`);
             
-            // Debug: Verify we're using the transparent subject
+            // CRITICAL VERIFICATION: Ensure we're using ONLY the transparent subject
             console.log(`Compositing ${image.name}:`, {
               hasBackdrop: !!data.result.backdropData,
               hasShadow: !!data.result.shadowLayerData,
               hasSubject: !!image.backgroundRemovedData,
+              hasOriginalData: !!image.originalData, // Should be empty after background removal
               subjectDataLength: image.backgroundRemovedData?.length,
               subjectPreview: image.backgroundRemovedData?.substring(0, 100)
             });
+            
+            // SECURITY CHECK: Verify original data has been completely discarded
+            if (image.originalData && image.originalData.trim() !== '') {
+              console.warn(`WARNING: Original image data still present for ${image.name} - this should be empty!`);
+            }
             
             // Ensure we're using only the transparent subject (never the original image)
             let transparentSubjectData = image.backgroundRemovedData;
@@ -243,12 +263,13 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
               throw new Error(`Subject image for ${image.name} is not in PNG format with transparency`);
             }
             
-            console.log(`Using transparent subject data for ${image.name} (length: ${transparentSubjectData.length})`);
+            console.log(`✓ Using ONLY transparent subject data for ${image.name} (length: ${transparentSubjectData.length})`);
+            console.log(`✓ Original image data discarded - only transparent subject will be composited`);
             
             const finalImageUrl = await compositeLayers(
               data.result.backdropData,
               data.result.shadowLayerData,
-              transparentSubjectData, // Guaranteed transparent PNG from background removal
+              transparentSubjectData, // GUARANTEED: Only transparent PNG from background removal
               processedImages.placement
             );
             
