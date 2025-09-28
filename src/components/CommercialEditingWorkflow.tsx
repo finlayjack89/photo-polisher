@@ -311,13 +311,38 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           // Phase 2 Option A: Generate AI context image and shadow layer
           logDataFlow(`🎭 Creating AI context image for ${image.name}...`);
           
-          // Create context image for AI analysis
+          // First, get backdrop dimensions to calculate correct scaling
+          const backdropDimensions = await new Promise<{width: number, height: number}>((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.width, height: img.height });
+            img.onerror = () => reject(new Error('Failed to load backdrop'));
+            img.src = pureBackdropData;
+          });
+          
+          // Calculate subject dimensions and position exactly like compositeLayers does
+          const subjectDimensions = await new Promise<{width: number, height: number}>((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            img.onerror = () => reject(new Error('Failed to load subject'));
+            img.src = image.backgroundRemovedData;
+          });
+          
+          // Use the exact same calculation as compositeLayers
+          const subjectAspectRatio = subjectDimensions.width / subjectDimensions.height;
+          const scaledWidth = backdropDimensions.width * processedImages.placement.scale;
+          const scaledHeight = scaledWidth / subjectAspectRatio;
+          const dx = (processedImages.placement.x * backdropDimensions.width) - (scaledWidth / 2);
+          const dy = (processedImages.placement.y * backdropDimensions.height) - (scaledHeight / 2);
+          
+          logDataFlow(`📐 Calculated positioning for AI context: ${Math.round(dx)}, ${Math.round(dy)} at ${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`);
+          
+          // Create context image for AI analysis with correct dimensions
           const contextImage = await createAiContextImage(
             pureBackdropData,
             image.backgroundRemovedData,
             {
-              position: { x: processedImages.placement.x * 1024, y: processedImages.placement.y * 1024 },
-              size: { width: processedImages.placement.scale * 1024, height: processedImages.placement.scale * 1024 },
+              position: { x: dx, y: dy },
+              size: { width: scaledWidth, height: scaledHeight },
               rotation: 0 // Default rotation for now
             }
           );
@@ -327,7 +352,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           const { data: shadowData, error: shadowError } = await supabase.functions.invoke('v5-process-single-image', {
             body: {
               contextImageUrl: contextImage,
-              dimensions: { width: 1024, height: 1024 } // Default dimensions, will be extracted from image
+              dimensions: { width: backdropDimensions.width, height: backdropDimensions.height }
             }
           });
 
