@@ -232,15 +232,15 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     
     // If rotated subjects are provided, update the processed subjects
     if (rotatedSubjects && rotatedSubjects.length > 0) {
-      logDataFlow(`🔄 Updating subjects with rotated versions: ${rotatedSubjects.length} subjects`);
+      logDataFlow(`🔄 Updating ALL subjects with rotated versions: ${rotatedSubjects.length} subjects`);
       
-      // Update processed subjects with rotated data
+      // Update ALL processed subjects with their corresponding rotated data
       const updatedSubjects = processedSubjects.map((subject, index) => ({
         ...subject,
         backgroundRemovedData: rotatedSubjects[index] || subject.backgroundRemovedData
       }));
       
-      // Also update processedImages if they exist
+      // Also update processedImages if they exist  
       if (processedImages.backgroundRemoved.length > 0) {
         const updatedBackgroundRemoved = processedImages.backgroundRemoved.map((subject, index) => ({
           ...subject,
@@ -254,9 +254,17 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           addBlur,
           backgroundRemoved: updatedBackgroundRemoved 
         }));
+        
+        logDataFlow(`✅ Updated ${updatedBackgroundRemoved.length} processedImages with rotated data`);
       }
       
       setProcessedSubjects(updatedSubjects);
+      logDataFlow(`✅ Updated ${updatedSubjects.length} processedSubjects with rotated data`);
+      
+      // Log the first few characters of each rotated subject for debugging
+      rotatedSubjects.forEach((rotatedData, index) => {
+        logDataFlow(`🔄 Subject ${index}: ${rotatedData.substring(0, 50)}...`);
+      });
     } else {
       setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
     }
@@ -296,6 +304,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         setProgress((i / totalImages) * 100);
 
         console.log(`V5 Processing image ${i + 1}/${totalImages}: ${image.name}`);
+        logDataFlow(`📊 Using backgroundRemovedData: ${image.backgroundRemovedData.substring(0, 50)}...`);
 
         try {
           // Phase 2 Option A: Generate shadow layer using pure backdrop + transparent subject
@@ -342,6 +351,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           logDataFlow(`✅ SECURITY CHECK PASSED: ${image.name} is transparent PNG`);
           logDataFlow(`✅ Using pure backdrop: ${pureBackdropData.length} chars`);
           logDataFlow(`✅ Using shadow layer: ${shadowLayerData.length} chars`);
+          logDataFlow(`✅ Using rotated subject: ${image.backgroundRemovedData.substring(0, 50)}...`);
           
           const finalImageUrl = await compositeLayers(
             pureBackdropData,

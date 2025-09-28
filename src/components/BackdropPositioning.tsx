@@ -288,24 +288,25 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   const rotateSubject = async (direction: 'clockwise' | 'counterclockwise') => {
     setIsRotating(true);
     try {
-      const rotatedDataUrl = direction === 'clockwise' 
-        ? await rotateImageClockwise(firstSubject)
-        : await rotateImageCounterClockwise(firstSubject);
+      // Rotate ALL subjects, not just the first one
+      const rotatedDataPromises = rotatedSubjects.map(async (subjectData) => {
+        return direction === 'clockwise' 
+          ? await rotateImageClockwise(subjectData)
+          : await rotateImageCounterClockwise(subjectData);
+      });
 
-      // Update the first subject with the rotated version
-      const updatedSubjects = [...rotatedSubjects];
-      updatedSubjects[0] = rotatedDataUrl;
-      setRotatedSubjects(updatedSubjects);
+      const allRotatedSubjects = await Promise.all(rotatedDataPromises);
+      setRotatedSubjects(allRotatedSubjects);
       
       toast({
-        title: "Subject rotated",
-        description: `Subject rotated ${direction}`,
+        title: "All subjects rotated",
+        description: `All ${rotatedSubjects.length} subjects rotated ${direction}`,
       });
     } catch (error) {
-      console.error('Error rotating subject:', error);
+      console.error('Error rotating subjects:', error);
       toast({
         title: "Rotation failed",
-        description: "Failed to rotate the subject. Please try again.",
+        description: "Failed to rotate the subjects. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -554,7 +555,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Rotate the subject before positioning on backdrop
+                    Rotate all subjects before positioning on backdrop
                   </p>
                 </div>
               )}
