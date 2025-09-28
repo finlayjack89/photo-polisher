@@ -81,8 +81,8 @@ serve(async (req) => {
     console.log(`Step 2: Positioning ${imageName}...`);
     const positionedData = await positionSubjectOnCanvas(
       processedImageData,
-      2048,
-      2048,
+      1024,
+      1024,
       placement
     );
     console.log(`✓ Positioning complete for ${imageName}`);
