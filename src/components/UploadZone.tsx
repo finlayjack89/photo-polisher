@@ -83,75 +83,95 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
   };
 
 const onDrop = async (acceptedFiles: File[]) => {
-    const validFiles = acceptedFiles.filter(file => {
-      const isValidType = file.type.startsWith('image/') || 
-                          file.name.toLowerCase().endsWith('.heic') ||
-                          file.name.toLowerCase().endsWith('.cr2') ||
-                          file.name.toLowerCase().endsWith('.nef') ||
-                          file.name.toLowerCase().endsWith('.arw');
-      const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB limit
-      return isValidType && isValidSize;
-    });
+  const validFiles = acceptedFiles.filter(file => {
+    const isValidType = file.type.startsWith('image/') || 
+                        file.name.toLowerCase().endsWith('.heic') ||
+                        file.name.toLowerCase().endsWith('.cr2') ||
+                        file.name.toLowerCase().endsWith('.nef') ||
+                        file.name.toLowerCase().endsWith('.arw');
+    const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB limit
+    return isValidType && isValidSize;
+  });
 
-    if (validFiles.length + selectedFiles.length > 20) {
-      // You should add a user-friendly toast notification here
-      console.error("Cannot upload more than 20 images.");
-      return;
-    }
+  if (validFiles.length + selectedFiles.length > 20) {
+    console.error("Cannot upload more than 20 images.");
+    // Consider adding a toast notification for the user here
+    return;
+  }
 
-    try {
-      const processedFiles: FileWithOriginalSize[] = [];
-      const newPreviews: string[] = [];
+  try {
+    const processedFiles: FileWithOriginalSize[] = [];
+    const newPreviews: string[] = [];
 
-      for (const file of validFiles) {
-        let fileToProcess: File | Blob = file;
-        const originalSize = file.size;
-        
-        const needsConversion = !file.type.startsWith('image/jpeg') && !file.type.startsWith('image/png');
+    for (const file of validFiles) {
+      let fileToProcess: File | Blob = file;
+      const originalSize = file.size;
 
-        if (needsConversion) {
-          console.log(`Converting ${file.name}...`);
-          try {
-            // Placeholder for your actual conversion functions
-            if (file.name.toLowerCase().endsWith('.heic')) {
-              fileToProcess = await heic2any({ blob: file, toType: "image/png" });
-            } else {
-              // Here you would call your CloudConvert function for CR2, etc.
-              // For now, we'll log a warning and skip.
-              console.warn(`File type ${file.type} needs a converter.`);
-              continue; 
-            }
-          } catch (conversionError) {
-            console.error(`Failed to convert ${file.name}:`, conversionError);
-            continue; // Skip to the next file if conversion fails
+      // --- CORRECTED LOGIC ---
+      // Define standard web formats that do NOT need conversion
+      const isStandardWebFormat = file.type === 'image/jpeg' || 
+                                  file.type === 'image/png' || 
+                                  file.type === 'image/webp';
+
+      const needsConversion = !isStandardWebFormat;
+
+      if (needsConversion) {
+        console.log(`Conversion needed for ${file.name} (${file.type})`);
+        try {
+          if (file.name.toLowerCase().endsWith('.heic')) {
+            // Convert HEIC to a lossless PNG to preserve quality for the next step
+            fileToProcess = await heic2any({ blob: file, toType: "image/png" });
+          } else {
+            console.warn(`File type ${file.type} requires a server-side converter.`);
+            // Here you would ideally call a server-side function for RAW files.
+            // For now, we will skip these files.
+            toast({
+              title: "Unsupported File Type",
+              description: `Automatic conversion for ${file.name} is not yet supported.`,
+              variant: "destructive"
+            });
+            continue; 
           }
+        } catch (conversionError) {
+          console.error(`Failed to convert ${file.name}:`, conversionError);
+          toast({
+            title: "Conversion Failed",
+            description: `Could not process ${file.name}. Please try a different file.`,
+            variant: "destructive"
+          });
+          continue; // Skip to the next file
         }
-        
-        // --- THIS IS THE CORRECTED CALL ---
-        // We now call processAndCompressImage with only ONE argument.
-        console.log(`Processing image: ${file.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
-        const compressedBlob = await processAndCompressImage(fileToProcess as File);
-        
-        const finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
-          type: 'image/jpeg',
-          lastModified: Date.now()
-        }) as FileWithOriginalSize;
-        
-        finalFile.originalSize = originalSize;
-        console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
-        
-        processedFiles.push(finalFile);
-        
-        const previewUrl = URL.createObjectURL(finalFile);
-        newPreviews.push(previewUrl);
       }
 
-      setSelectedFiles(prev => [...prev, ...processedFiles]);
-      setPreviews(prev => [...prev, ...newPreviews]);
-    } catch (error) {
-      console.error('Error processing files:', error);
+      // --- All files (original or converted) now go through the proper compression logic ---
+      console.log(`Processing image: ${file.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
+      const compressedBlob = await processAndCompressImage(fileToProcess as File);
+
+      const finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      }) as FileWithOriginalSize;
+
+      finalFile.originalSize = originalSize;
+      console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
+
+      processedFiles.push(finalFile);
+
+      const previewUrl = URL.createObjectURL(finalFile);
+      newPreviews.push(previewUrl);
     }
-  };
+
+    setSelectedFiles(prev => [...prev, ...processedFiles]);
+    setPreviews(prev => [...prev, ...newPreviews]);
+  } catch (error) {
+    console.error('Error processing files:', error);
+    toast({
+      title: "Processing Error",
+      description: "An unexpected error occurred while preparing your files.",
+      variant: "destructive"
+    });
+  }
+};
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
