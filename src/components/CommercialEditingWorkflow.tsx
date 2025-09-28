@@ -154,7 +154,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             const finalImageUrl = await compositeLayers(
               data.result.backdropData,
               data.result.shadowLayerData,
-              data.result.subjectData,
+              image.backgroundRemovedData, // Use the original background-removed transparent PNG
               processedImages.placement
             );
             
