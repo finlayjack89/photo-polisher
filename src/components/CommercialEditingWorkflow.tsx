@@ -221,7 +221,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentStep('precut-enhancement');
   };
 
-  const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
+  const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => {
     logDataFlow('🎯 Positioning completed');
     logDataFlow(`📊 Backdrop format: ${backdrop?.substring(0, 50)}`);
     logDataFlow(`📐 Placement: ${JSON.stringify(placement)}`);
@@ -230,7 +230,37 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setPureBackdropData(backdrop);
     logDataFlow(`✅ Pure backdrop stored: ${backdrop?.length} chars`);
     
-    setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
+    // If rotated subjects are provided, update the processed subjects
+    if (rotatedSubjects && rotatedSubjects.length > 0) {
+      logDataFlow(`🔄 Updating subjects with rotated versions: ${rotatedSubjects.length} subjects`);
+      
+      // Update processed subjects with rotated data
+      const updatedSubjects = processedSubjects.map((subject, index) => ({
+        ...subject,
+        backgroundRemovedData: rotatedSubjects[index] || subject.backgroundRemovedData
+      }));
+      
+      // Also update processedImages if they exist
+      if (processedImages.backgroundRemoved.length > 0) {
+        const updatedBackgroundRemoved = processedImages.backgroundRemoved.map((subject, index) => ({
+          ...subject,
+          backgroundRemovedData: rotatedSubjects[index] || subject.backgroundRemovedData
+        }));
+        
+        setProcessedImages(prev => ({ 
+          ...prev, 
+          backdrop, 
+          placement, 
+          addBlur,
+          backgroundRemoved: updatedBackgroundRemoved 
+        }));
+      }
+      
+      setProcessedSubjects(updatedSubjects);
+    } else {
+      setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
+    }
+    
     setCurrentStep('processing');
   };
 

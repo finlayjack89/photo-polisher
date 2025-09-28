@@ -6,15 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Move, RotateCw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
+import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
 import { SubjectPlacement } from "@/lib/canvas-utils";
 import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 import { BackdropLibrary } from "@/components/BackdropLibrary";
+import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-rotation-utils";
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects
-  onPositioningComplete: (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => void;
+  onPositioningComplete: (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => void;
   onBack: () => void;
 }
 
@@ -39,6 +40,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     y: 0.7, // slightly below center (typical product placement)
     scale: 0.8 // 80% of backdrop width
   });
+  const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
+  const [isRotating, setIsRotating] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,7 +49,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const { toast } = useToast();
 
-  const firstSubject = cutoutImages[0]; // Use first image for positioning
+  const firstSubject = rotatedSubjects[0]; // Use first rotated image for positioning
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -282,6 +285,34 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     setPlacement(prev => ({ ...prev, scale: value[0] }));
   };
 
+  const rotateSubject = async (direction: 'clockwise' | 'counterclockwise') => {
+    setIsRotating(true);
+    try {
+      const rotatedDataUrl = direction === 'clockwise' 
+        ? await rotateImageClockwise(firstSubject)
+        : await rotateImageCounterClockwise(firstSubject);
+
+      // Update the first subject with the rotated version
+      const updatedSubjects = [...rotatedSubjects];
+      updatedSubjects[0] = rotatedDataUrl;
+      setRotatedSubjects(updatedSubjects);
+      
+      toast({
+        title: "Subject rotated",
+        description: `Subject rotated ${direction}`,
+      });
+    } catch (error) {
+      console.error('Error rotating subject:', error);
+      toast({
+        title: "Rotation failed",
+        description: "Failed to rotate the subject. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
   const handleContinue = () => {
     if (backdrop) {
       console.log('🎯 SECURE POSITIONING: Final placement values:', {
@@ -297,7 +328,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         backdropType: backdrop.split(';')[0]
       });
       console.log('✅ VERIFIED: Passing PURE backdrop (not contaminated with subject)');
-      onPositioningComplete(backdrop, placement, addBlur);
+      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects);
     }
   };
 
@@ -495,6 +526,38 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                 />
                 <Label htmlFor="add-blur">Add background blur (depth of field)</Label>
               </div>
+
+              {/* Subject Rotation Controls */}
+              {firstSubject && (
+                <div className="space-y-3">
+                  <Label>Subject Orientation</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => rotateSubject('counterclockwise')}
+                      disabled={isRotating}
+                      className="flex-1"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      90° CCW
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => rotateSubject('clockwise')}
+                      disabled={isRotating}
+                      className="flex-1"
+                    >
+                      <RotateCw className="h-4 w-4 mr-1" />
+                      90° CW
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Rotate the subject before positioning on backdrop
+                  </p>
+                </div>
+              )}
 
               {/* Positioning Controls */}
               {backdrop && firstSubject && (

@@ -94,55 +94,23 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
   };
 
   const getImageDataToDisplay = (image: typeof currentImages[0]) => {
-    // Phase 4: Enhanced debug logging and fallback handling
-    console.log('🔄 ImageRotationStep - Data structure analysis:', {
-      imageName: image.name,
-      availableProperties: Object.keys(image),
-      backgroundRemovedData: !!image.backgroundRemovedData,
-      processedImageUrl: !!(image as any).processedImageUrl,
-      originalData: !!image.originalData,
-      data: !!(image as any).data,
-      url: !!(image as any).url
-    });
-    
-    // Enhanced candidate priority order with better fallback handling
-    const candidates = [
-      { name: 'backgroundRemovedData', data: image.backgroundRemovedData },
-      { name: 'processedImageUrl', data: (image as any).processedImageUrl },
-      { name: 'originalData', data: image.originalData },
-      { name: 'data', data: (image as any).data },
-      { name: 'url', data: (image as any).url }
-    ];
-    
-    console.log('🔍 Candidate analysis for', image.name, ':', {
-      availableCandidates: candidates.map(c => ({ 
-        name: c.name, 
-        hasData: !!c.data, 
-        length: c.data?.length,
-        isDataUrl: c.data?.startsWith('data:image/'),
-        preview: c.data?.substring(0, 30)
-      }))
-    });
-    
-    // Find first valid data URL
-    for (const candidate of candidates) {
-      if (candidate.data && candidate.data.startsWith('data:image/')) {
-        console.log(`✅ Using ${candidate.name} for preview of ${image.name}`);
-        return candidate.data;
-      }
+    // Use background removed data if available, otherwise use original data
+    if (image.backgroundRemovedData && image.backgroundRemovedData.startsWith('data:image/')) {
+      return image.backgroundRemovedData;
     }
     
-    console.error('❌ No valid image data found for preview of', image.name);
-    console.error('🔍 Full image object:', image);
+    if (image.originalData && image.originalData.startsWith('data:image/')) {
+      return image.originalData;
+    }
     
-    // Fallback: Return empty string but log the issue
+    // Log if no valid data found for debugging
+    console.warn(`No valid image data found for ${image.name}`);
     return '';
   };
 
   const getOriginalImageToDisplay = (image: typeof currentImages[0]) => {
-    // For rotation step, we want to show the transparent subject as "original" for comparison
-    // This is the same as the current display image since we don't keep original data
-    return getImageDataToDisplay(image);
+    // Show original data if available, otherwise show the same as current
+    return image.originalData || getImageDataToDisplay(image);
   };
 
   return (
@@ -171,41 +139,22 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {!isPreCut && image.originalData && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Original</p>
-                        <img
-                          src={getOriginalImageToDisplay(image)}
-                          alt={`Original ${image.name}`}
-                          className="w-full h-24 object-cover rounded border"
-                        />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Current</p>
-                        <div className="w-full h-24 rounded border bg-checkered">
-                          <img
-                            src={getImageDataToDisplay(image)}
-                            alt={`Current ${image.name}`}
-                            className="w-full h-full object-cover rounded"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {isPreCut && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Current Image</p>
-                      <div className="w-full h-32 rounded border bg-checkered">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Image Preview</p>
+                    <div className="w-full h-32 rounded border bg-checkered flex items-center justify-center">
+                      {getImageDataToDisplay(image) ? (
                         <img
                           src={getImageDataToDisplay(image)}
-                          alt={`Current ${image.name}`}
-                          className="w-full h-full object-cover rounded"
+                          alt={`Preview ${image.name}`}
+                          className="max-w-full max-h-full object-contain rounded"
                         />
-                      </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground text-center p-4">
+                          No preview available
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                   
                   <div className="flex gap-2">
                     <Button
