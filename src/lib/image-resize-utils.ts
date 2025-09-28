@@ -1,4 +1,4 @@
-// This function gets the natural dimensions of an image file.
+// This function gets the natural dimensions of an image file. It is needed by BackdropPositioning.tsx.
 export const getImageDimensions = (file: File | Blob): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -9,7 +9,7 @@ export const getImageDimensions = (file: File | Blob): Promise<{ width: number; 
       img.onload = () => {
         resolve({ width: img.width, height: img.height });
       };
-      img.onerror = (error) => reject(error);
+      img.onerror = (error) => reject(new Error('Failed to load image for dimension check: ' + error));
     };
     reader.onerror = (error) => reject(error);
   });
@@ -30,7 +30,7 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
           return reject(new Error('Failed to get canvas context'));
         }
 
-        const MAX_DIMENSION = 2048;
+        const MAX_DIMENSION = 2048; // Correct, higher resolution target
         let { width, height } = img;
 
         if (width > height) {
@@ -58,9 +58,10 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
             }
 
             if (blob.size <= targetSizeInBytes) {
-              return resolve(blob);
+              return resolve(blob); // Already under the target size
             }
 
+            // If still too large, start the iterative compression loop
             const compressLoop = async () => {
               for (let quality = 0.96; quality >= 0.1; quality -= 0.02) {
                 const compressedBlob: Blob = await new Promise((res) => {
@@ -75,6 +76,7 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
                   return resolve(compressedBlob);
                 }
               }
+              // If the loop finishes, return the smallest version
               const lastBlob: Blob = await new Promise((res) => {
                   canvas.toBlob((b) => res(b as Blob), 'image/jpeg', 0.1);
               });
@@ -84,10 +86,10 @@ export const processAndCompressImage = (file: File): Promise<Blob> => {
             compressLoop();
           },
           'image/jpeg',
-          0.98
+          0.98 // Start with very high quality for the initial check
         );
       };
-      img.onerror = (error) => reject(new Error('Failed to load image: ' + error));
+      img.onerror = (error) => reject(new Error('Failed to load image for processing: ' + error));
     };
     reader.onerror = (error) => reject(error);
   });
