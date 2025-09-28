@@ -99,6 +99,16 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
                            (image as any).processedImageUrl ||
                            image.originalData ||
                            (image as any).data;
+    
+    console.log('Image data for preview:', {
+      name: image.name,
+      hasBackgroundRemovedData: !!image.backgroundRemovedData,
+      hasProcessedImageUrl: !!(image as any).processedImageUrl,
+      hasOriginalData: !!image.originalData,
+      hasData: !!(image as any).data,
+      candidateData: candidateData ? candidateData.substring(0, 50) + '...' : 'none'
+    });
+    
     return candidateData || '';
   };
 

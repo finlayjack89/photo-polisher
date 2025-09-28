@@ -357,7 +357,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         // Draw backdrop
         finalCtx.drawImage(backdropImg, 0, 0);
 
-        // Draw positioned subject on top
+        // Draw ONLY the positioned subject (compositedData already contains the positioned subject)
+        // Do NOT draw the original subject again - compositedData is the final positioned subject
         const subjectImg = new Image();
         await new Promise((resolve, reject) => {
           subjectImg.onload = resolve;
@@ -365,6 +366,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           subjectImg.src = compositedData;
         });
 
+        // The compositedData already contains the properly positioned subject
+        // We just draw it directly on the backdrop
         finalCtx.drawImage(subjectImg, 0, 0);
 
         // Apply blur if requested
