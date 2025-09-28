@@ -79,28 +79,48 @@ serve(async (req) => {
       if (output) {
         let dataUrl;
         
-        // Helper function to convert ArrayBuffer to base64 without stack overflow
+        // Helper function to convert ArrayBuffer to base64 with memory optimization
         const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
           const bytes = new Uint8Array(buffer);
           let binary = '';
-          const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+          const chunkSize = 0x4000; // Smaller 16KB chunks to use less memory
           
           for (let i = 0; i < bytes.length; i += chunkSize) {
             const chunk = bytes.subarray(i, i + chunkSize);
             binary += String.fromCharCode(...chunk);
           }
           
-          return btoa(binary);
+          const result = btoa(binary);
+          // Clear variables to help with garbage collection
+          binary = '';
+          return result;
         };
 
         // Handle different response formats
         if (typeof output === 'string' && output.startsWith('http')) {
           console.log('Processing URL response');
-          // If it's a URL, fetch the image
-          const imageResponse = await fetch(output);
-          const imageBuffer = await imageResponse.arrayBuffer();
-          const base64Data = arrayBufferToBase64(imageBuffer);
-          dataUrl = `data:image/png;base64,${base64Data}`;
+          // If it's a URL, fetch the image with timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+          
+          try {
+            const imageResponse = await fetch(output, { 
+              signal: controller.signal,
+              headers: { 'Accept': 'image/*' }
+            });
+            clearTimeout(timeoutId);
+            
+            if (!imageResponse.ok) {
+              throw new Error(`HTTP ${imageResponse.status}: ${imageResponse.statusText}`);
+            }
+            
+            const imageBuffer = await imageResponse.arrayBuffer();
+            const base64Data = arrayBufferToBase64(imageBuffer);
+            dataUrl = `data:image/png;base64,${base64Data}`;
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            throw fetchError;
+          }
         } else if (typeof output === 'string' && output.startsWith('data:')) {
           console.log('Processing data URL response');
           // If it's already a data URL
@@ -146,24 +166,28 @@ serve(async (req) => {
       }
     };
 
-    // Process all images in parallel with individual error handling
-    const imagePromises = images.map(async (image, index) => {
+    // Process images sequentially to avoid memory issues
+    const results: (ProcessingResult | FailedResult)[] = [];
+    
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
       try {
-        return await processImage(image, index);
+        console.log(`Processing image ${i + 1}/${images.length}: ${image.name} sequentially`);
+        const result = await processImage(image, i);
+        results.push(result);
+        
       } catch (error) {
         console.error(`Error processing ${image.name}:`, error);
         // Return error result instead of throwing to allow other images to continue
-        return {
+        results.push({
           name: image.name,
           originalData: image.data,
           backgroundRemovedData: null,
           size: 0,
           error: error instanceof Error ? error.message : String(error)
-        };
+        });
       }
-    });
-
-    const results: (ProcessingResult | FailedResult)[] = await Promise.all(imagePromises);
+    }
     
     // Check if any images failed and separate successful from failed
     const successful = results.filter((result): result is ProcessingResult => !('error' in result));
