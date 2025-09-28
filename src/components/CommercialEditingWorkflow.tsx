@@ -8,6 +8,7 @@ import { ImagePreviewStep } from './ImagePreviewStep';
 import { BackgroundRemovalStep } from './BackgroundRemovalStep';
 import { ImageRotationStep } from './ImageRotationStep';
 import { supabase } from "@/integrations/supabase/client";
+import { createAiContextImage } from '@/lib/canvas-utils';
 import { 
   positionSubjectOnCanvas,
   fileToDataUrl,
@@ -307,15 +308,26 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         logDataFlow(`📊 Using backgroundRemovedData: ${image.backgroundRemovedData.substring(0, 50)}...`);
 
         try {
-          // Phase 2 Option A: Generate shadow layer using pure backdrop + transparent subject
-          logDataFlow(`🎭 Generating shadow layer for ${image.name}...`);
+          // Phase 2 Option A: Generate AI context image and shadow layer
+          logDataFlow(`🎭 Creating AI context image for ${image.name}...`);
           
-          const { data: shadowData, error: shadowError } = await supabase.functions.invoke('generate-shadow-layer', {
+          // Create context image for AI analysis
+          const contextImage = await createAiContextImage(
+            pureBackdropData,
+            image.backgroundRemovedData,
+            {
+              position: { x: processedImages.placement.x * 1024, y: processedImages.placement.y * 1024 },
+              size: { width: processedImages.placement.scale * 1024, height: processedImages.placement.scale * 1024 },
+              rotation: 0 // Default rotation for now
+            }
+          );
+          
+          logDataFlow(`🤖 Generating shadow layer using V5 processing for ${image.name}...`);
+          
+          const { data: shadowData, error: shadowError } = await supabase.functions.invoke('v5-process-single-image', {
             body: {
-              backdrop: pureBackdropData,
-              subjectData: image.backgroundRemovedData,
-              placement: processedImages.placement,
-              imageName: image.name
+              contextImageUrl: contextImage,
+              dimensions: { width: 1024, height: 1024 } // Default dimensions, will be extracted from image
             }
           });
 
@@ -324,12 +336,12 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             throw new Error(`Shadow generation failed: ${shadowError.message}`);
           }
 
-          if (!shadowData?.success || !shadowData?.result?.shadowLayerData) {
+          if (!shadowData?.success || !shadowData?.imageData) {
             logDataFlow(`❌ Shadow generation returned no data for ${image.name}`);
             throw new Error('Shadow generation returned no results');
           }
 
-          const shadowLayerData = shadowData.result.shadowLayerData;
+          const shadowLayerData = shadowData.imageData;
           logDataFlow(`✅ Shadow layer generated for ${image.name} (${shadowLayerData.length} chars)`);
           
           // Store shadow layer for potential reuse
