@@ -155,11 +155,17 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     
     try {
       const subject = processedSubjects[subjectIndex];
-      // Convert backdrop URL to data URL to avoid CORS issues
+      
+      // Handle backdrop data - it can be either a string data URL or an object with url property
       let backdropDataUrl: string;
-      if (backdrop.url.startsWith('data:')) {
+      if (typeof backdrop === 'string') {
+        // backdrop is already a data URL string
+        backdropDataUrl = backdrop;
+        console.log('✅ Using backdrop as data URL directly');
+      } else if (backdrop.url && backdrop.url.startsWith('data:')) {
         backdropDataUrl = backdrop.url;
-      } else {
+        console.log('✅ Using backdrop.url as data URL');
+      } else if (backdrop.url) {
         // Fetch the backdrop and convert to data URL
         console.log('🔍 Converting backdrop URL to data URL for AI processing...');
         const response = await fetch(backdrop.url);
@@ -171,6 +177,8 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
+      } else {
+        throw new Error('Invalid backdrop data format');
       }
       
       const subjectUrl = subject.backgroundRemovedData;
@@ -190,10 +198,35 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
 
       // --- STEP 2: Call the AI to generate the shadow layer ---
       console.log("Invoking AI to generate shadow layer...");
+      // Get dimensions from backdrop if available, otherwise use defaults
+      let backdropWidth = 1024;
+      let backdropHeight = 1024;
+      
+      if (typeof backdrop === 'object' && backdrop.width && backdrop.height) {
+        backdropWidth = backdrop.width;
+        backdropHeight = backdrop.height;
+      } else {
+        // Try to get dimensions from the image data
+        try {
+          const img = new Image();
+          img.src = backdropDataUrl;
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              backdropWidth = img.width;
+              backdropHeight = img.height;
+              resolve(null);
+            };
+            img.onerror = reject;
+          });
+        } catch (e) {
+          console.warn('Could not determine backdrop dimensions, using defaults');
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
         body: {
           contextImageUrl: contextImage,
-          dimensions: { width: backdrop.width || 1024, height: backdrop.height || 1024 }
+          dimensions: { width: backdropWidth, height: backdropHeight }
         },
       });
 
