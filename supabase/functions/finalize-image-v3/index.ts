@@ -35,10 +35,11 @@ const buildShadowPrompt = (): string => {
 - Maintain all existing backdrop elements and subject placement
 
 **4. Quality Preservation:**
-- CRITICAL: Preserve maximum image quality and detail - output must retain 95%+ of original quality
-- Do NOT compress, blur, or reduce image resolution
-- Maintain all fine textures, patterns, and surface details
-- Output in highest available quality with no quality degradation
+- CRITICAL: Output must be IDENTICAL quality to input - NO compression or quality loss
+- Maintain exact pixel dimensions and resolution
+- Preserve all fine details, textures, and sharpness
+- Use lossless processing - output at maximum quality settings
+- Do NOT apply any compression algorithms or quality reduction
 
 **Output Requirements:**
 - Return the complete image with subject preserved and realistic shadow added
@@ -75,11 +76,12 @@ const buildReflectionPrompt = (): string => {
 - Maintain professional product photography standards
 
 **5. Quality Preservation:**
-- CRITICAL: Preserve maximum image quality and detail - output must retain 95%+ of original quality
-- Do NOT compress, blur, or reduce image resolution or sharpness
-- Maintain all fine textures, patterns, leather grain, and surface details exactly as input
-- Output in highest available quality with no compression or quality loss
-- Preserve original image sharpness and clarity
+- CRITICAL: Output must be IDENTICAL quality to input - NO compression or quality loss  
+- Maintain exact pixel dimensions and resolution
+- Preserve all fine details, textures, sharpness, and clarity exactly as input
+- Use lossless processing - output at maximum quality settings
+- Do NOT apply any compression algorithms or quality reduction
+- Keep all surface materials, patterns, and fine details pixel-perfect
 
 **Output Requirements:**
 - Return the final polished image with all enhancements applied
@@ -111,10 +113,9 @@ serve(async (req) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash-image-preview',
+      model: 'gemini-2.0-flash-exp',
       generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 4096,
+        temperature: 0.1, // Lower temperature for better quality preservation
       },
     });
 

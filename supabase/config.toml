@@ -54,3 +54,6 @@ verify_jwt = false
 
 [functions.finalize-image-v3]
 verify_jwt = false
+
+[functions.retry-single-image-enhancement]
+verify_jwt = false

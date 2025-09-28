@@ -33,7 +33,14 @@ Apply these enhancements while preserving the subject and composition exactly:
    - Create a cohesive, premium aesthetic throughout the image
    - Maintain natural product proportions and details
 
-CRITICAL: Do not alter the product's position, size, or core appearance. Focus only on lighting, shadows, reflections, and color enhancement to create a professional commercial photography result.`;
+4. **CRITICAL Quality Preservation:**
+   - Output must be IDENTICAL quality to input - NO compression or quality loss
+   - Maintain exact pixel dimensions and resolution  
+   - Preserve all fine details, textures, and sharpness
+   - Use lossless processing - output at maximum quality settings
+   - Do NOT apply any compression algorithms or quality reduction
+
+CRITICAL: Do not alter the product's position, size, or core appearance. Focus only on lighting, shadows, reflections, and color enhancement while maintaining perfect quality.`;
 };
 
 serve(async (req) => {
@@ -56,7 +63,7 @@ serve(async (req) => {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.0-flash-exp",
       generationConfig: {
-        temperature: temperature // User-defined temperature
+        temperature: Math.max(0.1, temperature) // Ensure minimum quality preservation
       }
     });
 
@@ -81,7 +88,7 @@ serve(async (req) => {
     ]);
 
     const result = await Promise.race([enhancementPromise, timeoutPromise]);
-    const response = await result.response;
+    const response = await (result as any).response;
     
     if (!response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
       console.warn('No enhanced image data received, returning original');
@@ -110,7 +117,7 @@ serve(async (req) => {
     console.error('Error in retry enhancement:', error);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
