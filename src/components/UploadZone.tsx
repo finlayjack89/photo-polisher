@@ -144,13 +144,30 @@ const onDrop = async (acceptedFiles: File[]) => {
       }
 
       // --- All files (original or converted) now go through the proper compression logic ---
-      console.log(`Processing image: ${file.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
-      const compressedBlob = await processAndCompressImage(fileToProcess as File);
+      let finalFile: FileWithOriginalSize;
+const FIVE_MB = 5 * 1024 * 1024;
 
-      const finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
-        type: 'image/jpeg',
-        lastModified: Date.now()
-      }) as FileWithOriginalSize;
+// --- THIS IS THE FIX ---
+// Only process the image if it's larger than 5MB.
+// Your processAndCompressImage function already handles the 2048px resize,
+// so we only need to check the file size here.
+if (originalSize > FIVE_MB) {
+  console.log(`Processing image: ${file.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
+  const compressedBlob = await processAndCompressImage(fileToProcess as File);
+
+  finalFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpeg"), {
+    type: 'image/jpeg',
+    lastModified: Date.now()
+  }) as FileWithOriginalSize;
+
+} else {
+  // If the file is already under 5MB, just use it as is.
+  console.log(`Skipping compression for ${file.name}, size is already acceptable.`);
+  finalFile = fileToProcess as FileWithOriginalSize;
+}
+
+finalFile.originalSize = originalSize;
+console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
 
       finalFile.originalSize = originalSize;
       console.log(`Final optimized size: ${(finalFile.size / (1024 * 1024)).toFixed(2)}MB`);
