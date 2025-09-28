@@ -73,6 +73,9 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
         
         // Start with high quality and iteratively compress by 2% until 4.5-5MB range
         const compressLoop = async () => {
+          let previousBlob: Blob | null = null;
+          let previousQuality = 0.98;
+          
           // Start with 98% quality
           for (let quality = 0.98; quality > 0.1; quality -= 0.02) {
             const compressedBlob: Blob = await new Promise((res) => {
@@ -83,23 +86,33 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
               );
             });
             
+            console.log(`Quality: ${quality}, Size: ${(compressedBlob.size / (1024 * 1024)).toFixed(2)}MB`);
+            
             // Check if we're in the target range (4.5MB - 5MB)
             if (compressedBlob.size >= SIZE_4_5MB && compressedBlob.size <= SIZE_5MB) {
               return resolve(compressedBlob);
             }
             
-            // If we've compressed below 4.5MB, use the previous iteration
+            // If we've compressed below 4.5MB, use the previous iteration (if available)
             if (compressedBlob.size < SIZE_4_5MB) {
-              // Go back to previous quality level (2% higher)
-              const finalQuality = Math.min(quality + 0.02, 0.98);
-              const finalBlob: Blob = await new Promise((res) => {
-                canvas.toBlob((b) => res(b as Blob), 'image/jpeg', finalQuality);
-              });
-              return resolve(finalBlob);
+              if (previousBlob && previousBlob.size <= SIZE_5MB) {
+                console.log(`Using previous quality ${previousQuality}, Size: ${(previousBlob.size / (1024 * 1024)).toFixed(2)}MB`);
+                return resolve(previousBlob);
+              }
+              // If no previous blob or previous was too large, use current blob
+              return resolve(compressedBlob);
             }
+            
+            // Store current blob as previous for next iteration
+            previousBlob = compressedBlob;
+            previousQuality = quality;
           }
           
-          // If we've exhausted all quality levels, return the last blob
+          // If we've exhausted all quality levels, return the best option
+          if (previousBlob) {
+            return resolve(previousBlob);
+          }
+          
           const lastBlob: Blob = await new Promise((res) => {
             canvas.toBlob((b) => res(b as Blob), 'image/jpeg', 0.1);
           });
