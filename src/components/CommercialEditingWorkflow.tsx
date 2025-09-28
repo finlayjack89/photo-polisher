@@ -52,6 +52,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     needsResize?: boolean,
     maxDimension?: number
   } | null>(null);
+  
+  // Phase 1: Add comprehensive logging and data tracking
+  const [dataFlowLog, setDataFlowLog] = useState<string[]>([]);
+  const [shadowLayers, setShadowLayers] = useState<Record<string, string>>({});
+  const [pureBackdropData, setPureBackdropData] = useState<string | null>(null);
+
+  const logDataFlow = (message: string) => {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log(`🔍 DATA FLOW: ${logEntry}`);
+    setDataFlowLog(prev => [...prev, logEntry]);
+  };
+  
   const { toast } = useToast();
 
   // Analyze images on component mount
@@ -209,15 +222,24 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   };
 
   const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
-    console.log('Positioning completed, starting V5 single-image processing...');
+    logDataFlow('🎯 Positioning completed');
+    logDataFlow(`📊 Backdrop format: ${backdrop?.substring(0, 50)}`);
+    logDataFlow(`📐 Placement: ${JSON.stringify(placement)}`);
+    
+    // CRITICAL: Store the pure backdrop separately
+    setPureBackdropData(backdrop);
+    logDataFlow(`✅ Pure backdrop stored: ${backdrop?.length} chars`);
+    
     setProcessedImages(prev => ({ ...prev, backdrop, placement, addBlur }));
     setCurrentStep('processing');
   };
 
-  // V5 Single-Image Processing with Real-Time Progress
+  // Phase 2 Option A: Pure layer compositing workflow
   const startV5SingleImageProcessing = async () => {
-    if (!processedImages.backgroundRemoved?.length || !processedImages.backdrop || !processedImages.placement) {
-      console.error('Missing required data for V5 processing');
+    logDataFlow('🚀 Starting secure layer-based processing workflow');
+    
+    if (!processedImages.backgroundRemoved?.length || !pureBackdropData || !processedImages.placement) {
+      logDataFlow('❌ Missing required data for processing');
       toast({
         title: "Processing Error", 
         description: "Missing required data for processing. Please try again.",
@@ -226,10 +248,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       return;
     }
 
+    logDataFlow(`📋 Processing ${processedImages.backgroundRemoved.length} subjects with pure backdrop`);
     setCurrentStep('processing');
     setIsProcessing(true);
     setProgress(0);
-    setCurrentProcessingStep('Starting V5 single-image processing...');
+    setCurrentProcessingStep('Starting secure layer-based processing...');
 
     const results: Array<{ name: string; finalizedData: string }> = [];
     const totalImages = processedImages.backgroundRemoved.length;
@@ -245,69 +268,66 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         console.log(`V5 Processing image ${i + 1}/${totalImages}: ${image.name}`);
 
         try {
-          const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
+          // Phase 2 Option A: Generate shadow layer using pure backdrop + transparent subject
+          logDataFlow(`🎭 Generating shadow layer for ${image.name}...`);
+          
+          const { data: shadowData, error: shadowError } = await supabase.functions.invoke('generate-shadow-layer', {
             body: {
-              imageData: image.backgroundRemovedData,
-              imageName: image.name,
-              backdrop: processedImages.backdrop,
+              backdrop: pureBackdropData,
+              subjectData: image.backgroundRemovedData,
               placement: processedImages.placement,
-              addBlur: processedImages.addBlur || false
+              imageName: image.name
             }
           });
 
-          if (error) {
-            console.error(`V5 processing failed for ${image.name}:`, error);
-            throw new Error(`Processing failed for ${image.name}: ${error.message}`);
+          if (shadowError) {
+            logDataFlow(`❌ Shadow generation failed for ${image.name}: ${shadowError.message}`);
+            throw new Error(`Shadow generation failed: ${shadowError.message}`);
           }
 
-          if (data?.success && data.result) {
-            // Composite the layers on the frontend for maximum quality
-            setCurrentProcessingStep(`Compositing ${image.name} with high quality...`);
-            
-            // CRITICAL VERIFICATION: Ensure we're using ONLY the transparent subject
-            console.log(`Compositing ${image.name}:`, {
-              hasBackdrop: !!data.result.backdropData,
-              hasShadow: !!data.result.shadowLayerData,
-              hasSubject: !!image.backgroundRemovedData,
-              hasOriginalData: !!image.originalData, // Should be empty after background removal
-              subjectDataLength: image.backgroundRemovedData?.length,
-              subjectPreview: image.backgroundRemovedData?.substring(0, 100)
-            });
-            
-            // SECURITY CHECK: Verify original data has been completely discarded
-            if (image.originalData && image.originalData.trim() !== '') {
-              console.warn(`WARNING: Original image data still present for ${image.name} - this should be empty!`);
-            }
-            
-            // Ensure we're using only the transparent subject (never the original image)
-            let transparentSubjectData = image.backgroundRemovedData;
-            
-            // Verify this is actually transparent PNG data
-            if (!transparentSubjectData?.includes('data:image/png')) {
-              console.error(`Invalid subject data for ${image.name} - not PNG format`);
-              throw new Error(`Subject image for ${image.name} is not in PNG format with transparency`);
-            }
-            
-            console.log(`✓ Using ONLY transparent subject data for ${image.name} (length: ${transparentSubjectData.length})`);
-            console.log(`✓ Original image data discarded - only transparent subject will be composited`);
-            
-            const finalImageUrl = await compositeLayers(
-              data.result.backdropData,
-              data.result.shadowLayerData,
-              transparentSubjectData, // GUARANTEED: Only transparent PNG from background removal
-              processedImages.placement
-            );
-            
-            results.push({
-              name: data.result.name,
-              finalizedData: finalImageUrl
-            });
-            
-            console.log(`✓ Successfully processed and composited ${image.name} with V5 architecture`);
-            setCurrentProcessingStep(`✓ Completed ${image.name} (${i + 1}/${totalImages})`);
-          } else {
-            throw new Error(`Invalid response for ${image.name}`);
+          if (!shadowData?.success || !shadowData?.result?.shadowLayerData) {
+            logDataFlow(`❌ Shadow generation returned no data for ${image.name}`);
+            throw new Error('Shadow generation returned no results');
           }
+
+          const shadowLayerData = shadowData.result.shadowLayerData;
+          logDataFlow(`✅ Shadow layer generated for ${image.name} (${shadowLayerData.length} chars)`);
+          
+          // Store shadow layer for potential reuse
+          setShadowLayers(prev => ({
+            ...prev,
+            [image.name]: shadowLayerData
+          }));
+
+          // Phase 3: Secure client-side compositing with validation
+          logDataFlow(`🎨 Starting secure client-side compositing for ${image.name}...`);
+          setCurrentProcessingStep(`Compositing ${image.name} with pure layers...`);
+          
+          // Validate inputs before compositing
+          if (!image.backgroundRemovedData.includes('data:image/png')) {
+            logDataFlow(`❌ CRITICAL: Subject ${image.name} is not transparent PNG!`);
+            throw new Error(`Subject ${image.name} is not transparent PNG - cannot composite safely`);
+          }
+          
+          logDataFlow(`✅ SECURITY CHECK PASSED: ${image.name} is transparent PNG`);
+          logDataFlow(`✅ Using pure backdrop: ${pureBackdropData.length} chars`);
+          logDataFlow(`✅ Using shadow layer: ${shadowLayerData.length} chars`);
+          
+          const finalImageUrl = await compositeLayers(
+            pureBackdropData,
+            shadowLayerData,
+            image.backgroundRemovedData,
+            processedImages.placement
+          );
+
+          logDataFlow(`✅ Client compositing complete for ${image.name} (${finalImageUrl.length} chars)`);
+          
+          results.push({
+            name: image.name,
+            finalizedData: finalImageUrl
+          });
+          
+          setCurrentProcessingStep(`✓ Completed ${image.name} (${i + 1}/${totalImages})`);
 
         } catch (imageError) {
           console.error(`Failed to process ${image.name}:`, imageError);

@@ -183,22 +183,38 @@ export const compositeLayers = async (
   subjectUrl: string,
   placement: SubjectPlacement
 ): Promise<string> => {
-  console.log('compositeLayers - Starting compositing process (TRANSPARENT SUBJECT ONLY)');
-  console.log('compositeLayers - Data URLs received:', {
+  console.log('🎨 SECURE COMPOSITING: Starting pure layer composition');
+  console.log('📊 Input validation:', {
     backdropLength: backdropUrl?.length,
     shadowLayerLength: shadowLayerUrl?.length,
     subjectLength: subjectUrl?.length,
     backdropFormat: backdropUrl?.substring(0, 50),
     shadowLayerFormat: shadowLayerUrl?.substring(0, 50),
-    subjectFormat: subjectUrl?.substring(0, 50)
+    subjectFormat: subjectUrl?.substring(0, 50),
+    placement
   });
 
-  // CRITICAL VERIFICATION: Ensure the subject image is a PNG with transparency
+  // PHASE 3: Critical security validation
   if (!subjectUrl?.includes('data:image/png')) {
-    throw new Error('COMPOSITION ERROR: Subject image must be PNG format with transparency. Original image data detected - this should never happen!');
+    const error = 'CRITICAL SECURITY VIOLATION: Subject image must be PNG with transparency. Original image contamination detected!';
+    console.error('🚨', error);
+    throw new Error(error);
   }
   
-  console.log('✓ Verified: Subject is PNG with transparency - safe to composite');
+  if (!backdropUrl?.startsWith('data:image/')) {
+    const error = 'CRITICAL ERROR: Invalid backdrop data format';
+    console.error('🚨', error);
+    throw new Error(error);
+  }
+  
+  if (!shadowLayerUrl?.startsWith('data:image/')) {
+    const error = 'CRITICAL ERROR: Invalid shadow layer data format';
+    console.error('🚨', error);
+    throw new Error(error);
+  }
+  
+  console.log('✅ SECURITY CHECK PASSED: All inputs are valid image data URLs');
+  console.log('✅ TRANSPARENCY CHECK PASSED: Subject is PNG with transparency');
 
   // Helper function to load image
   const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {

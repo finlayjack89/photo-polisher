@@ -94,7 +94,18 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
   };
 
   const getImageDataToDisplay = (image: typeof currentImages[0]) => {
-    // Enhanced candidate priority order with more debug logging
+    // Phase 4: Enhanced debug logging and fallback handling
+    console.log('🔄 ImageRotationStep - Data structure analysis:', {
+      imageName: image.name,
+      availableProperties: Object.keys(image),
+      backgroundRemovedData: !!image.backgroundRemovedData,
+      processedImageUrl: !!(image as any).processedImageUrl,
+      originalData: !!image.originalData,
+      data: !!(image as any).data,
+      url: !!(image as any).url
+    });
+    
+    // Enhanced candidate priority order with better fallback handling
     const candidates = [
       { name: 'backgroundRemovedData', data: image.backgroundRemovedData },
       { name: 'processedImageUrl', data: (image as any).processedImageUrl },
@@ -103,26 +114,28 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
       { name: 'url', data: (image as any).url }
     ];
     
-    console.log('getImageDataToDisplay - Checking candidates for', image.name, ':', {
-      availableCandidates: candidates.map(c => ({ name: c.name, hasData: !!c.data, length: c.data?.length }))
+    console.log('🔍 Candidate analysis for', image.name, ':', {
+      availableCandidates: candidates.map(c => ({ 
+        name: c.name, 
+        hasData: !!c.data, 
+        length: c.data?.length,
+        isDataUrl: c.data?.startsWith('data:image/'),
+        preview: c.data?.substring(0, 30)
+      }))
     });
     
     // Find first valid data URL
     for (const candidate of candidates) {
       if (candidate.data && candidate.data.startsWith('data:image/')) {
-        console.log(`✓ Using ${candidate.name} for preview of ${image.name}`, candidate.data.substring(0, 50) + '...');
+        console.log(`✅ Using ${candidate.name} for preview of ${image.name}`);
         return candidate.data;
       }
     }
     
     console.error('❌ No valid image data found for preview of', image.name);
-    console.error('Available data:', candidates.map(c => ({ 
-      name: c.name, 
-      hasData: !!c.data, 
-      starts: c.data?.substring(0, 20),
-      isDataUrl: c.data?.startsWith('data:image/')
-    })));
+    console.error('🔍 Full image object:', image);
     
+    // Fallback: Return empty string but log the issue
     return '';
   };
 
