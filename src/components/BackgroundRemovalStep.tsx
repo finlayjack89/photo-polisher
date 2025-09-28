@@ -75,32 +75,36 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       setProgress(20);
       setCurrentProcessingStep('Removing backgrounds with AI...');
 
-      // Process images in batches of 3 to avoid CPU timeouts
-      const BATCH_SIZE = 3;
+      // Process images one by one to avoid CPU timeouts
       const allResults: ProcessedImage[] = [];
       
-      for (let i = 0; i < imageData.length; i += BATCH_SIZE) {
-        const batch = imageData.slice(i, i + BATCH_SIZE);
-        const batchProgress = ((i / imageData.length) * 80) + 20; // 20-100% range
+      for (let i = 0; i < imageData.length; i++) {
+        const image = imageData[i];
+        const imageProgress = ((i / imageData.length) * 80) + 20; // 20-100% range
         
-        setCurrentProcessingStep(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(imageData.length / BATCH_SIZE)}...`);
-        setProgress(batchProgress);
+        setCurrentProcessingStep(`Processing image ${i + 1} of ${imageData.length}: ${image.name}...`);
+        setProgress(imageProgress);
 
         const { data: result, error } = await supabase.functions.invoke('remove-backgrounds', {
-          body: { images: batch.map(img => ({ data: img.data, name: img.name })) }
+          body: { images: [{ data: image.data, name: image.name }] }
         });
 
         if (error) {
-          throw new Error(error.message);
+          console.error(`Error processing ${image.name}:`, error);
+          toast({
+            title: "Processing Error",
+            description: `Failed to process ${image.name}: ${error.message}`,
+            variant: "destructive",
+          });
+          continue; // Skip this image and continue with others
         }
 
-        if (result?.results) {
-          // Add original size to each result
-          const resultsWithOriginalSize = result.results.map((res: any, index: number) => ({
-            ...res,
-            originalSize: batch[index].originalSize
-          }));
-          allResults.push(...resultsWithOriginalSize);
+        if (result?.results && result.results.length > 0) {
+          const processedImage = {
+            ...result.results[0],
+            originalSize: image.originalSize
+          };
+          allResults.push(processedImage);
         }
       }
 
