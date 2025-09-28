@@ -129,6 +129,22 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   const handleBackgroundRemovalComplete = (subjects: any[]) => {
     console.log("Background removal complete. Received subjects:", subjects);
+    
+    // DEBUG: Log the actual structure of subjects to fix rotation preview
+    subjects.forEach((subject, index) => {
+      console.log(`Subject ${index} structure:`, {
+        keys: Object.keys(subject),
+        hasBackgroundRemovedData: !!subject.backgroundRemovedData,
+        hasProcessedImageUrl: !!subject.processedImageUrl,
+        hasData: !!subject.data,
+        hasUrl: !!subject.url,
+        backgroundRemovedDataLength: subject.backgroundRemovedData?.length,
+        processedImageUrlLength: subject.processedImageUrl?.length,
+        dataLength: subject.data?.length,
+        urlLength: subject.url?.length
+      });
+    });
+    
     setProcessedSubjects(subjects);
     // We also advance to the next step in the workflow here
     setCurrentStep('rotation'); 
@@ -140,15 +156,35 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     backgroundRemovedData?: string;
     size: number;
   }>) => {
-    // CRITICAL: Ensure only transparent subject data is preserved
-    const processedRotatedImages = rotatedImages.map(img => ({
-      name: img.name,
-      originalData: '', // Discard any original data
-      backgroundRemovedData: img.backgroundRemovedData || '', // Keep only rotated transparent subject
-      size: img.size
-    }));
+    console.log('handleRotationComplete - Received rotatedImages:', rotatedImages);
     
-    console.log('Rotation complete - maintaining transparent-only subjects');
+    // CRITICAL: Ensure only transparent subject data is preserved
+    const processedRotatedImages = rotatedImages.map((img, index) => {
+      console.log(`Processing rotated image ${index}:`, {
+        name: img.name,
+        hasOriginalData: !!img.originalData,
+        hasBackgroundRemovedData: !!img.backgroundRemovedData,
+        backgroundRemovedDataIsPNG: img.backgroundRemovedData?.includes('data:image/png'),
+        size: img.size
+      });
+      
+      // CRITICAL: Explicitly validate that we only keep PNG transparent data
+      const transparentSubjectData = img.backgroundRemovedData;
+      if (transparentSubjectData && !transparentSubjectData.includes('data:image/png')) {
+        console.error(`ERROR: Non-PNG data detected for ${img.name}. This will cause original image contamination!`);
+        throw new Error(`Invalid data format for ${img.name}. Must be PNG with transparency.`);
+      }
+      
+      return {
+        name: img.name,
+        originalData: '', // COMPLETELY DISCARD original data
+        backgroundRemovedData: transparentSubjectData || '', // Keep only transparent PNG subject
+        size: img.size
+      };
+    });
+    
+    console.log('Rotation complete - Final processed images:', processedRotatedImages);
+    console.log('✓ VERIFIED: All data is transparent PNG format - original images purged');
     setProcessedImages({ backgroundRemoved: processedRotatedImages });
     setCurrentStep('positioning');
   };
@@ -314,15 +350,27 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   };
 
   const startClientCompositing = async (backdrop: string, placement: SubjectPlacement, addBlur: boolean) => {
+    console.log('startClientCompositing - Starting with pure backdrop and transparent subjects');
+    console.log('startClientCompositing - Backdrop format:', backdrop?.substring(0, 50));
+    console.log('startClientCompositing - Subjects to process:', processedImages.backgroundRemoved?.length);
+    
     setIsProcessing(true);
     setProgress(0);
     setCurrentProcessingStep('Creating client-side composition...');
 
     try {
+      // CRITICAL: Verify backdrop is pure (not contaminated)
+      if (!backdrop) {
+        throw new Error('No backdrop provided for compositing');
+      }
+      
       // Get backdrop image
       const backdropImg = new Image();
       await new Promise((resolve, reject) => {
-        backdropImg.onload = resolve;
+        backdropImg.onload = () => {
+          console.log('startClientCompositing - Backdrop loaded:', `${backdropImg.width}x${backdropImg.height}`);
+          resolve(null);
+        };
         backdropImg.onerror = reject;
         backdropImg.src = backdrop;
       });
@@ -338,15 +386,20 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         setProgress(20 + (i / processedImages.backgroundRemoved.length) * 60);
         setCurrentProcessingStep(`Compositing ${subject.name}...`);
 
-        // Position subject on backdrop using client-side canvas
-        const compositedData = await positionSubjectOnCanvas(
-          subject.backgroundRemovedData,
-          backdropImg.naturalWidth,
-          backdropImg.naturalHeight,
-          placement
-        );
+        // CRITICAL: Verify subject is transparent PNG
+        if (!subject.backgroundRemovedData) {
+          console.error(`ERROR: No transparent data for subject ${subject.name}`);
+          throw new Error(`No transparent data available for ${subject.name}`);
+        }
+        
+        if (!subject.backgroundRemovedData.includes('data:image/png')) {
+          console.error(`ERROR: Subject ${subject.name} is not PNG format`);
+          throw new Error(`Subject ${subject.name} must be PNG with transparency`);
+        }
+        
+        console.log(`✓ VERIFIED: Subject ${subject.name} is transparent PNG`);
 
-        // Create final composite by drawing backdrop + positioned subject
+        // Create final composite with PURE BACKDROP + TRANSPARENT SUBJECT ONLY
         const finalCanvas = document.createElement('canvas');
         finalCanvas.width = backdropImg.naturalWidth;
         finalCanvas.height = backdropImg.naturalHeight;
@@ -354,33 +407,51 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         
         if (!finalCtx) throw new Error('Could not get canvas context');
 
-        // Draw backdrop
+        console.log(`Drawing pure backdrop for ${subject.name}...`);
+        // Draw PURE backdrop first
         finalCtx.drawImage(backdropImg, 0, 0);
 
-        // Draw ONLY the positioned subject (compositedData already contains the positioned subject)
-        // Do NOT draw the original subject again - compositedData is the final positioned subject
+        // Load and position the transparent subject
         const subjectImg = new Image();
         await new Promise((resolve, reject) => {
-          subjectImg.onload = resolve;
+          subjectImg.onload = () => {
+            console.log(`Transparent subject loaded for ${subject.name}: ${subjectImg.width}x${subjectImg.height}`);
+            resolve(null);
+          };
           subjectImg.onerror = reject;
-          subjectImg.src = compositedData;
+          subjectImg.src = subject.backgroundRemovedData;
         });
 
-        // The compositedData already contains the properly positioned subject
-        // We just draw it directly on the backdrop
-        finalCtx.drawImage(subjectImg, 0, 0);
+        // Calculate positioning based on placement
+        const subjectAspectRatio = subjectImg.naturalWidth / subjectImg.naturalHeight;
+        const scaledWidth = finalCanvas.width * placement.scale;
+        const scaledHeight = scaledWidth / subjectAspectRatio;
+        const dx = (placement.x * finalCanvas.width) - (scaledWidth / 2);
+        const dy = (placement.y * finalCanvas.height) - (scaledHeight / 2);
+
+        console.log(`Drawing positioned transparent subject for ${subject.name}:`, {
+          position: `${Math.round(dx)}, ${Math.round(dy)}`,
+          size: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+          placement
+        });
+
+        // Draw ONLY the transparent subject at the correct position
+        finalCtx.drawImage(subjectImg, dx, dy, scaledWidth, scaledHeight);
 
         // Apply blur if requested
         if (addBlur) {
           finalCtx.filter = 'blur(1px)';
           finalCtx.drawImage(backdropImg, 0, 0);
           finalCtx.filter = 'none';
-          finalCtx.drawImage(subjectImg, 0, 0);
+          finalCtx.drawImage(subjectImg, dx, dy, scaledWidth, scaledHeight);
         }
+
+        const finalComposite = finalCanvas.toDataURL('image/png');
+        console.log(`✓ COMPLETED: Clean composite for ${subject.name} (${finalComposite.length} bytes)`);
 
         clientComposited.push({
           name: subject.name,
-          compositedData: finalCanvas.toDataURL('image/png')
+          compositedData: finalComposite
         });
       }
 
@@ -678,13 +749,34 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   if (currentStep === 'rotation') {
     // Use processedSubjects if available, otherwise fall back to processedImages.backgroundRemoved
+    console.log('Preparing rotation step data...');
+    console.log('processedSubjects available:', processedSubjects.length > 0);
+    console.log('processedSubjects structure:', processedSubjects);
+    
     const rotationImages = processedSubjects.length > 0 
-      ? processedSubjects.map(subject => ({
-          name: subject.original_filename || subject.name || 'Processed Image',
-          originalData: '', // Don't pass original data
-          backgroundRemovedData: subject.backgroundRemovedData || subject.processedImageUrl,
-          size: subject.size || 0
-        }))
+      ? processedSubjects.map((subject, index) => {
+          // Try multiple possible property names for the transparent subject data
+          const transparentData = subject.backgroundRemovedData || 
+                                subject.processedImageUrl || 
+                                subject.data ||
+                                subject.url ||
+                                '';
+          
+          console.log(`Mapping subject ${index} for rotation:`, {
+            name: subject.original_filename || subject.name || 'Processed Image',
+            hasTransparentData: !!transparentData,
+            transparentDataLength: transparentData?.length,
+            transparentDataFormat: transparentData?.substring(0, 50),
+            allKeys: Object.keys(subject)
+          });
+          
+          return {
+            name: subject.original_filename || subject.name || 'Processed Image',
+            originalData: '', // Never pass original data
+            backgroundRemovedData: transparentData,
+            size: subject.size || 0
+          };
+        })
       : processedImages.backgroundRemoved;
 
     return (

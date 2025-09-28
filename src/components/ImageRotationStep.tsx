@@ -94,26 +94,42 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
   };
 
   const getImageDataToDisplay = (image: typeof currentImages[0]) => {
-    // Try different property names to handle various data structures
-    const candidateData = image.backgroundRemovedData || 
-                           (image as any).processedImageUrl ||
-                           image.originalData ||
-                           (image as any).data;
+    // Enhanced candidate priority order with more debug logging
+    const candidates = [
+      { name: 'backgroundRemovedData', data: image.backgroundRemovedData },
+      { name: 'processedImageUrl', data: (image as any).processedImageUrl },
+      { name: 'originalData', data: image.originalData },
+      { name: 'data', data: (image as any).data },
+      { name: 'url', data: (image as any).url }
+    ];
     
-    console.log('Image data for preview:', {
-      name: image.name,
-      hasBackgroundRemovedData: !!image.backgroundRemovedData,
-      hasProcessedImageUrl: !!(image as any).processedImageUrl,
-      hasOriginalData: !!image.originalData,
-      hasData: !!(image as any).data,
-      candidateData: candidateData ? candidateData.substring(0, 50) + '...' : 'none'
+    console.log('getImageDataToDisplay - Checking candidates for', image.name, ':', {
+      availableCandidates: candidates.map(c => ({ name: c.name, hasData: !!c.data, length: c.data?.length }))
     });
     
-    return candidateData || '';
+    // Find first valid data URL
+    for (const candidate of candidates) {
+      if (candidate.data && candidate.data.startsWith('data:image/')) {
+        console.log(`✓ Using ${candidate.name} for preview of ${image.name}`, candidate.data.substring(0, 50) + '...');
+        return candidate.data;
+      }
+    }
+    
+    console.error('❌ No valid image data found for preview of', image.name);
+    console.error('Available data:', candidates.map(c => ({ 
+      name: c.name, 
+      hasData: !!c.data, 
+      starts: c.data?.substring(0, 20),
+      isDataUrl: c.data?.startsWith('data:image/')
+    })));
+    
+    return '';
   };
 
   const getOriginalImageToDisplay = (image: typeof currentImages[0]) => {
-    return image.originalData;
+    // For rotation step, we want to show the transparent subject as "original" for comparison
+    // This is the same as the current display image since we don't keep original data
+    return getImageDataToDisplay(image);
   };
 
   return (

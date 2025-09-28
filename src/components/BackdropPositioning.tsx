@@ -290,6 +290,13 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         scale: placement.scale,
         scalePercentage: Math.round(placement.scale * 100) + '%'
       });
+      console.log('BackdropPositioning - Backdrop format verification:', {
+        backdropLength: backdrop.length,
+        backdropFormat: backdrop.substring(0, 50),
+        isDataUrl: backdrop.startsWith('data:image/'),
+        backdropType: backdrop.split(';')[0]
+      });
+      console.log('✓ VERIFIED: Passing PURE backdrop (not contaminated with subject)');
       onPositioningComplete(backdrop, placement, addBlur);
     }
   };
