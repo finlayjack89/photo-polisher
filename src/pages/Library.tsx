@@ -77,7 +77,8 @@ const Library = () => {
       if (batchesError) {
         console.error('Error fetching batches:', batchesError);
         // If tables don't exist yet, show friendly message
-        if (batchesError.message?.includes('does not exist')) {
+        if (batchesError.message?.includes('does not exist') || 
+            batchesError.message?.includes('Could not find the table')) {
           toast({
             title: 'Database Setup Required',
             description: 'Please reconnect Supabase to create the library tables.',
