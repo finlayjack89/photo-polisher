@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink, Edit3, Save, X } from "lucide-react";
+import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink, Edit3, Save, X, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import JSZip from "jszip";
 
 interface ProcessedImage {
@@ -30,9 +31,17 @@ interface GalleryPreviewProps {
   results: ProcessedImage[];
   onBack: () => void;
   title?: string;
+  transparentImages?: Array<{ name: string; data: string }>;
+  aiEnhancedImages?: Array<{ name: string; data: string }>;
 }
 
-export const GalleryPreview = ({ results, onBack, title = "Processing Complete!" }: GalleryPreviewProps) => {
+export const GalleryPreview = ({ 
+  results, 
+  onBack, 
+  title = "Processing Complete!", 
+  transparentImages = [],
+  aiEnhancedImages = []
+}: GalleryPreviewProps) => {
   const [selectedView, setSelectedView] = useState<'grid' | 'comparison'>('grid');
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [isUpscaling, setIsUpscaling] = useState(false);
@@ -40,7 +49,9 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
   const [isEditingNames, setIsEditingNames] = useState(false);
   const [temperature, setTemperature] = useState<number>(0.7);
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>(results);
+  const [isSavingToLibrary, setIsSavingToLibrary] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -267,6 +278,68 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
     }
   };
 
+  const saveToLibrary = async () => {
+    if (!user) {
+      toast({
+        title: "Sign In Required",
+        description: "Please sign in to save images to your library.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSavingToLibrary(true);
+
+    try {
+      // Prepare images for saving
+      const finalImagesToSave = displayImages.map(img => ({
+        name: getDisplayFilename(img),
+        data: getCurrentImageData(img) || ''
+      }));
+
+      const transparentImagesToSave = transparentImages.map(img => ({
+        name: img.name,
+        data: img.data
+      }));
+
+      const aiEnhancedImagesToSave = aiEnhancedImages.map(img => ({
+        name: img.name,
+        data: img.data
+      }));
+
+      const batchName = `Batch ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
+
+      // Import the library storage function dynamically to avoid type errors
+      const { saveBatchToLibrary } = await import('@/lib/library-storage');
+
+      const result = await saveBatchToLibrary({
+        userId: user.id,
+        batchName,
+        transparentImages: transparentImagesToSave,
+        aiEnhancedImages: aiEnhancedImagesToSave,
+        finalImages: finalImagesToSave
+      });
+
+      if (result.success) {
+        toast({
+          title: "Saved to Library",
+          description: "Your images have been saved to your library successfully!"
+        });
+      } else {
+        throw new Error(result.error || 'Failed to save to library');
+      }
+    } catch (error) {
+      console.error('Error saving to library:', error);
+      toast({
+        title: "Save Failed",
+        description: "Failed to save images to library. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingToLibrary(false);
+    }
+  };
+
   if (!displayImages || displayImages.length === 0) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -303,6 +376,16 @@ export const GalleryPreview = ({ results, onBack, title = "Processing Complete!"
             <Edit3 className="w-4 h-4 mr-2" />
             {isEditingNames ? 'Done Editing' : 'Edit Names'}
           </Button>
+          {user && (
+            <Button 
+              onClick={saveToLibrary}
+              disabled={isSavingToLibrary}
+              variant="secondary"
+            >
+              <FolderPlus className="w-4 h-4 mr-2" />
+              {isSavingToLibrary ? 'Saving...' : 'Save to Library'}
+            </Button>
+          )}
           <Button 
             onClick={handleUpscaleAndCompress} 
             disabled={isUpscaling}

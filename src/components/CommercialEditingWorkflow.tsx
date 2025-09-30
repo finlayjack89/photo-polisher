@@ -1045,6 +1045,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   if (currentStep === 'complete' && (processedImages.aiEnhanced || processedImages.finalResults)) {
     const finalImages = processedImages.aiEnhanced || processedImages.finalResults;
+    
+    // Prepare transparent images for library
+    const transparentImagesForLibrary = processedImages.backgroundRemoved.map(img => ({
+      name: img.name,
+      data: img.backgroundRemovedData
+    }));
+    
+    // Prepare AI enhanced images if they exist
+    const aiEnhancedImagesForLibrary = processedImages.aiEnhanced?.map(img => ({
+      name: img.name,
+      data: (img as any).enhancedData
+    })) || [];
+    
     return (
       <GalleryPreview
         results={finalImages.map((result, index) => ({
@@ -1059,6 +1072,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         }))}
         onBack={onBack}
         title="Final Enhanced Images"
+        transparentImages={transparentImagesForLibrary}
+        aiEnhancedImages={aiEnhancedImagesForLibrary}
       />
     );
   }
@@ -1121,11 +1136,25 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       finalizedData: result.compositedData
     }));
     
+    // Prepare transparent images for library
+    const transparentImagesForLibrary = processedImages.backgroundRemoved.map(img => ({
+      name: img.name,
+      data: img.backgroundRemovedData
+    }));
+    
+    // Prepare AI enhanced images if they exist
+    const aiEnhancedImagesForLibrary = processedImages.aiEnhanced?.map(img => ({
+      name: img.name,
+      data: (img as any).enhancedData
+    })) || [];
+    
     return (
       <GalleryPreview
         results={finalResults || []}
         onBack={onBack}
         title="Enhancement Complete!"
+        transparentImages={transparentImagesForLibrary}
+        aiEnhancedImages={aiEnhancedImagesForLibrary}
       />
     );
   }

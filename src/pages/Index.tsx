@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Upload, Sparkles, Image as ImageIcon, Zap, Settings, LogOut } from "lucide-react";
+import { Upload, Sparkles, Image as ImageIcon, Zap, Settings, LogOut, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { ProcessingWorkflow } from "@/components/ProcessingWorkflow";
@@ -32,14 +32,24 @@ const Index = () => {
           </div>
           <div className="flex items-center space-x-4">
             {user && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => navigate("/settings")}
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => navigate("/library")}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Library
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => navigate("/settings")}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Button>
+              </>
             )}
             {user ? (
               <Button variant="ghost" size="sm" onClick={signOut}>
