@@ -1,60 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.21.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface ShadowGenerationRequest {
-  backdrop: string; // Pure backdrop image (base64)
-  subjectData: string; // Transparent subject PNG (base64)
-  placement: {
-    x: number;
-    y: number;
-    scale: number;
-  };
-  imageName: string;
-}
-
-const buildPureShadowPrompt = (): string => {
-  return `You are a professional shadow generation AI. You will receive two images:
-1. A pure backdrop/background scene
-2. A transparent subject image showing what object will be placed on the backdrop
-
-Your task is to generate ONLY realistic shadows and reflections that this subject would cast on the backdrop, based on the subject's shape and the backdrop's lighting.
-
-**CRITICAL REQUIREMENTS:**
-
-**1. OUTPUT FORMAT:**
-- Generate a PNG image with transparent background
-- The image should contain ONLY shadows and reflections - no backdrop, no subject
-- Shadows should be semi-transparent (30-60% opacity)
-- Output dimensions must exactly match the backdrop image dimensions
-
-**2. SHADOW CHARACTERISTICS:**
-- Analyze the backdrop's existing lighting to determine shadow direction and intensity
-- Create soft, realistic shadows that match the lighting environment
-- Shadows should be cast from the subject's contact points with the surface
-- Use ambient occlusion principles for realistic depth
-
-**3. REFLECTION CHARACTERISTICS:**
-- Add subtle reflections only if the backdrop surface would naturally reflect (glossy/semi-glossy surfaces)
-- Reflections should be much fainter than shadows (15-30% opacity)
-- Reflections should be geometrically accurate to the subject's shape
-
-**4. WHAT NOT TO INCLUDE:**
-- Do NOT include the original backdrop in your output
-- Do NOT include the subject itself in your output
-- Do NOT add any background elements or colors
-- Do NOT change or add lighting to the scene itself
-
-**5. QUALITY:**
-- Maintain high resolution matching the backdrop
-- Use soft, realistic shadow edges (no hard cuts)
-- Ensure shadows integrate naturally with existing scene lighting
-
-Your output must be a transparent PNG containing only the shadow/reflection layer that can be composited between the backdrop and subject.`;
 };
 
 serve(async (req) => {
@@ -63,136 +12,107 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🎯 Shadow Layer Generation Started');
-    const { backdrop, subjectData, placement, imageName }: ShadowGenerationRequest = await req.json();
+    console.log('🎯 Shadow Layer Generation Started (Modern Workflow)');
     
-    // Validation
-    if (!backdrop || !subjectData || !placement || !imageName) {
-      throw new Error('Missing required parameters for shadow generation');
+    // This function now expects a single context image and the original dimensions.
+    const { contextImageUrl, dimensions } = await req.json();
+
+    if (!contextImageUrl || !dimensions) {
+      throw new Error('Missing required parameters: contextImageUrl and dimensions');
     }
 
-    console.log(`📊 Processing ${imageName}:`, {
-      backdropSize: backdrop.length,
-      subjectSize: subjectData.length,
-      placement,
-      backdropFormat: backdrop.substring(0, 50),
-      subjectFormat: subjectData.substring(0, 50)
-    });
+    console.log(`📊 Processing context image with dimensions: ${dimensions.width}x${dimensions.height}`);
 
-    // Initialize Google Generative AI
+    // Initialize the AI client with your API key from environment variables
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY not configured');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp',
+
+    // Use the user-specified "Nano Banana" model
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash-image-preview",
       generationConfig: {
-        temperature: 0.1, // Very low for consistent shadow generation
-      },
-    });
-
-    // Parse image data
-    const backdropInfo = backdrop.includes(',') ? backdrop.split(',') : ['data:image/png;base64', backdrop];
-    const subjectInfo = subjectData.includes(',') ? subjectData.split(',') : ['data:image/png;base64', subjectData];
-    
-    const backdropMimeType = backdropInfo[0].match(/data:([^;]+)/)?.[1] || 'image/png';
-    const subjectMimeType = subjectInfo[0].match(/data:([^;]+)/)?.[1] || 'image/png';
-
-    console.log(`🔍 Image formats - Backdrop: ${backdropMimeType}, Subject: ${subjectMimeType}`);
-
-    // Generate shadow layer using Gemini
-    console.log('🤖 Calling Gemini for shadow generation...');
-    const shadowContents = [
-      {
-        role: 'user',
-        parts: [
-          { text: buildPureShadowPrompt() },
-          {
-            inlineData: {
-              mimeType: backdropMimeType,
-              data: backdropInfo[1],
-            },
-          },
-          {
-            inlineData: {
-              mimeType: subjectMimeType,
-              data: subjectInfo[1],
-            },
-          },
-        ],
-      },
-    ];
-
-    const shadowPromise = model.generateContent({ contents: shadowContents });
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Shadow generation timeout after 45 seconds')), 45000);
-    });
-
-    const shadowResult = await Promise.race([shadowPromise, timeoutPromise]);
-    const shadowResponse = await (shadowResult as any).response;
-
-    console.log(`🔍 Full Gemini response structure:`, JSON.stringify(shadowResponse, null, 2));
-    
-    // Check various possible response structures
-    let shadowBase64, shadowMimeType;
-    
-    if (shadowResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-      // Standard inline data response
-      shadowBase64 = shadowResponse.candidates[0].content.parts[0].inlineData.data;
-      shadowMimeType = shadowResponse.candidates[0].content.parts[0].inlineData.mimeType || 'image/png';
-    } else if (shadowResponse.candidates?.[0]?.content?.parts?.[0]?.text) {
-      // Text response with base64 data
-      const textResponse = shadowResponse.candidates[0].content.parts[0].text;
-      console.log(`📝 Text response from Gemini:`, textResponse);
-      
-      // Try to extract base64 data from text if present
-      const base64Match = textResponse.match(/data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/);
-      if (base64Match) {
-        shadowBase64 = base64Match[1];
-        shadowMimeType = 'image/png';
-      } else {
-        throw new Error(`No valid image data found in Gemini response for ${imageName}`);
+        temperature: 0.1,
       }
-    } else {
-      console.warn(`❌ Shadow generation failed for ${imageName} - unexpected response structure`);
-      console.log(`Response candidates:`, shadowResponse.candidates);
-      throw new Error(`Shadow generation failed for ${imageName} - no valid data in response`);
+    });
+
+    // This is the perfected prompt for generating studio-quality effects
+    const prompt = `
+You are a world-class visual effects artist for a professional product photography studio.
+Your task is to analyze the provided reference image of a product composited onto a studio backdrop and generate a physically realistic effects layer.
+
+**Analysis of Reference Image:**
+1. **Infer the Lighting:** Analyze the highlights and shadows on the backdrop to determine the primary light source's direction, softness, and color temperature.
+2. **Analyze the Surface:** Determine the properties of the surface the product is resting on (e.g., matte, semi-gloss, reflective).
+
+**Generation Task:**
+Based on your analysis, generate a single image containing ONLY two elements: a shadow and a reflection.
+
+**CRITICAL INSTRUCTIONS:**
+1. **Output Format:** You MUST output a single PNG file with a fully transparent background. This is an "effects layer" and must contain no part of the original subject or backdrop.
+2. **Shadow Generation:**
+   * The shadow must be cast away from the inferred primary light source.
+   * It should be a soft, diffuse contact shadow that grounds the product realistically. Do not create a long, hard shadow.
+   * The shadow's color should be a dark, low-saturation version of the backdrop color, not pure black.
+   * The opacity should be around 40-60%, making it present but not overpowering.
+3. **Reflection Generation:**
+   * Generate a subtle, mirror-image reflection of the product directly beneath it.
+   * The reflection should be vertically flipped.
+   * It must have a gradient mask applied so that it fades out (becomes more transparent) with distance from the subject.
+   * The reflection's opacity should be very low, between 5-15%, to simulate a semi-gloss surface.
+4. **Dimensions:** The output PNG must have the exact dimensions of the reference image: ${dimensions.width}x${dimensions.height}.
+
+Do not generate the final composited image. Your only output is the transparent PNG effects layer.
+    `;
+
+    console.log('🤖 Calling Gemini 2.5 Flash Image Preview for effects generation...');
+
+    const imagePart = {
+      inlineData: {
+        data: contextImageUrl.split(",")[1], // Remove the base64 prefix
+        mimeType: 'image/png'
+      }
+    };
+
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = result.response;
+    
+    console.log('🔍 Gemini response received, parsing result...');
+    
+    const firstCandidate = response.candidates?.[0];
+
+    if (!firstCandidate || !firstCandidate.content.parts[0]?.inlineData) {
+      console.error('❌ AI model did not return valid image data');
+      console.log('Response structure:', JSON.stringify(response, null, 2));
+      throw new Error("AI model did not return valid image data.");
     }
+    
+    const imageData = firstCandidate.content.parts[0].inlineData;
+    const shadowLayerDataUrl = `data:${imageData.mimeType};base64,${imageData.data}`;
 
-    if (!shadowBase64) {
-      throw new Error(`Shadow generation failed for ${imageName} - no shadow data extracted`);
-    }
-
-    // Create shadow data URL
-    const shadowDataUrl = `data:${shadowMimeType};base64,${shadowBase64}`;
-
-    console.log(`✅ Successfully generated shadow layer for ${imageName}`);
-    console.log(`📏 Shadow layer size: ${shadowDataUrl.length} characters`);
+    console.log('✅ Successfully generated effects layer');
+    console.log(`📏 Effects layer size: ${shadowLayerDataUrl.length} characters`);
 
     return new Response(JSON.stringify({ 
       success: true,
-      result: {
-        name: imageName,
-        shadowLayerData: shadowDataUrl,
-        placement: placement,
-        metadata: {
-          shadowFormat: shadowMimeType,
-          processingTime: Date.now(),
-          method: 'pure_layer_generation'
-        }
+      imageData: shadowLayerDataUrl,
+      metadata: {
+        dimensions,
+        method: 'context_image_analysis',
+        model: 'gemini-2.5-flash-image-preview'
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('❌ Shadow generation error:', error);
+    console.error('❌ Error in generate-shadow-layer function:', error);
     return new Response(JSON.stringify({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Shadow generation failed',
-      timestamp: new Date().toISOString()
+      success: false,
+      error: error instanceof Error ? error.message : 'Shadow generation failed'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

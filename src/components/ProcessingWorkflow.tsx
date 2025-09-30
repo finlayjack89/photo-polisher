@@ -223,7 +223,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         }
       }
 
-      const { data, error } = await supabase.functions.invoke('v5-process-single-image', {
+      const { data, error } = await supabase.functions.invoke('generate-shadow-layer', {
         body: {
           contextImageUrl: contextImage,
           dimensions: { width: backdropWidth, height: backdropHeight }
