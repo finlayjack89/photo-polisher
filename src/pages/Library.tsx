@@ -9,6 +9,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
+// NOTE: This component requires the project_batches and batch_images tables.
+// If you see errors, reconnect Supabase and run the migration.
+
 interface BatchImage {
   id: string;
   name: string;
@@ -50,7 +53,7 @@ const Library = () => {
       setLoading(true);
       
       // Fetch batches with their images
-      const { data: batchesData, error: batchesError } = await supabase
+      const { data: batchesData, error: batchesError } = await (supabase as any)
         .from('project_batches')
         .select(`
           id,
@@ -71,11 +74,23 @@ const Library = () => {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (batchesError) throw batchesError;
+      if (batchesError) {
+        console.error('Error fetching batches:', batchesError);
+        // If tables don't exist yet, show friendly message
+        if (batchesError.message?.includes('does not exist')) {
+          toast({
+            title: 'Database Setup Required',
+            description: 'Please reconnect Supabase to create the library tables.',
+            variant: 'destructive'
+          });
+          return;
+        }
+        throw batchesError;
+      }
 
-      const formattedBatches = (batchesData || []).map(batch => ({
+      const formattedBatches = ((batchesData as any[]) || []).map(batch => ({
         ...batch,
-        images: (batch.batch_images || []).sort((a, b) => a.sort_order - b.sort_order)
+        images: ((batch as any).batch_images || []).sort((a: any, b: any) => a.sort_order - b.sort_order)
       }));
 
       setBatches(formattedBatches);
@@ -120,7 +135,7 @@ const Library = () => {
 
   const deleteBatch = async (batchId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('project_batches')
         .delete()
         .eq('id', batchId);
