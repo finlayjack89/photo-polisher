@@ -1,9 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// NOTE: This file requires the project_batches and batch_images tables to exist.
-// If you see TypeScript errors, you need to run the database migration first.
-// Reconnect Supabase and approve the migration to create these tables.
-
 interface SaveBatchParams {
   userId: string;
   batchName: string;
@@ -12,6 +8,9 @@ interface SaveBatchParams {
   finalImages: Array<{ name: string; data: string }>;
 }
 
+/**
+ * Save a batch of images to the library with Cloudinary support
+ */
 export const saveBatchToLibrary = async ({
   userId,
   batchName,
@@ -21,8 +20,7 @@ export const saveBatchToLibrary = async ({
 }: SaveBatchParams): Promise<{ success: boolean; batchId?: string; error?: string }> => {
   try {
     // Create batch record
-    // Cast to any to bypass TypeScript checks until tables are created
-    const { data: batch, error: batchError } = await (supabase as any)
+    const { data: batch, error: batchError } = await supabase
       .from('project_batches')
       .insert({
         user_id: userId,
@@ -37,89 +35,136 @@ export const saveBatchToLibrary = async ({
     const batchId = batch.id;
     let thumbnailPath: string | null = null;
 
-    // Helper to upload image and create record
+    // Helper function to upload an image and create database record
     const uploadImage = async (
-      imageData: string,
-      name: string,
-      type: 'transparent' | 'ai_enhanced' | 'final',
+      imageData: { name: string; data: string },
+      type: 'transparent' | 'ai-enhanced' | 'final',
       sortOrder: number
     ) => {
-      // Convert base64 to blob
-      const base64Data = imageData.split(',')[1];
-      const byteCharacters = atob(base64Data);
-      const byteArrays = [];
+      console.log(`Uploading ${type} image: ${imageData.name}`);
       
-      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-        const slice = byteCharacters.slice(offset, offset + 512);
-        const byteNumbers = new Array(slice.length);
-        for (let i = 0; i < slice.length; i++) {
-          byteNumbers[i] = slice.charCodeAt(i);
+      // Check if this is a Cloudinary URL (final images from Cloudinary rendering)
+      const isCloudinaryUrl = imageData.data.startsWith('https://res.cloudinary.com');
+      
+      let publicUrl: string;
+      let filePath: string;
+      let dimensions = { width: 0, height: 0 };
+      let fileSize = 0;
+      let cloudinaryPublicId: string | null = null;
+      
+      if (isCloudinaryUrl) {
+        // For Cloudinary URLs, extract public_id and store URL directly
+        console.log('✓ Detected Cloudinary URL, storing reference');
+        publicUrl = imageData.data;
+        filePath = imageData.data; // Store full URL as path for Cloudinary images
+        
+        // Extract public_id from Cloudinary URL if possible
+        const urlMatch = imageData.data.match(/\/v\d+\/(.+)\./);
+        if (urlMatch) {
+          cloudinaryPublicId = urlMatch[1];
         }
-        byteArrays.push(new Uint8Array(byteNumbers));
+        
+        // Get dimensions from the image
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = imageData.data;
+        });
+        dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+        
+      } else {
+        // For data URLs, upload to Supabase storage
+        const response = await fetch(imageData.data);
+        const blob = await response.blob();
+        
+        // Get dimensions
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = imageData.data;
+        });
+        
+        dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+        fileSize = blob.size;
+        
+        // Generate unique filename
+        const fileExt = imageData.data.match(/data:image\/(.*?);/)?.[1] || 'png';
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        filePath = `${userId}/${batchId}/${type}/${fileName}`;
+        
+        // Upload to storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('project-images')
+          .upload(filePath, blob, {
+            contentType: `image/${fileExt}`,
+            upsert: false
+          });
+        
+        if (uploadError) {
+          console.error(`Upload error for ${imageData.name}:`, uploadError);
+          throw uploadError;
+        }
+        
+        console.log(`✓ Uploaded to storage: ${filePath}`);
+        
+        // Get public URL
+        const { data: { publicUrl: storageUrl } } = supabase.storage
+          .from('project-images')
+          .getPublicUrl(filePath);
+        
+        publicUrl = storageUrl;
       }
       
-      const blob = new Blob(byteArrays, { type: 'image/png' });
-
-      // Get image dimensions
-      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ width: img.width, height: img.height });
-        img.src = imageData;
-      });
-
-      // Upload to storage
-      const fileName = `${Date.now()}_${name}`;
-      const storagePath = `${userId}/${batchId}/${type}/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('project-images')
-        .upload(storagePath, blob, {
-          contentType: 'image/png',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Create database record
-      const { error: recordError } = await (supabase as any)
+      // Insert into batch_images table
+      const { error: dbError } = await supabase
         .from('batch_images')
         .insert({
           batch_id: batchId,
-          name: name,
+          name: imageData.name,
+          storage_path: filePath,
           image_type: type,
-          storage_path: storagePath,
-          file_size: blob.size,
-          dimensions: dimensions,
-          sort_order: sortOrder
+          file_size: fileSize,
+          dimensions,
+          sort_order: sortOrder,
+          width: dimensions.width,
+          height: dimensions.height,
+          cloudinary_public_id: cloudinaryPublicId
         });
-
-      if (recordError) throw recordError;
-
-      return storagePath;
+      
+      if (dbError) {
+        console.error(`Database insert error for ${imageData.name}:`, dbError);
+        throw dbError;
+      }
+      
+      console.log(`✓ Created database record for: ${imageData.name}`);
+      
+      return { publicUrl, filePath };
     };
 
     // Upload all transparent images
     for (let i = 0; i < transparentImages.length; i++) {
-      await uploadImage(transparentImages[i].data, transparentImages[i].name, 'transparent', i);
+      await uploadImage(transparentImages[i], 'transparent', i);
     }
 
     // Upload all AI enhanced images
     for (let i = 0; i < aiEnhancedImages.length; i++) {
-      await uploadImage(aiEnhancedImages[i].data, aiEnhancedImages[i].name, 'ai_enhanced', i + 100);
+      await uploadImage(aiEnhancedImages[i], 'ai-enhanced', i + 100);
     }
 
     // Upload all final images and set first as thumbnail
     for (let i = 0; i < finalImages.length; i++) {
-      const path = await uploadImage(finalImages[i].data, finalImages[i].name, 'final', i + 200);
+      const { filePath } = await uploadImage(finalImages[i], 'final', i + 200);
       
       if (i === 0 && !thumbnailPath) {
-        thumbnailPath = path;
+        thumbnailPath = filePath;
       }
     }
 
     // Update batch with thumbnail
     if (thumbnailPath) {
-      await (supabase as any)
+      await supabase
         .from('project_batches')
         .update({ thumbnail_url: thumbnailPath })
         .eq('id', batchId);
@@ -140,7 +185,7 @@ export const loadTransparentImagesFromBatch = async (
 ): Promise<Array<{ name: string; data: string }> | null> => {
   try {
     // Get transparent images from batch
-    const { data: images, error: imagesError } = await (supabase as any)
+    const { data: images, error: imagesError } = await supabase
       .from('batch_images')
       .select('*')
       .eq('batch_id', batchId)
@@ -151,7 +196,7 @@ export const loadTransparentImagesFromBatch = async (
 
     // Download each image
     const imageData = await Promise.all(
-      (images as any[]).map(async (image) => {
+      (images || []).map(async (image) => {
         const { data: blob, error: downloadError } = await supabase.storage
           .from('project-images')
           .download(image.storage_path);

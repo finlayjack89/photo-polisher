@@ -7,7 +7,8 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
-import { SubjectPlacement } from "@/lib/canvas-utils";
+import { uploadToCloudinary } from "@/lib/cloudinary-render";
+import { supabase } from "@/integrations/supabase/client";
 import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 import { BackdropLibrary } from "@/components/BackdropLibrary";
@@ -15,7 +16,13 @@ import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-r
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects
-  onPositioningComplete: (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => void;
+  onPositioningComplete: (
+    backdrop: string, 
+    placement: { x: number; y: number; scale: number }, 
+    addBlur: boolean, 
+    rotatedSubjects?: string[],
+    backdropCloudinaryId?: string
+  ) => void;
   onBack: () => void;
 }
 
@@ -35,7 +42,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   const [showOptimization, setShowOptimization] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [addBlur, setAddBlur] = useState(false);
-  const [placement, setPlacement] = useState<SubjectPlacement>({
+  const [placement, setPlacement] = useState<{ x: number; y: number; scale: number }>({
     x: 0.5, // center
     y: 0.7, // slightly below center (typical product placement)
     scale: 0.8 // 80% of backdrop width
@@ -314,22 +321,48 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
 
-  const handleContinue = () => {
-    if (backdrop) {
-      console.log('🎯 SECURE POSITIONING: Final placement values:', {
+  const handleContinue = async () => {
+    if (!backdrop) return;
+    
+    try {
+      setIsOptimizing(true);
+      toast({
+        title: "Uploading backdrop",
+        description: "Uploading backdrop to Cloudinary..."
+      });
+
+      // Get user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'anonymous';
+
+      console.log('📤 Uploading backdrop to Cloudinary...');
+      
+      // Upload backdrop to Cloudinary
+      const backdropUpload = await uploadToCloudinary(backdrop, 'backdrop', userId);
+      
+      console.log('✅ Backdrop uploaded:', backdropUpload.public_id);
+      console.log('🎯 Final placement values:', {
         x: placement.x,
         y: placement.y,
-        scale: placement.scale,
-        scalePercentage: Math.round(placement.scale * 100) + '%'
+        scale: placement.scale
       });
-      console.log('🔍 PURE BACKDROP verification:', {
-        backdropLength: backdrop.length,
-        backdropFormat: backdrop.substring(0, 50),
-        isDataUrl: backdrop.startsWith('data:image/'),
-        backdropType: backdrop.split(';')[0]
+
+      toast({
+        title: "Backdrop uploaded",
+        description: "Ready to render images"
       });
-      console.log('✅ VERIFIED: Passing PURE backdrop (not contaminated with subject)');
-      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects);
+
+      // Pass backdrop data URL, placement, and Cloudinary ID to parent
+      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects, backdropUpload.public_id);
+    } catch (error) {
+      console.error('Failed to upload backdrop:', error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload backdrop",
+        variant: "destructive"
+      });
+    } finally {
+      setIsOptimizing(false);
     }
   };
 
@@ -647,10 +680,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
           </Button>
           <Button 
             onClick={handleContinue} 
-            disabled={!backdrop}
+            disabled={!backdrop || isOptimizing}
             className="min-w-[200px]"
           >
-            Continue to Compositing
+            {isOptimizing ? 'Uploading Backdrop...' : 'Continue to Rendering'}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
