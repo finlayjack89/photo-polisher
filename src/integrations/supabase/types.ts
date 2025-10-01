@@ -47,6 +47,68 @@ export type Database = {
         }
         Relationships: []
       }
+      batch_images: {
+        Row: {
+          batch_id: string
+          cloudinary_public_id: string | null
+          cloudinary_version: number | null
+          created_at: string
+          dimensions: Json
+          file_size: number
+          height: number | null
+          id: string
+          image_type: string
+          name: string
+          render_params: Json | null
+          sort_order: number
+          storage_path: string
+          type: string | null
+          width: number | null
+        }
+        Insert: {
+          batch_id: string
+          cloudinary_public_id?: string | null
+          cloudinary_version?: number | null
+          created_at?: string
+          dimensions: Json
+          file_size: number
+          height?: number | null
+          id?: string
+          image_type: string
+          name: string
+          render_params?: Json | null
+          sort_order: number
+          storage_path: string
+          type?: string | null
+          width?: number | null
+        }
+        Update: {
+          batch_id?: string
+          cloudinary_public_id?: string | null
+          cloudinary_version?: number | null
+          created_at?: string
+          dimensions?: Json
+          file_size?: number
+          height?: number | null
+          id?: string
+          image_type?: string
+          name?: string
+          render_params?: Json | null
+          sort_order?: number
+          storage_path?: string
+          type?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_images_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "project_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processing_cache: {
         Row: {
           cache_key: string
@@ -83,6 +145,33 @@ export type Database = {
           options_hash?: string
           original_url?: string
           processed_url?: string
+        }
+        Relationships: []
+      }
+      project_batches: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

@@ -5,9 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { compositeLayers, createAiContextImage } from '@/lib/canvas-utils';
+import { renderComposite, MARBLE_STUDIO_GLOSS_V1, type RenderParams } from '@/lib/cloudinary-render';
 
 interface ProcessedSubject {
   original_filename: string;
@@ -40,9 +39,7 @@ interface ProcessedFile {
 
 const processingSteps = [
   { id: 'upload', label: 'Uploading Files', icon: ImageIcon },
-  { id: 'analyze', label: 'AI Analysis', icon: Sparkles },
-  { id: 'convert', label: 'Converting Images', icon: Scissors },
-  { id: 'compress', label: 'Smart Compression', icon: Scissors },
+  { id: 'render', label: 'Cloudinary Render', icon: Sparkles },
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
@@ -65,20 +62,6 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     }
   }, [processedSubjects]);
 
-  // Convert File objects to base64 for API
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove the data URL prefix to get just the base64 data
-        resolve(result.split(',')[1]);
-      };
-      reader.onerror = error => reject(error);
-    });
-  };
-
   useEffect(() => {
     if (!isProcessing) {
       processImages();
@@ -98,50 +81,66 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
       setCurrentStep(0);
       setProgress(10);
       
-      console.log('Starting AI-enhanced processing workflow...');
+      console.log('Starting Cloudinary render workflow...');
+      
+      const processedFiles: ProcessedFile[] = [];
       
       for (let i = 0; i < processedSubjects.length; i++) {
-        await handleProcessImage(i);
-        setProgress(20 + (i / processedSubjects.length) * 70);
-      }
-      
-      setCurrentStep(4);
-      setProgress(100);
-      setCompletedFiles(processedSubjects.length);
-      
-      toast({
-        title: "AI Processing Complete",
-        description: `Successfully processed ${processedSubjects.length} images with AI-generated shadows and reflections`,
-      });
-
-      // Complete the workflow
-      setTimeout(() => {
-        // Convert processedSubjects to ProcessedFile format
-        const processedFilesWithAnalysis: ProcessedFile[] = processedSubjects.map((subject, index) => ({
+        const subject = processedSubjects[i];
+        
+        // Build render params using house preset
+        const renderParams: RenderParams = {
+          ...MARBLE_STUDIO_GLOSS_V1,
+          bag_public_id: `temp/${subject.name}`, // TODO: Upload to Cloudinary first
+          backdrop_public_id: 'temp/backdrop', // TODO: Upload to Cloudinary first
+        } as RenderParams;
+        
+        console.log(`Rendering ${subject.name} with Cloudinary...`);
+        setCurrentStep(1);
+        
+        const { url } = await renderComposite(renderParams);
+        
+        console.log(`✅ Rendered ${subject.name}:`, url);
+        
+        processedFiles.push({
           originalName: subject.original_filename,
           processedName: subject.name,
-          data: subject.processedImageUrl || subject.backgroundRemovedData,
-          size: 1024, // Default size
+          data: url,
+          size: 1024,
           format: 'image/png',
           analysis: {
-            description: 'AI-enhanced with shadows and reflections',
-            suggestions: ['Image enhanced with AI-generated shadows and reflections'],
+            description: 'Rendered with Cloudinary Marble Studio Gloss v1 preset',
+            suggestions: ['Lossless PNG with shadows and reflections'],
             quality_score: 95,
             detected_issues: [],
             enhancement_recommendations: []
           }
-        }));
+        });
         
-        onComplete(processedFilesWithAnalysis);
+        setProgress(20 + (i / processedSubjects.length) * 70);
+        setCompletedFiles(i + 1);
+      }
+      
+      setCurrentStep(2);
+      setProgress(100);
+      
+      toast({
+        title: "Rendering Complete",
+        description: `Successfully rendered ${processedSubjects.length} images with Cloudinary`,
+      });
+
+      // Complete the workflow
+      setTimeout(() => {
+        onComplete(processedFiles);
       }, 1000);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
-      console.error('AI processing error:', err);
+      console.error('Rendering error:', err);
       
       toast({
-        title: "AI Processing Failed",
+        title: "Rendering Failed",
         description: errorMessage,
         variant: "destructive"
       });
@@ -150,125 +149,15 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     }
   };
 
-  const handleProcessImage = async (subjectIndex: number) => {
-    if (!backdrop || !processedSubjects) return;
-    
-    try {
-      const subject = processedSubjects[subjectIndex];
-      
-      // Handle backdrop data - it can be either a string data URL or an object with url property
-      let backdropDataUrl: string;
-      if (typeof backdrop === 'string') {
-        // backdrop is already a data URL string
-        backdropDataUrl = backdrop;
-        console.log('✅ Using backdrop as data URL directly');
-      } else if (backdrop.url && backdrop.url.startsWith('data:')) {
-        backdropDataUrl = backdrop.url;
-        console.log('✅ Using backdrop.url as data URL');
-      } else if (backdrop.url) {
-        // Fetch the backdrop and convert to data URL
-        console.log('🔍 Converting backdrop URL to data URL for AI processing...');
-        const response = await fetch(backdrop.url);
-        if (!response.ok) throw new Error(`Failed to fetch backdrop: ${response.statusText}`);
-        const blob = await response.blob();
-        backdropDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } else {
-        throw new Error('Invalid backdrop data format');
-      }
-      
-      const subjectUrl = subject.backgroundRemovedData;
-      
-      // Get rotation from the CommercialEditingWorkflow if available
-      const rotation = 0; // Default rotation, this should come from the workflow state
-      
-      const subjectConfig = {
-        position: { x: 0.5, y: 0.5 }, // Default center position
-        size: { width: 400, height: 400 }, // Default size
-        rotation: rotation
-      };
-
-      // --- STEP 1: Create the high-quality context image for the AI ---
-      console.log("Creating AI context image as PNG...");
-      const contextImage = await createAiContextImage(backdropDataUrl, subjectUrl, subjectConfig);
-
-      // --- STEP 2: Call the AI to generate the shadow layer ---
-      console.log("Invoking AI to generate shadow layer...");
-      // Get dimensions from backdrop if available, otherwise use defaults
-      let backdropWidth = 1024;
-      let backdropHeight = 1024;
-      
-      if (typeof backdrop === 'object' && backdrop.width && backdrop.height) {
-        backdropWidth = backdrop.width;
-        backdropHeight = backdrop.height;
-      } else {
-        // Try to get dimensions from the image data
-        try {
-          const img = new Image();
-          img.src = backdropDataUrl;
-          await new Promise((resolve, reject) => {
-            img.onload = () => {
-              backdropWidth = img.width;
-              backdropHeight = img.height;
-              resolve(null);
-            };
-            img.onerror = reject;
-          });
-        } catch (e) {
-          console.warn('Could not determine backdrop dimensions, using defaults');
-        }
-      }
-
-      const { data, error } = await supabase.functions.invoke('generate-shadow-layer', {
-        body: {
-          contextImageUrl: contextImage,
-          dimensions: { width: backdropWidth, height: backdropHeight }
-        },
-      });
-
-      if (error) throw error;
-      const shadowLayerUrl = data.imageData;
-
-      // --- STEP 3: Composite the final image using all three layers ---
-      console.log("Compositing final image...");
-      const placementConfig = {
-        x: 0.5,
-        y: 0.5,
-        scale: 0.4
-      };
-      
-      const finalImage = await compositeLayers(
-        backdropDataUrl,
-        shadowLayerUrl,
-        subjectUrl,
-        placementConfig
-      );
-      
-      // Update the processed subject with the final enhanced image
-      processedSubjects[subjectIndex] = {
-        ...subject,
-        processedImageUrl: finalImage
-      };
-
-    } catch (err) {
-      console.error(`Processing failed for subject ${subjectIndex}:`, err);
-      throw err;
-    }
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Processing Header */}
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-bold text-foreground">
-          Processing Your Photos
+          Rendering Your Photos
         </h2>
         <p className="text-muted-foreground">
-          Our AI is working its magic on {files.length} photos
+          Cloudinary is rendering {files.length} photos with the Marble Studio Gloss v1 preset
         </p>
       </div>
 
@@ -279,12 +168,12 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
             <div className="w-8 h-8 bg-gradient-electric rounded-lg flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-electric-foreground animate-spin" />
             </div>
-            <span>Processing Pipeline</span>
+            <span>Rendering Pipeline</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Step Indicators */}
-          <div className="grid grid-cols-5 gap-2 md:gap-4">
+          <div className="grid grid-cols-3 gap-2 md:gap-4">
             {processingSteps.map((step, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
@@ -335,7 +224,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
             <div className="flex items-center space-x-3">
               <Clock className="w-5 h-5 text-electric" />
               <span className="font-medium text-foreground">
-                Processing Files
+                Rendering Files
               </span>
             </div>
             <Badge variant="outline">
@@ -406,12 +295,12 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
       {error && (
         <div className="text-center">
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
-            <p className="text-destructive font-medium">Processing Error</p>
+            <p className="text-destructive font-medium">Rendering Error</p>
             <p className="text-sm text-destructive/80 mt-1">{error}</p>
           </div>
           <Button onClick={processImages} disabled={isProcessing}>
             <Sparkles className="w-4 h-4 mr-2" />
-            Retry Processing
+            Retry Rendering
           </Button>
         </div>
       )}
@@ -420,7 +309,7 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         <div className="flex justify-center">
           <Button variant="outline" disabled>
             <Clock className="w-4 h-4 mr-2" />
-            {isProcessing ? 'Processing in Progress...' : 'Processing Complete'}
+            {isProcessing ? 'Rendering in Progress...' : 'Rendering Complete'}
           </Button>
         </div>
       )}
