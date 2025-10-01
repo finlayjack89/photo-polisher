@@ -36,10 +36,9 @@ serve(async (req) => {
       throw new Error('Cloudinary credentials not configured');
     }
 
-    // Upload to Cloudinary
+    // Upload to Cloudinary using signed upload
     const formData = new FormData();
     formData.append('file', image_data_url);
-    formData.append('upload_preset', 'ml_default');
     if (folder) formData.append('folder', folder);
     if (public_id) formData.append('public_id', public_id);
     
