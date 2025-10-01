@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { renderComposite, MARBLE_STUDIO_GLOSS_V1, type RenderParams } from '@/lib/cloudinary-render';
+import { renderComposite, uploadToCloudinary, MARBLE_STUDIO_GLOSS_V1, type RenderParams } from '@/lib/cloudinary-render';
 
 interface ProcessedSubject {
   original_filename: string;
@@ -79,20 +79,59 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
     
     try {
       setCurrentStep(0);
-      setProgress(10);
+      setProgress(5);
       
-      console.log('Starting Cloudinary render workflow...');
+      console.log('Starting Cloudinary upload and render workflow...');
+      
+      // Step 1: Upload backdrop to Cloudinary
+      console.log('Uploading backdrop to Cloudinary...');
+      let backdropDataUrl: string;
+      if (typeof backdrop === 'string' && backdrop.startsWith('data:')) {
+        backdropDataUrl = backdrop;
+      } else if (backdrop.url) {
+        // Fetch and convert to data URL
+        const response = await fetch(backdrop.url);
+        const blob = await response.blob();
+        backdropDataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        throw new Error('Invalid backdrop format');
+      }
+      
+      const { public_id: backdropPublicId } = await uploadToCloudinary(
+        backdropDataUrl,
+        'backdrop',
+        'user' // TODO: Get actual user ID
+      );
+      
+      console.log('Backdrop uploaded:', backdropPublicId);
+      setProgress(10);
       
       const processedFiles: ProcessedFile[] = [];
       
+      // Step 2: Process each subject
       for (let i = 0; i < processedSubjects.length; i++) {
         const subject = processedSubjects[i];
+        
+        console.log(`Uploading subject ${i + 1}/${processedSubjects.length}: ${subject.name}`);
+        
+        // Upload subject to Cloudinary
+        const { public_id: bagPublicId } = await uploadToCloudinary(
+          subject.backgroundRemovedData,
+          'bag',
+          'user' // TODO: Get actual user ID
+        );
+        
+        console.log(`Subject uploaded: ${bagPublicId}`);
         
         // Build render params using house preset
         const renderParams: RenderParams = {
           ...MARBLE_STUDIO_GLOSS_V1,
-          bag_public_id: `temp/${subject.name}`, // TODO: Upload to Cloudinary first
-          backdrop_public_id: 'temp/backdrop', // TODO: Upload to Cloudinary first
+          bag_public_id: bagPublicId,
+          backdrop_public_id: backdropPublicId,
         } as RenderParams;
         
         console.log(`Rendering ${subject.name} with Cloudinary...`);

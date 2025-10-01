@@ -121,16 +121,21 @@ export const uploadToCloudinary = async (
   type: 'bag' | 'backdrop',
   userId: string
 ): Promise<{ public_id: string; version: number; width: number; height: number }> => {
-  // For now, return a placeholder - will need a separate edge function for actual upload
-  console.warn('uploadToCloudinary not yet implemented - needs edge function');
+  console.log('Uploading to Cloudinary:', { type, userId });
   
-  // This would call an edge function that handles the signed upload to Cloudinary
-  // For the refactor, we'll implement this after the core rendering is working
-  
-  return {
-    public_id: `${userId}/${type}/${Date.now()}`,
-    version: 1,
-    width: 2048,
-    height: 2048,
-  };
+  const { data, error } = await supabase.functions.invoke('upload-to-cloudinary', {
+    body: {
+      image_data_url: imageDataUrl,
+      folder: `${userId}/${type}s`,
+      type,
+    },
+  });
+
+  if (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+
+  console.log('Upload complete:', data);
+  return data;
 };
