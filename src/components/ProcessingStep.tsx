@@ -55,7 +55,7 @@ export const ProcessingStep: React.FC<ProcessingStepProps> = ({
           </div>
 
           <div className="text-center text-sm text-muted-foreground">
-            Please wait while we process your images with AI...
+            Please wait while we process your images...
           </div>
         </CardContent>
       </Card>

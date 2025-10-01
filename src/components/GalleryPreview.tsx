@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import { Download, RotateCcw, Zap, Image as ImageIcon, ArrowLeft, ExternalLink, Edit3, Save, X, FolderPlus } from "lucide-react";
+import { Download, Image as ImageIcon, ArrowLeft, ExternalLink, Edit3, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +15,7 @@ interface ProcessedImage {
   name: string;
   originalData?: string; // base64
   processedData?: string; // base64  
-  finalizedData?: string; // V5 architecture
+  finalizedData?: string; // Cloudinary rendered
   size?: number;
   originalSize?: number;
   compressionRatio?: string;
@@ -44,10 +42,8 @@ export const GalleryPreview = ({
 }: GalleryPreviewProps) => {
   const [selectedView, setSelectedView] = useState<'grid' | 'comparison'>('grid');
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
-  const [isUpscaling, setIsUpscaling] = useState(false);
-  const [upscaledImages, setUpscaledImages] = useState<ProcessedImage[]>([]);
+  const [upscaledImages] = useState<ProcessedImage[]>([]);
   const [isEditingNames, setIsEditingNames] = useState(false);
-  const [temperature, setTemperature] = useState<number>(0.7);
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>(results);
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false);
   const { toast } = useToast();
@@ -61,167 +57,14 @@ export const GalleryPreview = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Use results from V5 architecture or upscaled images
+  // Display processed/enhanced images
   const displayImages = upscaledImages.length > 0 ? upscaledImages : processedImages;
 
-  const handleUpscaleAndCompress = async () => {
-    setIsUpscaling(true);
-    try {
-      // Prepare data for upscaling from V5 results
-      const upscaleData = results.map(img => ({
-        name: img.name,
-        data: (img.finalizedData || img.processedData || '').replace(/^data:image\/[a-z]+;base64,/, ''),
-        size: img.size || 0,
-        type: 'image/png'
-      }));
-
-      // Process images in batches to avoid timeouts
-      const BATCH_SIZE = 2;
-      const allUpscaledFiles: any[] = [];
-      
-      for (let i = 0; i < upscaleData.length; i += BATCH_SIZE) {
-        const batch = upscaleData.slice(i, i + BATCH_SIZE);
-        
-        const { data: upscaleResult, error: upscaleError } = await supabase.functions.invoke('upscale-images', {
-          body: { files: batch }
-        });
-
-        if (upscaleError) throw upscaleError;
-        
-        if (upscaleResult?.upscaledFiles) {
-          allUpscaledFiles.push(...upscaleResult.upscaledFiles);
-        }
-      }
-
-      // Compress the upscaled images
-      const allCompressedFiles: any[] = [];
-      
-      for (let i = 0; i < allUpscaledFiles.length; i += BATCH_SIZE) {
-        const batch = allUpscaledFiles.slice(i, i + BATCH_SIZE);
-        
-        const { data: compressResult, error: compressError } = await supabase.functions.invoke('compress-images', {
-          body: { files: batch }
-        });
-
-        if (compressError) throw compressError;
-        
-        if (compressResult?.compressedFiles) {
-          allCompressedFiles.push(...compressResult.compressedFiles);
-        }
-      }
-
-      // Update displayed images with upscaled versions
-      const enhanced = allCompressedFiles.map((file: any) => {
-        const originalImg = results.find(img => img.name === file.originalName);
-        const originalSize = originalImg?.size || 0;
-        
-        const scaleFactor = originalSize > 0 ? file.size / originalSize : 1;
-        const qualityPercentage = Math.min(Math.round(scaleFactor * 100), 200);
-        
-        return {
-          name: file.originalName,
-          originalData: originalImg?.originalData || '',
-          finalizedData: `data:image/png;base64,${file.data}`,
-          size: file.size,
-          originalSize: originalSize,
-          compressionRatio: `${Math.round((scaleFactor - 1) * 100)}% larger`,
-          qualityPercentage: qualityPercentage
-        };
-      });
-
-      setUpscaledImages(enhanced);
-      toast({
-        title: "Enhancement Complete",
-        description: "Images have been upscaled and compressed successfully!"
-      });
-    } catch (error) {
-      console.error('Upscale and compress error:', error);
-      toast({
-        title: "Enhancement Failed",
-        description: "Failed to upscale and compress images. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsUpscaling(false);
-    }
-  };
-
-  const handleRetryIndividual = async (imageIndex: number) => {
-    const image = displayImages[imageIndex];
-    if (!image.processedData && !image.finalizedData) return;
-
-    // Update retry status
-    const updatedImages = [...displayImages];
-    updatedImages[imageIndex] = { ...image, retryStatus: 'processing' };
-    if (upscaledImages.length > 0) {
-      setUpscaledImages(updatedImages);
-    } else {
-      setProcessedImages(updatedImages);
-    }
-
-    try {
-      const compositedImageData = image.finalizedData || image.processedData || '';
-      
-      const { data, error } = await supabase.functions.invoke('retry-single-image-enhancement', {
-        body: {
-          compositedImageData: compositedImageData.replace(/^data:image\/[a-z]+;base64,/, ''),
-          temperature: temperature,
-          imageName: image.name
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.success) {
-        // Update image with retry result - handle both enhanced and fallback cases
-        updatedImages[imageIndex] = {
-          ...image,
-          retryStatus: 'completed',
-          retryEnhancedData: data.enhancedImageData
-        };
-
-        if (data.fallback) {
-          toast({
-            title: "Enhancement Complete",
-            description: `${image.name} - AI enhancement returned to original quality (no changes needed)`
-          });
-        } else {
-          toast({
-            title: "Enhancement Complete",
-            description: `${image.name} has been enhanced with temperature ${temperature}`
-          });
-        }
-      } else {
-        throw new Error(data.error || 'Enhancement failed');
-      }
-    } catch (error) {
-      console.error('Retry enhancement error:', error);
-      updatedImages[imageIndex] = { ...image, retryStatus: 'error' };
-      
-      toast({
-        title: "Enhancement Failed",
-        description: `Failed to enhance ${image.name}. Please try again.`,
-        variant: "destructive"
-      });
-    }
-
-    // Update state
-    if (upscaledImages.length > 0) {
-      setUpscaledImages(updatedImages);
-    } else {
-      setProcessedImages(updatedImages);
-    }
-  };
 
   const handleFilenameChange = (index: number, newName: string) => {
-    const updatedImages = [...displayImages];
+    const updatedImages = [...processedImages];
     updatedImages[index] = { ...updatedImages[index], customFilename: newName };
-    
-    if (upscaledImages.length > 0) {
-      setUpscaledImages(updatedImages);
-    } else {
-      setProcessedImages(updatedImages);
-    }
+    setProcessedImages(updatedImages);
   };
 
   const getDisplayFilename = (image: ProcessedImage) => {
@@ -386,14 +229,6 @@ export const GalleryPreview = ({
               {isSavingToLibrary ? 'Saving...' : 'Save to Library'}
             </Button>
           )}
-          <Button 
-            onClick={handleUpscaleAndCompress} 
-            disabled={isUpscaling}
-            variant="default"
-          >
-            <Zap className="w-4 h-4 mr-2" />
-            {isUpscaling ? 'Enhancing...' : 'AI Enhance & Upscale'}
-          </Button>
           <Button onClick={downloadAllAsZip} variant="default">
             <Download className="w-4 h-4 mr-2" />
             Download All
@@ -401,25 +236,6 @@ export const GalleryPreview = ({
         </div>
       </div>
 
-      {/* AI Temperature Control */}
-      <Card className="p-4">
-        <div className="flex items-center gap-4">
-          <Label className="text-sm font-medium">AI Enhancement Temperature:</Label>
-          <div className="flex-1 max-w-xs">
-            <Slider
-              value={[temperature]}
-              onValueChange={(value) => setTemperature(value[0])}
-              min={0.01}
-              max={0.99}
-              step={0.05}
-              className="w-full"
-            />
-          </div>
-          <div className="text-sm text-muted-foreground min-w-[80px]">
-            {temperature.toFixed(2)} ({temperature <= 0.3 ? 'Conservative' : temperature <= 0.7 ? 'Balanced' : 'Creative'})
-          </div>
-        </div>
-      </Card>
 
       <Tabs value={selectedView} onValueChange={(value) => setSelectedView(value as 'grid' | 'comparison')}>
         <TabsList className="grid w-full grid-cols-2">
@@ -475,36 +291,24 @@ export const GalleryPreview = ({
                     )}
                   </div>
                   <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => downloadFile(
-                          getCurrentImageData(image) || '',
-                          getDisplayFilename(image)
-                        )}
-                        className="flex-1"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedImage(selectedImage === index ? null : index)}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </Button>
-                    </div>
                     <Button
                       size="sm"
-                      variant="secondary"
-                      onClick={() => handleRetryIndividual(index)}
-                      disabled={image.retryStatus === 'processing'}
+                      variant="outline"
+                      onClick={() => downloadFile(
+                        getCurrentImageData(image) || '',
+                        getDisplayFilename(image)
+                      )}
                       className="w-full"
                     >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      {image.retryStatus === 'processing' ? 'Enhancing...' : 'Retry Enhancement'}
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedImage(selectedImage === index ? null : index)}
+                    >
+                      <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
                 </CardContent>
@@ -562,15 +366,6 @@ export const GalleryPreview = ({
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Download
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleRetryIndividual(index)}
-                    disabled={image.retryStatus === 'processing'}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    {image.retryStatus === 'processing' ? 'Enhancing...' : 'Retry Enhancement'}
                   </Button>
                 </div>
               </CardContent>

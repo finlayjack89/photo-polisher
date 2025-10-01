@@ -28,7 +28,7 @@ export const ProcessingQueue = () => {
     try {
       setIsLoading(true);
 
-      // V5 Architecture - Get cache statistics instead of job queue
+      // Cloudinary Architecture - Get cache statistics
       const { data: cacheData } = await supabase
         .from('processing_cache')
         .select('hit_count, created_at, last_accessed');
@@ -39,7 +39,7 @@ export const ProcessingQueue = () => {
       setStats({
         totalProcessed: cacheEntries,
         cacheHits: totalCacheHits,
-        averageProcessingTime: 2.5, // V5 average processing time per image
+        averageProcessingTime: 2.5, // Cloudinary average processing time per image
         systemStatus: 'optimal'
       });
 
@@ -86,7 +86,7 @@ export const ProcessingQueue = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Processing System</h1>
-          <p className="text-muted-foreground">V5 Real-Time Image Processing Status</p>
+          <p className="text-muted-foreground">Cloudinary Real-Time Image Processing Status</p>
         </div>
         <Button 
           onClick={fetchProcessingStats} 
@@ -111,7 +111,7 @@ export const ProcessingQueue = () => {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              V5 real-time processing system
+              Cloudinary real-time processing
             </p>
           </CardContent>
         </Card>
@@ -158,21 +158,21 @@ export const ProcessingQueue = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <div className="p-4 rounded-lg bg-muted">
-              <h4 className="font-medium mb-2">V5 Architecture Benefits</h4>
+              <h4 className="font-medium mb-2">Cloudinary Architecture Benefits</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Real-time image processing</li>
-                <li>• No queue management needed</li>
+                <li>• Server-side compositing</li>
+                <li>• Real-time processing</li>
                 <li>• Optimized cache system</li>
-                <li>• Sequential multi-step processing</li>
+                <li>• Professional shadows & reflections</li>
               </ul>
             </div>
             
             <div className="p-4 rounded-lg bg-muted">
               <h4 className="font-medium mb-2">Processing Pipeline</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Background removal (AI)</li>
-                <li>• Backdrop compositing</li>
-                <li>• AI enhancement</li>
+                <li>• Background removal</li>
+                <li>• Image rotation</li>
+                <li>• Cloudinary compositing</li>
                 <li>• Final optimization</li>
               </ul>
             </div>

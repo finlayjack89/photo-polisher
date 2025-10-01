@@ -27,7 +27,7 @@ export const AdminDashboard = () => {
     try {
       setIsLoading(true);
 
-      // V5 Architecture - No processing_jobs table, simplified metrics
+      // Cloudinary Architecture - Simplified metrics
       const { data: cacheData } = await supabase
         .from('processing_cache')
         .select('hit_count');
@@ -45,9 +45,9 @@ export const AdminDashboard = () => {
 
       setStats({
         totalUsers,
-        activeProcessing: 0, // V5 processes in real-time, no queue
+        activeProcessing: 0, // Cloudinary processes in real-time, no queue
         cacheHitRate: Math.round(cacheHitRate * 100),
-        systemHealth: 'healthy' // Simplified for V5 architecture
+        systemHealth: 'healthy' // Simplified for Cloudinary architecture
       });
 
     } catch (error) {
@@ -84,7 +84,7 @@ export const AdminDashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-          <p className="text-muted-foreground">V5 Single-Image Processing Architecture</p>
+          <p className="text-muted-foreground">Cloudinary Integration Architecture</p>
         </div>
         <Button 
           onClick={fetchStats} 
@@ -118,7 +118,7 @@ export const AdminDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeProcessing}</div>
             <p className="text-xs text-muted-foreground">
-              Real-time processing (V5)
+              Cloudinary real-time processing
             </p>
           </CardContent>
         </Card>
@@ -157,19 +157,19 @@ export const AdminDashboard = () => {
         <CardContent>
           <div className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">V5 Architecture Status</h3>
+              <h3 className="font-semibold mb-2">Cloudinary Architecture Status</h3>
               <p className="text-muted-foreground text-sm">
-                The system is running on V5 single-image processing architecture with real-time processing capabilities.
+                The system uses Cloudinary for server-side image compositing with real-time processing capabilities.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg bg-muted">
                 <h4 className="font-medium">Processing Model</h4>
-                <p className="text-sm text-muted-foreground">Real-time single-image processing</p>
+                <p className="text-sm text-muted-foreground">Cloudinary server-side rendering</p>
               </div>
               <div className="p-4 rounded-lg bg-muted">
-                <h4 className="font-medium">AI Model</h4>
-                <p className="text-sm text-muted-foreground">Gemini 2.5 Flash Image Preview</p>
+                <h4 className="font-medium">Rendering Engine</h4>
+                <p className="text-sm text-muted-foreground">Cloudinary Transformation API</p>
               </div>
               <div className="p-4 rounded-lg bg-muted">
                 <h4 className="font-medium">Cache System</h4>

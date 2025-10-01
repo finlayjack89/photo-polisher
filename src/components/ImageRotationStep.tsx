@@ -122,7 +122,7 @@ export const ImageRotationStep: React.FC<ImageRotationStepProps> = ({
             <h1 className="text-3xl font-bold">Adjust Image Orientation</h1>
           </div>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Rotate your images if needed. These changes will be permanent and carry through AI enhancement.
+            Rotate your images if needed. These adjustments will be applied to the final composited images.
           </p>
         </div>
 
