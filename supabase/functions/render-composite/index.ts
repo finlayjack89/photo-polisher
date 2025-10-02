@@ -223,58 +223,6 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
   bagOverlay.push('fl_layer_apply');
   transformations.push(bagOverlay.join(','));
 
-  // Add shadows and reflection BELOW the baseline only (clipped to floor)
-  
-  // Add contact shadow (dense perimeter under the bag)
-  if (shadow.contact.opacity > 0) {
-    const contactShadow = [
-      `l_${bag_public_id.replace(/\//g, ':')}`,
-      'e_colorize:100,co_rgb:000000',
-      `o_${Math.round(shadow.contact.opacity * 100)}`,
-      `e_blur:${shadow.contact.radius_px * 10}`,
-      `w_${bagScaledWidth}`,
-      `g_north_west`,
-      `x_${bagCenterX}`,
-      `y_${bagCenterY + shadow.contact.offset_y_px}`,
-      'fl_layer_apply',
-    ];
-    transformations.push(contactShadow.join(','));
-  }
-
-  // Add ground shadow (elongated) only below baseline
-  if (shadow.ground.opacity > 0) {
-    const groundShadow = [
-      `l_${bag_public_id.replace(/\//g, ':')}`,
-      'e_colorize:100,co_rgb:000000',
-      `o_${Math.round(shadow.ground.opacity * 100)}`,
-      `e_blur:${shadow.ground.radius_px * 10}`,
-      `w_${bagScaledWidth}`,
-      `h_${Math.round(bagScaledWidth * shadow.ground.elongation_y * 0.5)}`,
-      `g_north_west`,
-      `x_${bagCenterX}`,
-      `y_${Math.max(placement.y_baseline_px, bagCenterY)}`, // Don't draw above baseline
-      'fl_layer_apply',
-    ];
-    transformations.push(groundShadow.join(','));
-  }
-
-  // Add reflection only below baseline
-  if (reflection.enabled && reflection.opacity > 0 && bagCenterY < placement.y_baseline_px) {
-    const reflectionOverlay = [
-      `l_${bag_public_id.replace(/\//g, ':')}`,
-      'a_vflip', // Vertical flip
-      `o_${Math.round(reflection.opacity * 100)}`,
-      `e_blur:${reflection.blur_px * 10}`,
-      `e_gradient_fade:${reflection.fade_pct}`,
-      `w_${bagScaledWidth}`,
-      `g_north_west`,
-      `x_${bagCenterX}`,
-      `y_${Math.max(placement.y_baseline_px, bagCenterY + reflection.offset_y_px)}`, // Clip to floor
-      'fl_layer_apply',
-    ];
-    transformations.push(reflectionOverlay.join(','));
-  }
-
   return transformations.join('/');
 }
 
