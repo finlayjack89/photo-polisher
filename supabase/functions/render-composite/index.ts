@@ -138,17 +138,12 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
   const { canvas, placement, shadow, reflection, backdrop_fx, bag_public_id } = params;
   const transformations: string[] = [];
 
-  // Base canvas setup - fit backdrop with gravity south (anchor bottom)
-  transformations.push(`w_${canvas.w},h_${canvas.h},c_fit,g_south,f_${canvas.format}`);
+  // Base canvas setup - fill and crop to exact dimensions
+  transformations.push(`w_${canvas.w},h_${canvas.h},c_fill,g_south,f_${canvas.format}`);
 
-  // Apply backdrop blur ONLY to wall area (above baseline)
+  // Apply backdrop blur if specified
   if (backdrop_fx.wall_blur_px > 0) {
-    const wallHeight = canvas.h - placement.y_baseline_px;
-    if (wallHeight > 0) {
-      transformations.push(
-        `c_crop,h_${wallHeight},g_north/e_blur:${backdrop_fx.wall_blur_px * 100}/fl_layer_apply,g_north`
-      );
-    }
+    transformations.push(`e_blur:${backdrop_fx.wall_blur_px * 100}`);
   }
 
   // Calculate bag pixel position from normalized coordinates
@@ -158,21 +153,74 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
   // Calculate bag dimensions based on scale
   const bagScaledWidth = Math.round(canvas.w * placement.scale);
   
-  // Overlay the bag (subject) at user's exact position
+  // Add contact shadow first (below bag)
+  if (shadow.contact.opacity > 0) {
+    const contactShadow = [
+      `l_${bag_public_id.replace(/\//g, ':')}`,
+      'e_colorize:100,co_rgb:000000',
+      `o_${Math.round(shadow.contact.opacity * 100)}`,
+      `e_blur:${shadow.contact.radius_px * 10}`,
+      placement.mode === 'fit_entire_subject' ? 'c_fit' : 'c_scale',
+      `w_${bagScaledWidth}`,
+      `g_center`,
+      `x_${bagCenterX - canvas.w / 2}`,
+      `y_${bagCenterY - canvas.h / 2 + shadow.contact.offset_y_px}`,
+      'fl_layer_apply',
+    ];
+    transformations.push(contactShadow.join(','));
+  }
+
+  // Add ground shadow (elongated)
+  if (shadow.ground.opacity > 0) {
+    const groundShadow = [
+      `l_${bag_public_id.replace(/\//g, ':')}`,
+      'e_colorize:100,co_rgb:000000',
+      `o_${Math.round(shadow.ground.opacity * 100)}`,
+      `e_blur:${shadow.ground.radius_px * 10}`,
+      placement.mode === 'fit_entire_subject' ? 'c_fit' : 'c_scale',
+      `w_${bagScaledWidth}`,
+      `h_${Math.round(bagScaledWidth * shadow.ground.elongation_y * 0.5)}`,
+      `g_center`,
+      `x_${bagCenterX - canvas.w / 2}`,
+      `y_${Math.max(placement.y_baseline_px - canvas.h / 2, bagCenterY - canvas.h / 2 + 20)}`,
+      'fl_layer_apply',
+    ];
+    transformations.push(groundShadow.join(','));
+  }
+
+  // Add reflection below baseline
+  if (reflection.enabled && reflection.opacity > 0) {
+    const reflectionOverlay = [
+      `l_${bag_public_id.replace(/\//g, ':')}`,
+      'a_vflip',
+      `o_${Math.round(reflection.opacity * 100)}`,
+      `e_blur:${reflection.blur_px * 10}`,
+      `e_gradient_fade:${reflection.fade_pct}`,
+      placement.mode === 'fit_entire_subject' ? 'c_fit' : 'c_scale',
+      `w_${bagScaledWidth}`,
+      `g_center`,
+      `x_${bagCenterX - canvas.w / 2}`,
+      `y_${Math.max(placement.y_baseline_px - canvas.h / 2 + reflection.offset_y_px, bagCenterY - canvas.h / 2 + 40)}`,
+      'fl_layer_apply',
+    ];
+    transformations.push(reflectionOverlay.join(','));
+  }
+  
+  // Overlay the bag (subject) LAST at user's exact position
   const bagOverlay = [
     `l_${bag_public_id.replace(/\//g, ':')}`,
-    'fl_layer_apply',
     placement.mode === 'fit_entire_subject' ? 'c_fit' : 'c_scale',
     `w_${bagScaledWidth}`,
-    `g_north_west`, // Position from top-left
-    `x_${bagCenterX}`,
-    `y_${bagCenterY}`,
+    `g_center`,
+    `x_${bagCenterX - canvas.w / 2}`,
+    `y_${bagCenterY - canvas.h / 2}`,
   ];
 
   if (placement.rotation_deg !== 0) {
     bagOverlay.push(`a_${placement.rotation_deg}`);
   }
-
+  
+  bagOverlay.push('fl_layer_apply');
   transformations.push(bagOverlay.join(','));
 
   // Add shadows and reflection BELOW the baseline only (clipped to floor)
