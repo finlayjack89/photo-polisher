@@ -84,6 +84,140 @@ export const applyMaskToImage = (originalImageDataUrl: string, maskImageDataUrl:
 };
 
 /**
+ * Find the lowest alpha pixel in a subject image to determine ground contact point
+ */
+export const findLowestAlphaPixel = (imageDataUrl: string): Promise<number> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return reject('Could not get canvas context');
+
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Scan from bottom to top to find the lowest non-transparent pixel
+      for (let y = canvas.height - 1; y >= 0; y--) {
+        for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4;
+          const alpha = data[i + 3];
+          if (alpha > 50) { // Consider pixels with >50 alpha as solid
+            resolve(y); // Return Y coordinate of lowest solid pixel
+            return;
+          }
+        }
+      }
+      resolve(canvas.height); // Fallback if no solid pixels found
+    };
+    img.onerror = reject;
+    img.src = imageDataUrl;
+  });
+};
+
+/**
+ * Step 5: Client-Side Compositing with Baseline Anchoring
+ * Clips AI effects below the floor baseline and enforces correct layer order
+ */
+export const compositeLayers = (
+  backdropDataUrl: string,
+  subjectDataUrl: string,
+  shadowLayerDataUrl: string | null,
+  placement: { x: number; y: number; scale: number },
+  baseline: number, // Y coordinate of floor in canvas pixels
+  options?: {
+    shadowOpacity?: number; // 0-1, default 1
+    debugBaseline?: boolean; // Draw red line at baseline for debugging
+  }
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const backdrop = new Image();
+    const subject = new Image();
+    const shadowLayer = shadowLayerDataUrl ? new Image() : null;
+    let loadedCount = 0;
+    const totalToLoad = shadowLayer ? 3 : 2;
+
+    const onImageLoad = () => {
+      loadedCount++;
+      if (loadedCount === totalToLoad) {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = backdrop.naturalWidth;
+          canvas.height = backdrop.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) return reject('Could not get canvas context');
+
+          // 1. Draw backdrop
+          ctx.drawImage(backdrop, 0, 0);
+
+          // 2. Draw AI shadow/reflection layer CLIPPED TO FLOOR
+          if (shadowLayer) {
+            ctx.save();
+            
+            // Clip to floor area (below baseline)
+            ctx.beginPath();
+            ctx.rect(0, baseline, canvas.width, canvas.height - baseline);
+            ctx.clip();
+
+            // Apply opacity if specified
+            if (options?.shadowOpacity !== undefined && options.shadowOpacity < 1) {
+              ctx.globalAlpha = options.shadowOpacity;
+            }
+
+            ctx.drawImage(shadowLayer, 0, 0, canvas.width, canvas.height);
+            
+            ctx.restore();
+          }
+
+          // 3. Draw subject LAST (on top of everything)
+          const scaledWidth = subject.naturalWidth * placement.scale;
+          const scaledHeight = subject.naturalHeight * placement.scale;
+          const dx = placement.x * canvas.width;
+          const dy = placement.y * canvas.height;
+          
+          ctx.drawImage(subject, dx, dy, scaledWidth, scaledHeight);
+
+          // 4. Debug overlay (optional)
+          if (options?.debugBaseline) {
+            // Red line at baseline
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, baseline);
+            ctx.lineTo(canvas.width, baseline);
+            ctx.stroke();
+
+            // Translucent band below baseline
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+            ctx.fillRect(0, baseline, canvas.width, Math.min(16, canvas.height - baseline));
+          }
+
+          resolve(canvas.toDataURL('image/png'));
+        } catch (error) {
+          reject(error);
+        }
+      }
+    };
+
+    backdrop.onload = onImageLoad;
+    subject.onload = onImageLoad;
+    if (shadowLayer) shadowLayer.onload = onImageLoad;
+    
+    backdrop.onerror = reject;
+    subject.onerror = reject;
+    if (shadowLayer) shadowLayer.onerror = reject;
+    
+    backdrop.src = backdropDataUrl;
+    subject.src = subjectDataUrl;
+    if (shadowLayer) shadowLayer.src = shadowLayerDataUrl!;
+  });
+};
+
+/**
  * Utility to get image dimensions from data URL
  */
 export const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {

@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           dimensions: Json | null
           file_size: number | null
+          floor_y_px: number | null
           id: string
           name: string
           storage_path: string
@@ -29,6 +30,7 @@ export type Database = {
           created_at?: string
           dimensions?: Json | null
           file_size?: number | null
+          floor_y_px?: number | null
           id?: string
           name: string
           storage_path: string
@@ -39,6 +41,7 @@ export type Database = {
           created_at?: string
           dimensions?: Json | null
           file_size?: number | null
+          floor_y_px?: number | null
           id?: string
           name?: string
           storage_path?: string

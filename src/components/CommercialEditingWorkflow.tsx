@@ -34,6 +34,7 @@ interface ProcessedImages {
     scale: number;
   };
   addBlur?: boolean;
+  floorBaseline?: number; // Floor Y coordinate in pixels
   finalResults?: Array<{ name: string; finalizedData: string; }>;
 }
 
@@ -156,11 +157,13 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     placement: { x: number; y: number; scale: number }, 
     addBlur: boolean, 
     rotatedSubjects?: string[],
-    backdropCloudinaryId?: string
+    backdropCloudinaryId?: string,
+    floorBaseline?: number
   ) => {
     console.log('🎯 Positioning completed - preparing for Cloudinary rendering');
     console.log('📊 Backdrop Cloudinary ID:', backdropCloudinaryId);
     console.log('📐 Placement:', placement);
+    console.log('🏢 Floor Baseline (px):', floorBaseline);
     
     // Update processed subjects with rotated data
     if (rotatedSubjects && rotatedSubjects.length > 0) {
@@ -178,7 +181,8 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       backdrop, 
       backdropCloudinaryId,
       placement, 
-      addBlur
+      addBlur,
+      floorBaseline
     }));
     
     setCurrentStep('cloudinary-rendering');
@@ -233,7 +237,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           console.log('✅ Subject uploaded:', subjectUpload.public_id);
 
           // Calculate placement parameters for Cloudinary
-          const y_baseline_px = Math.round(processedImages.placement.y * 2048);
+          const y_baseline_px = processedImages.floorBaseline || Math.round(processedImages.placement.y * 2048);
           
           // Render composite using Cloudinary
           console.log('🎨 Rendering composite with Cloudinary...');

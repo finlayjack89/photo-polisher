@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary-render";
 import { supabase } from "@/integrations/supabase/client";
-import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
+import { processAndCompressImage, getImageDimensions as getImageDimensionsFromFile } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 import { BackdropLibrary } from "@/components/BackdropLibrary";
 import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-rotation-utils";
+import { findLowestAlphaPixel, getImageDimensions } from "@/lib/canvas-utils";
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects
@@ -21,7 +22,8 @@ interface BackdropPositioningProps {
     placement: { x: number; y: number; scale: number }, 
     addBlur: boolean, 
     rotatedSubjects?: string[],
-    backdropCloudinaryId?: string
+    backdropCloudinaryId?: string,
+    floorBaseline?: number // Y coordinate in pixels of the floor line
   ) => void;
   onBack: () => void;
 }
@@ -49,6 +51,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
   const [isRotating, setIsRotating] = useState(false);
+  const [floorBaseline, setFloorBaseline] = useState<number>(0.7); // Default floor at 70% down the backdrop
+  const [baselineNudge, setBaselineNudge] = useState<number>(0); // -40 to +40 px adjustment
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +149,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       
       try {
         // Get image dimensions
-        const dimensions = await getImageDimensions(file);
+        const dimensions = await getImageDimensionsFromFile(file);
         const fileSize = file.size;
         
         // Check if optimization is needed (>5MB or >2048px in any dimension)
@@ -341,10 +345,17 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const backdropUpload = await uploadToCloudinary(backdrop, 'backdrop', userId);
       
       console.log('✅ Backdrop uploaded:', backdropUpload.public_id);
+      
+      // Calculate floor baseline in pixels (from backdrop dimensions)
+      const backdropDims = await getImageDimensions(backdrop);
+      const floorBaselinePx = Math.round((floorBaseline * backdropDims.height) + baselineNudge);
+      
       console.log('🎯 Final placement values:', {
         x: placement.x,
         y: placement.y,
-        scale: placement.scale
+        scale: placement.scale,
+        floorBaseline: floorBaselinePx,
+        backdropHeight: backdropDims.height
       });
 
       toast({
@@ -352,8 +363,15 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         description: "Ready to render images"
       });
 
-      // Pass backdrop data URL, placement, and Cloudinary ID to parent
-      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects, backdropUpload.public_id);
+      // Pass backdrop data URL, placement, Cloudinary ID, and floor baseline to parent
+      onPositioningComplete(
+        backdrop, 
+        placement, 
+        addBlur, 
+        rotatedSubjects, 
+        backdropUpload.public_id,
+        floorBaselinePx
+      );
     } catch (error) {
       console.error('Failed to upload backdrop:', error);
       toast({
@@ -611,10 +629,40 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                     </div>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label>Floor Baseline (Y Position)</Label>
+                    <Slider
+                      value={[floorBaseline]}
+                      onValueChange={(value) => setFloorBaseline(value[0])}
+                      max={1.0}
+                      min={0.0}
+                      step={0.01}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-muted-foreground text-center">
+                      Floor at {Math.round(floorBaseline * 100)}% down backdrop
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Baseline Nudge (Fine Adjustment)</Label>
+                    <Slider
+                      value={[baselineNudge]}
+                      onValueChange={(value) => setBaselineNudge(value[0])}
+                      max={40}
+                      min={-40}
+                      step={1}
+                      className="w-full"
+                    />
+                    <div className="text-xs text-muted-foreground text-center">
+                      {baselineNudge > 0 ? '+' : ''}{baselineNudge}px adjustment
+                    </div>
+                  </div>
+
                   <div className="bg-muted/50 p-3 rounded-lg">
                     <p className="text-sm font-medium mb-1">Positioning Instructions:</p>
                     <p className="text-xs text-muted-foreground">
-                      Click and drag on the preview to position your product. Use the size slider to adjust scale.
+                      Click and drag on the preview to position your product. Use the size slider to adjust scale. Floor baseline controls where shadows/reflections are anchored.
                     </p>
                   </div>
                 </div>

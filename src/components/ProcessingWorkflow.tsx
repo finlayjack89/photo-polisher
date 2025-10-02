@@ -20,6 +20,7 @@ interface ProcessingWorkflowProps {
   backdrop?: any;
   files: File[];
   onComplete: (processedFiles: ProcessedFile[]) => void;
+  floorBaseline?: number; // Y coordinate in pixels of floor line
 }
 
 interface ProcessedFile {
@@ -43,7 +44,7 @@ const processingSteps = [
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
-export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onComplete }: ProcessingWorkflowProps) => {
+export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onComplete, floorBaseline }: ProcessingWorkflowProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [completedFiles, setCompletedFiles] = useState(0);
