@@ -8,6 +8,7 @@ import { ImageRotationStep } from './ImageRotationStep';
 import { uploadToCloudinary, renderComposite, MARBLE_STUDIO_GLOSS_V1 } from '@/lib/cloudinary-render';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { compressImageForCloudinary } from "@/lib/image-compression-utils";
 
 interface CommercialEditingWorkflowProps {
   files: (File & { isPreCut?: boolean })[];
@@ -222,10 +223,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
         console.log(`Rendering image ${i + 1}/${totalImages}: ${subject.name}`);
 
         try {
-          // Upload subject to Cloudinary
+          // Compress and upload subject to Cloudinary
           console.log('📤 Uploading subject to Cloudinary...');
+          const compressedSubject = await compressImageForCloudinary(subjectData, 8);
           const subjectUpload = await uploadToCloudinary(
-            subjectData,
+            compressedSubject,
             'bag',
             userId
           );

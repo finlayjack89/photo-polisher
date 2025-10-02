@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary-render";
 import { supabase } from "@/integrations/supabase/client";
+import { compressImageForCloudinary } from "@/lib/image-compression-utils";
 import { processAndCompressImage, getImageDimensions } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
 import { BackdropLibrary } from "@/components/BackdropLibrary";
@@ -335,10 +336,11 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || 'anonymous';
 
-      console.log('📤 Uploading backdrop to Cloudinary...');
+      console.log('📤 Compressing and uploading backdrop to Cloudinary...');
       
-      // Upload backdrop to Cloudinary
-      const backdropUpload = await uploadToCloudinary(backdrop, 'backdrop', userId);
+      // Compress and upload backdrop to Cloudinary
+      const compressedBackdrop = await compressImageForCloudinary(backdrop, 8);
+      const backdropUpload = await uploadToCloudinary(compressedBackdrop, 'backdrop', userId);
       
       console.log('✅ Backdrop uploaded:', backdropUpload.public_id);
       console.log('🎯 Final placement values:', {
