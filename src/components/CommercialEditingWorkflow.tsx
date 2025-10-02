@@ -246,8 +246,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
             backdrop_public_id: processedImages.backdropCloudinaryId,
             canvas: MARBLE_STUDIO_GLOSS_V1.canvas!,
             placement: {
-              ...MARBLE_STUDIO_GLOSS_V1.placement!,
+              mode: MARBLE_STUDIO_GLOSS_V1.placement!.mode,
+              x: processedImages.placement.x, // Use actual user placement
+              y: processedImages.placement.y, // Use actual user placement
               y_baseline_px,
+              rotation_deg: MARBLE_STUDIO_GLOSS_V1.placement!.rotation_deg,
               scale: processedImages.placement.scale
             },
             shadow: MARBLE_STUDIO_GLOSS_V1.shadow!,

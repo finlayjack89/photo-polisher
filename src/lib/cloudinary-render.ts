@@ -15,10 +15,11 @@ export interface RenderParams {
   };
   placement: {
     mode: string;
-    x: string;
-    y_baseline_px: number;
+    x: number; // Normalized 0-1 position
+    y: number; // Normalized 0-1 position
+    y_baseline_px: number; // Floor baseline for effects clipping
     rotation_deg: number;
-    scale?: number;
+    scale: number;
   };
   shadow: {
     contact: {
@@ -60,9 +61,11 @@ export const MARBLE_STUDIO_GLOSS_V1: Partial<RenderParams> = {
   },
   placement: {
     mode: "fit_entire_subject",
-    x: "center",
+    x: 0.5, // Center
+    y: 0.7, // 70% down from top
     y_baseline_px: 1660,
     rotation_deg: 0,
+    scale: 0.5,
   },
   shadow: {
     contact: {

@@ -21,9 +21,11 @@ interface RenderRequest {
   };
   placement: {
     mode: string;
-    x: string;
-    y_baseline_px: number;
+    x: number; // Normalized 0-1 position
+    y: number; // Normalized 0-1 position
+    y_baseline_px: number; // Floor baseline for effects clipping
     rotation_deg: number;
+    scale: number;
   };
   shadow: {
     contact: {
@@ -136,25 +138,35 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
   const { canvas, placement, shadow, reflection, backdrop_fx, bag_public_id } = params;
   const transformations: string[] = [];
 
-  // Base canvas setup
-  transformations.push(`w_${canvas.w},h_${canvas.h},c_fill,f_${canvas.format}`);
+  // Base canvas setup - fit backdrop with gravity south (anchor bottom)
+  transformations.push(`w_${canvas.w},h_${canvas.h},c_fit,g_south,f_${canvas.format}`);
 
-  // Apply backdrop blur if specified
+  // Apply backdrop blur ONLY to wall area (above baseline)
   if (backdrop_fx.wall_blur_px > 0) {
-    transformations.push(`e_blur:${backdrop_fx.wall_blur_px * 100}`);
+    const wallHeight = canvas.h - placement.y_baseline_px;
+    if (wallHeight > 0) {
+      transformations.push(
+        `c_crop,h_${wallHeight},g_north/e_blur:${backdrop_fx.wall_blur_px * 100}/fl_layer_apply,g_north`
+      );
+    }
   }
 
-  // Calculate bag placement
-  const yPosition = Math.round((placement.y_baseline_px / canvas.h) * 100);
+  // Calculate bag pixel position from normalized coordinates
+  const bagCenterX = Math.round(placement.x * canvas.w);
+  const bagCenterY = Math.round(placement.y * canvas.h);
   
-  // Overlay the bag (subject) - preserved, no alterations
+  // Calculate bag dimensions based on scale
+  const bagScaledWidth = Math.round(canvas.w * placement.scale);
+  
+  // Overlay the bag (subject) at user's exact position
   const bagOverlay = [
     `l_${bag_public_id.replace(/\//g, ':')}`,
     'fl_layer_apply',
     placement.mode === 'fit_entire_subject' ? 'c_fit' : 'c_scale',
-    `w_${Math.round(canvas.w * 0.8)}`, // Auto-fit to 80% of canvas width
-    `g_south`,
-    `y_${canvas.h - placement.y_baseline_px}`,
+    `w_${bagScaledWidth}`,
+    `g_north_west`, // Position from top-left
+    `x_${bagCenterX}`,
+    `y_${bagCenterY}`,
   ];
 
   if (placement.rotation_deg !== 0) {
@@ -163,42 +175,53 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
 
   transformations.push(bagOverlay.join(','));
 
-  // Add contact shadow (dense perimeter)
+  // Add shadows and reflection BELOW the baseline only (clipped to floor)
+  
+  // Add contact shadow (dense perimeter under the bag)
   if (shadow.contact.opacity > 0) {
     const contactShadow = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
       'e_colorize:100,co_rgb:000000',
       `o_${Math.round(shadow.contact.opacity * 100)}`,
       `e_blur:${shadow.contact.radius_px * 10}`,
-      `y_${canvas.h - placement.y_baseline_px + shadow.contact.offset_y_px}`,
+      `w_${bagScaledWidth}`,
+      `g_north_west`,
+      `x_${bagCenterX}`,
+      `y_${bagCenterY + shadow.contact.offset_y_px}`,
       'fl_layer_apply',
     ];
     transformations.push(contactShadow.join(','));
   }
 
-  // Add ground shadow (elongated)
+  // Add ground shadow (elongated) only below baseline
   if (shadow.ground.opacity > 0) {
     const groundShadow = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
       'e_colorize:100,co_rgb:000000',
       `o_${Math.round(shadow.ground.opacity * 100)}`,
       `e_blur:${shadow.ground.radius_px * 10}`,
-      `h_${Math.round(canvas.h * shadow.ground.elongation_y * 0.3)}`,
-      `y_${canvas.h - placement.y_baseline_px}`,
+      `w_${bagScaledWidth}`,
+      `h_${Math.round(bagScaledWidth * shadow.ground.elongation_y * 0.5)}`,
+      `g_north_west`,
+      `x_${bagCenterX}`,
+      `y_${Math.max(placement.y_baseline_px, bagCenterY)}`, // Don't draw above baseline
       'fl_layer_apply',
     ];
     transformations.push(groundShadow.join(','));
   }
 
-  // Add reflection
-  if (reflection.enabled && reflection.opacity > 0) {
+  // Add reflection only below baseline
+  if (reflection.enabled && reflection.opacity > 0 && bagCenterY < placement.y_baseline_px) {
     const reflectionOverlay = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
       'a_vflip', // Vertical flip
       `o_${Math.round(reflection.opacity * 100)}`,
       `e_blur:${reflection.blur_px * 10}`,
       `e_gradient_fade:${reflection.fade_pct}`,
-      `y_${canvas.h - placement.y_baseline_px - reflection.offset_y_px}`,
+      `w_${bagScaledWidth}`,
+      `g_north_west`,
+      `x_${bagCenterX}`,
+      `y_${Math.max(placement.y_baseline_px, bagCenterY + reflection.offset_y_px)}`, // Clip to floor
       'fl_layer_apply',
     ];
     transformations.push(reflectionOverlay.join(','));
