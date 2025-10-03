@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library } from "lucide-react";
-import { uploadToCloudinary } from "@/lib/cloudinary-render";
+import { Upload, Move, RotateCw, RotateCcw, ArrowRight, AlertCircle, Zap, Library, Loader2 } from "lucide-react";
+import { uploadToCloudinary, renderComposite, MARBLE_STUDIO_GLOSS_V1 } from "@/lib/cloudinary-render";
 import { supabase } from "@/integrations/supabase/client";
 import { processAndCompressImage, getImageDimensions as getImageDimensionsFromFile } from "@/lib/image-resize-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -47,17 +47,22 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   const [placement, setPlacement] = useState<{ x: number; y: number; scale: number }>({
     x: 0.5, // center
     y: 0.7, // slightly below center (typical product placement)
-    scale: 0.8 // 80% of backdrop width
+    scale: 0.5 // 50% of canvas width
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
   const [isRotating, setIsRotating] = useState(false);
   const [floorBaseline, setFloorBaseline] = useState<number>(0.7); // Default floor at 70% down the backdrop
   const [baselineNudge, setBaselineNudge] = useState<number>(0); // -40 to +40 px adjustment
   
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Cloudinary preview state
+  const [backdropCloudinaryId, setBackdropCloudinaryId] = useState<string>("");
+  const [subjectCloudinaryId, setSubjectCloudinaryId] = useState<string>("");
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  
+  const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   const firstSubject = rotatedSubjects[0]; // Use first rotated image for positioning
@@ -86,9 +91,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       
       // Load the optimized image
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         if (e.target?.result) {
-          setBackdrop(e.target.result as string);
+          const backdropData = e.target.result as string;
+          setBackdrop(backdropData);
           setShowOptimization(false);
           
           const sizeBefore = (backdropAnalysis.fileSize / 1024 / 1024).toFixed(1);
@@ -98,6 +104,9 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             title: "Backdrop Optimized",
             description: `Size reduced from ${sizeBefore}MB to ${sizeAfter}MB`,
           });
+          
+          // Upload to Cloudinary immediately
+          await uploadBackdropToCloudinary(backdropData);
         }
       };
       reader.readAsDataURL(optimizedFile);
@@ -127,20 +136,132 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     
     // Use original file without optimization
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       if (e.target?.result) {
-        setBackdrop(e.target.result as string);
+        const backdropData = e.target.result as string;
+        setBackdrop(backdropData);
         setShowOptimization(false);
+        
+        // Upload to Cloudinary immediately
+        await uploadBackdropToCloudinary(backdropData);
       }
     };
     reader.readAsDataURL(backdropFile);
   };
-
-  useEffect(() => {
-    if (backdrop && firstSubject && canvasRef.current) {
-      drawPreview();
+  
+  const uploadBackdropToCloudinary = async (backdropData: string) => {
+    try {
+      setIsOptimizing(true);
+      toast({
+        title: "Uploading backdrop",
+        description: "Preparing live preview..."
+      });
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'anonymous';
+      
+      const backdropUpload = await uploadToCloudinary(backdropData, 'backdrop', userId);
+      setBackdropCloudinaryId(backdropUpload.public_id);
+      
+      toast({
+        title: "Backdrop ready",
+        description: "Loading live preview..."
+      });
+    } catch (error) {
+      console.error('Failed to upload backdrop:', error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload backdrop",
+        variant: "destructive"
+      });
+    } finally {
+      setIsOptimizing(false);
     }
-  }, [backdrop, firstSubject, placement]);
+  };
+  
+  const uploadSubjectToCloudinary = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'anonymous';
+      
+      const subjectUpload = await uploadToCloudinary(firstSubject, 'bag', userId);
+      setSubjectCloudinaryId(subjectUpload.public_id);
+    } catch (error) {
+      console.error('Failed to upload subject:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload product image",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const generateCloudinaryPreview = async () => {
+    if (!backdropCloudinaryId || !subjectCloudinaryId) return;
+    
+    try {
+      setIsGeneratingPreview(true);
+      
+      // Get backdrop dimensions for baseline calculation
+      const backdropDims = await getImageDimensions(backdrop);
+      const floorBaselinePx = Math.round((floorBaseline * backdropDims.height) + baselineNudge);
+      
+      // Call render-composite with current placement
+      const renderResult = await renderComposite({
+        bag_public_id: subjectCloudinaryId,
+        backdrop_public_id: backdropCloudinaryId,
+        canvas: MARBLE_STUDIO_GLOSS_V1.canvas!,
+        placement: {
+          mode: MARBLE_STUDIO_GLOSS_V1.placement!.mode,
+          x: placement.x,
+          y: placement.y,
+          y_baseline_px: floorBaselinePx,
+          rotation_deg: MARBLE_STUDIO_GLOSS_V1.placement!.rotation_deg,
+          scale: placement.scale
+        },
+        shadow: {
+          contact: { opacity: 0, radius_px: 0, offset_y_px: 0 },
+          ground: { opacity: 0, radius_px: 0, elongation_y: 0 }
+        },
+        reflection: { enabled: false, opacity: 0, fade_pct: 0, blur_px: 0, offset_y_px: 0 },
+        backdrop_fx: { wall_blur_px: addBlur ? 20 : 0 },
+        safeguards: MARBLE_STUDIO_GLOSS_V1.safeguards!
+      });
+      
+      setPreviewUrl(renderResult.url);
+    } catch (error) {
+      console.error('Failed to generate preview:', error);
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
+
+  // Generate Cloudinary preview when placement changes
+  useEffect(() => {
+    if (backdropCloudinaryId && subjectCloudinaryId) {
+      // Debounce preview updates
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+      
+      updateTimerRef.current = setTimeout(() => {
+        generateCloudinaryPreview();
+      }, 300);
+    }
+    
+    return () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+    };
+  }, [backdropCloudinaryId, subjectCloudinaryId, placement, floorBaseline, baselineNudge, addBlur]);
+  
+  // Upload subject to Cloudinary when backdrop is uploaded
+  useEffect(() => {
+    if (backdropCloudinaryId && firstSubject && !subjectCloudinaryId) {
+      uploadSubjectToCloudinary();
+    }
+  }, [backdropCloudinaryId, firstSubject]);
 
   const handleBackdropUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -168,9 +289,13 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         } else {
           // File is fine, load it directly
           const reader = new FileReader();
-          reader.onload = (e) => {
+          reader.onload = async (e) => {
             if (e.target?.result) {
-              setBackdrop(e.target.result as string);
+              const backdropData = e.target.result as string;
+              setBackdrop(backdropData);
+              
+              // Upload to Cloudinary immediately
+              await uploadBackdropToCloudinary(backdropData);
             }
           };
           reader.readAsDataURL(file);
@@ -186,110 +311,19 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
 
-  const drawPreview = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const handlePreviewClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const preview = previewRef.current;
+    if (!preview || !previewUrl) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const backdropImg = new Image();
-    const subjectImg = new Image();
-    let loadedCount = 0;
-
-    const onLoad = () => {
-      loadedCount++;
-      if (loadedCount === 2) {
-        // Use consistent canvas dimensions for preview (normalize to max 800px)
-        const maxCanvasSize = 800;
-        const backdropAspectRatio = backdropImg.naturalWidth / backdropImg.naturalHeight;
-        
-        let canvasWidth, canvasHeight;
-        if (backdropAspectRatio > 1) {
-          canvasWidth = Math.min(maxCanvasSize, backdropImg.naturalWidth);
-          canvasHeight = canvasWidth / backdropAspectRatio;
-        } else {
-          canvasHeight = Math.min(maxCanvasSize, backdropImg.naturalHeight);
-          canvasWidth = canvasHeight * backdropAspectRatio;
-        }
-        
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        
-        // Set display size to fit in container (max 600x400)
-        const maxDisplayWidth = 600;
-        const maxDisplayHeight = 400;
-        
-        let displayWidth = Math.min(maxDisplayWidth, canvasWidth);
-        let displayHeight = displayWidth / backdropAspectRatio;
-        
-        if (displayHeight > maxDisplayHeight) {
-          displayHeight = maxDisplayHeight;
-          displayWidth = displayHeight * backdropAspectRatio;
-        }
-        
-        canvas.style.width = `${displayWidth}px`;
-        canvas.style.height = `${displayHeight}px`;
-
-        // Clear canvas and draw backdrop
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(backdropImg, 0, 0, canvas.width, canvas.height);
-
-        // Draw subject at specified position
-        const subjectAspectRatio = subjectImg.naturalWidth / subjectImg.naturalHeight;
-        const scaledWidth = canvas.width * placement.scale;
-        const scaledHeight = scaledWidth / subjectAspectRatio;
-        
-        const dx = (placement.x * canvas.width) - (scaledWidth / 2);
-        const dy = (placement.y * canvas.height) - (scaledHeight / 2);
-
-        ctx.drawImage(subjectImg, dx, dy, scaledWidth, scaledHeight);
-      }
-    };
-
-    backdropImg.onload = onLoad;
-    subjectImg.onload = onLoad;
-    backdropImg.src = backdrop;
-    subjectImg.src = firstSubject;
-  };
-
-  const handleCanvasMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
-
-    setIsDragging(true);
-    setDragStart({ x, y });
-  };
-
-  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
+    const rect = preview.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
 
     setPlacement(prev => ({
       ...prev,
-      x: Math.max(0, Math.min(1, x / canvas.width)),
-      y: Math.max(0, Math.min(1, y / canvas.height))
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y))
     }));
-  };
-
-  const handleCanvasMouseUp = () => {
-    setIsDragging(false);
   };
 
   const handleScaleChange = (value: number[]) => {
@@ -309,6 +343,12 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const allRotatedSubjects = await Promise.all(rotatedDataPromises);
       setRotatedSubjects(allRotatedSubjects);
       
+      // Re-upload first subject to Cloudinary
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'anonymous';
+      const subjectUpload = await uploadToCloudinary(allRotatedSubjects[0], 'bag', userId);
+      setSubjectCloudinaryId(subjectUpload.public_id);
+      
       toast({
         title: "All subjects rotated",
         description: `All ${rotatedSubjects.length} subjects rotated ${direction}`,
@@ -326,26 +366,9 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   };
 
   const handleContinue = async () => {
-    if (!backdrop) return;
+    if (!backdrop || !backdropCloudinaryId) return;
     
     try {
-      setIsOptimizing(true);
-      toast({
-        title: "Uploading backdrop",
-        description: "Uploading backdrop to Cloudinary..."
-      });
-
-      // Get user ID
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || 'anonymous';
-
-      console.log('📤 Uploading backdrop to Cloudinary...');
-      
-      // Upload backdrop to Cloudinary (already compressed during upload)
-      const backdropUpload = await uploadToCloudinary(backdrop, 'backdrop', userId);
-      
-      console.log('✅ Backdrop uploaded:', backdropUpload.public_id);
-      
       // Calculate floor baseline in pixels (from backdrop dimensions)
       const backdropDims = await getImageDimensions(backdrop);
       const floorBaselinePx = Math.round((floorBaseline * backdropDims.height) + baselineNudge);
@@ -359,8 +382,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       });
 
       toast({
-        title: "Backdrop uploaded",
-        description: "Ready to render images"
+        title: "Positioning complete",
+        description: "Ready to render with shadows and reflections"
       });
 
       // Pass backdrop data URL, placement, Cloudinary ID, and floor baseline to parent
@@ -369,18 +392,16 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         placement, 
         addBlur, 
         rotatedSubjects, 
-        backdropUpload.public_id,
+        backdropCloudinaryId,
         floorBaselinePx
       );
     } catch (error) {
-      console.error('Failed to upload backdrop:', error);
+      console.error('Failed to continue:', error);
       toast({
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to upload backdrop",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to continue",
         variant: "destructive"
       });
-    } finally {
-      setIsOptimizing(false);
     }
   };
 
@@ -694,18 +715,41 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             <CardContent>
               {backdrop && firstSubject ? (
                 <div className="space-y-4">
-                  <div className="flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 p-4" style={{ minHeight: '300px' }}>
-                    <canvas
-                      ref={canvasRef}
-                      className="max-w-full max-h-full object-contain cursor-move border border-muted-foreground/20 rounded shadow-sm"
-                      onMouseDown={handleCanvasMouseDown}
-                      onMouseMove={handleCanvasMouseMove}
-                      onMouseUp={handleCanvasMouseUp}
-                      onMouseLeave={handleCanvasMouseUp}
-                    />
+                  <div 
+                    ref={previewRef}
+                    className="relative flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 overflow-hidden cursor-crosshair" 
+                    style={{ minHeight: '400px' }}
+                    onClick={handlePreviewClick}
+                  >
+                    {previewUrl ? (
+                      <>
+                        <img 
+                          src={previewUrl} 
+                          alt="Live Cloudinary Preview" 
+                          className="max-w-full max-h-[500px] object-contain"
+                        />
+                        {isGeneratingPreview && (
+                          <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-8 text-center">
+                        <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
+                        <p className="text-sm text-muted-foreground">
+                          Generating live Cloudinary preview...
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground text-center">
-                    Position: ({Math.round(placement.x * 100)}%, {Math.round(placement.y * 100)}%)
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground text-center">
+                      Position: ({Math.round(placement.x * 100)}%, {Math.round(placement.y * 100)}%)
+                    </div>
+                    <div className="text-xs text-primary/70 text-center font-medium">
+                      ✓ Live Cloudinary Preview - What you see is what you get
+                    </div>
                   </div>
                 </div>
               ) : (
