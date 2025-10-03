@@ -44,27 +44,13 @@ serve(async (req) => {
     // Cloudinary offsets from center
     const xOffset = subjectCenterX - (canvasWidth / 2);
     const yOffset = subjectCenterY - (canvasHeight / 2);
-    
-    // Calculate floor baseline (bottom of subject)
-    // First get subject dimensions to calculate bottom
-    const subjectHeight = Math.round(subjectWidth * 0.6); // Approximate aspect ratio
-    const floorY = subjectCenterY + (subjectHeight / 2);
 
-    // Build transformation: backdrop fills canvas, then add shadows/reflection, then subject
+    // Simple transformation: backdrop fills canvas, subject overlaid at exact position
     const transformations = [
       // 1. Set canvas - backdrop fills entire frame
       `w_${canvasWidth},h_${canvasHeight},c_fill,f_png`,
       
-      // 2. Add ground shadow (soft black shadow below product)
-      `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${subjectWidth},e_colorize:100,co_rgb:000000,o_20,e_blur:80,e_distort:0:0:${subjectWidth}:0:${subjectWidth*1.2}:${subjectHeight}:0:${subjectHeight},g_center,x_${xOffset},y_${floorY - canvasHeight/2},fl_layer_apply`,
-      
-      // 3. Add contact shadow (sharp shadow directly under product)
-      `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${subjectWidth},e_colorize:100,co_rgb:000000,o_35,e_blur:20,g_center,x_${xOffset},y_${yOffset + Math.round(subjectHeight * 0.4)},fl_layer_apply`,
-      
-      // 4. Add single reflection (vertically flipped, faded from bottom)
-      `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${subjectWidth},a_vflip,o_25,e_blur:4,g_center,x_${xOffset},y_${floorY - canvasHeight/2 + Math.round(subjectHeight * 0.8)},fl_layer_apply/e_gradient_fade:symmetric:20`,
-      
-      // 5. Overlay main subject on top (exact position from preview)
+      // 2. Overlay subject at user-specified position (matching preview exactly)
       `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${subjectWidth},g_center,x_${xOffset},y_${yOffset},fl_layer_apply`,
     ].join('/');
 
