@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BackdropUpload } from "@/components/BackdropUpload";
-import { BackdropLibrary } from "@/components/BackdropLibrary";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 const Settings = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const [refreshLibrary, setRefreshLibrary] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -34,10 +30,6 @@ const Settings = () => {
     return null;
   }
 
-  const handleBackdropUploaded = () => {
-    setRefreshLibrary(prev => prev + 1);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-6">
@@ -53,61 +45,23 @@ const Settings = () => {
           
           <h1 className="text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground">
-            Manage your backdrop library and application preferences
+            Application preferences and account settings
           </p>
         </div>
 
-        <Tabs defaultValue="backdrops" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="backdrops">Backdrop Library</TabsTrigger>
-            <TabsTrigger value="general">General Settings</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="backdrops" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Upload New Backdrop</CardTitle>
-                <CardDescription>
-                  Add high-quality backdrops to your library. Images will be optimized for AI processing while maintaining maximum quality.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <BackdropUpload onUploadComplete={handleBackdropUploaded} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Backdrop Library</CardTitle>
-                <CardDescription>
-                  Manage your saved backdrops. You can delete backdrops you no longer need.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <BackdropLibrary 
-                  refreshTrigger={refreshLibrary} 
-                  allowDelete={true}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="general">
-            <Card>
-              <CardHeader>
-                <CardTitle>General Settings</CardTitle>
-                <CardDescription>
-                  Application preferences and account settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Additional settings will be available here in future updates.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <Card>
+          <CardHeader>
+            <CardTitle>General Settings</CardTitle>
+            <CardDescription>
+              Application preferences and account settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Additional settings will be available here in future updates.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

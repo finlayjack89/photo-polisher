@@ -53,106 +53,56 @@ export type Database = {
         }
         Relationships: []
       }
-      batch_images: {
+      final_renders: {
         Row: {
-          batch_id: string
-          cloudinary_public_id: string | null
-          cloudinary_version: number | null
+          backdrop_url: string
+          cloudinary_render_id: string | null
           created_at: string
-          dimensions: Json
-          file_size: number
-          height: number | null
+          final_url: string
           id: string
-          image_type: string
-          name: string
-          render_params: Json | null
-          sort_order: number
-          storage_path: string
-          type: string | null
-          width: number | null
+          image_id: string | null
+          project_id: string | null
+          subject_position: Json
+          user_id: string
         }
         Insert: {
-          batch_id: string
-          cloudinary_public_id?: string | null
-          cloudinary_version?: number | null
+          backdrop_url: string
+          cloudinary_render_id?: string | null
           created_at?: string
-          dimensions: Json
-          file_size: number
-          height?: number | null
+          final_url: string
           id?: string
-          image_type: string
-          name: string
-          render_params?: Json | null
-          sort_order: number
-          storage_path: string
-          type?: string | null
-          width?: number | null
+          image_id?: string | null
+          project_id?: string | null
+          subject_position: Json
+          user_id: string
         }
         Update: {
-          batch_id?: string
-          cloudinary_public_id?: string | null
-          cloudinary_version?: number | null
+          backdrop_url?: string
+          cloudinary_render_id?: string | null
           created_at?: string
-          dimensions?: Json
-          file_size?: number
-          height?: number | null
+          final_url?: string
           id?: string
-          image_type?: string
-          name?: string
-          render_params?: Json | null
-          sort_order?: number
-          storage_path?: string
-          type?: string | null
-          width?: number | null
+          image_id?: string | null
+          project_id?: string | null
+          subject_position?: Json
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "batch_images_batch_id_fkey"
-            columns: ["batch_id"]
+            foreignKeyName: "final_renders_image_id_fkey"
+            columns: ["image_id"]
             isOneToOne: false
-            referencedRelation: "project_batches"
+            referencedRelation: "project_images"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "final_renders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
-      }
-      processing_cache: {
-        Row: {
-          cache_key: string
-          created_at: string | null
-          expires_at: string | null
-          hit_count: number | null
-          id: string
-          last_accessed: string | null
-          operation: Database["public"]["Enums"]["operation_type"]
-          options_hash: string
-          original_url: string
-          processed_url: string
-        }
-        Insert: {
-          cache_key: string
-          created_at?: string | null
-          expires_at?: string | null
-          hit_count?: number | null
-          id?: string
-          last_accessed?: string | null
-          operation: Database["public"]["Enums"]["operation_type"]
-          options_hash: string
-          original_url: string
-          processed_url: string
-        }
-        Update: {
-          cache_key?: string
-          created_at?: string | null
-          expires_at?: string | null
-          hit_count?: number | null
-          id?: string
-          last_accessed?: string | null
-          operation?: Database["public"]["Enums"]["operation_type"]
-          options_hash?: string
-          original_url?: string
-          processed_url?: string
-        }
-        Relationships: []
       }
       project_batches: {
         Row: {
@@ -181,6 +131,71 @@ export type Database = {
         }
         Relationships: []
       }
+      project_images: {
+        Row: {
+          cloudinary_public_id: string | null
+          created_at: string
+          id: string
+          no_bg_url: string | null
+          original_url: string
+          project_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          cloudinary_public_id?: string | null
+          created_at?: string
+          id?: string
+          no_bg_url?: string | null
+          original_url: string
+          project_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          cloudinary_public_id?: string | null
+          created_at?: string
+          id?: string
+          no_bg_url?: string | null
+          original_url?: string
+          project_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       system_health: {
         Row: {
           id: string
@@ -202,36 +217,6 @@ export type Database = {
           metric_name?: string
           metric_value?: number
           recorded_at?: string | null
-        }
-        Relationships: []
-      }
-      user_quotas: {
-        Row: {
-          created_at: string | null
-          current_usage: number | null
-          id: string
-          monthly_limit: number | null
-          reset_date: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          current_usage?: number | null
-          id?: string
-          monthly_limit?: number | null
-          reset_date?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          current_usage?: number | null
-          id?: string
-          monthly_limit?: number | null
-          reset_date?: string | null
-          updated_at?: string | null
-          user_id?: string | null
         }
         Relationships: []
       }
