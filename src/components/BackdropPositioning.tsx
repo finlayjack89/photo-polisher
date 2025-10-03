@@ -51,18 +51,15 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
   const [isRotating, setIsRotating] = useState(false);
-  const [floorBaseline, setFloorBaseline] = useState<number>(0.7); // Default floor at 70% down the backdrop
-  const [baselineNudge, setBaselineNudge] = useState<number>(0); // -40 to +40 px adjustment
+  const [isDragging, setIsDragging] = useState(false);
   
   // Cloudinary preview state
   const [backdropCloudinaryId, setBackdropCloudinaryId] = useState<string>("");
   const [subjectCloudinaryId, setSubjectCloudinaryId] = useState<string>("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
   const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   const firstSubject = rotatedSubjects[0]; // Use first rotated image for positioning
@@ -205,7 +202,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   
   // Build Cloudinary URL directly for instant preview (no API call needed)
   const buildCloudinaryPreviewUrl = () => {
-    if (!backdropCloudinaryId || !subjectCloudinaryId || !backdrop) return null;
+    if (!backdropCloudinaryId || !subjectCloudinaryId) return null;
     
     try {
       const canvas = MARBLE_STUDIO_GLOSS_V1.canvas!;
@@ -213,11 +210,11 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const bagCenterY = Math.round(placement.y * canvas.h);
       const bagScaledWidth = Math.round(canvas.w * placement.scale);
       
-      // Build transformation string
+      // Build transformation string - backdrop stays static, subject moves
       const transformations = [
-        `w_${canvas.w},h_${canvas.h},c_fill,g_south,f_${canvas.format}`,
+        `w_${canvas.w},h_${canvas.h},c_fill,f_${canvas.format}`,
         addBlur ? `e_blur:2000` : null,
-        `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${bagCenterY - canvas.h / 2},fl_layer_apply`
+        `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${canvas.h / 2 - bagCenterY},fl_layer_apply`
       ].filter(Boolean).join('/');
       
       return `https://res.cloudinary.com/dkbz3p4li/image/upload/${transformations}/${backdropCloudinaryId}`;
@@ -227,41 +224,15 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
 
-  const generateCloudinaryPreview = async () => {
-    if (!backdropCloudinaryId || !subjectCloudinaryId) return;
-    
-    try {
-      // Instant preview with direct URL construction
+  // Generate Cloudinary preview when placement changes - INSTANT!
+  useEffect(() => {
+    if (backdropCloudinaryId && subjectCloudinaryId) {
       const instantUrl = buildCloudinaryPreviewUrl();
       if (instantUrl) {
         setPreviewUrl(instantUrl);
       }
-      setIsGeneratingPreview(false);
-    } catch (error) {
-      console.error('Failed to generate preview:', error);
-      setIsGeneratingPreview(false);
     }
-  };
-
-  // Generate Cloudinary preview when placement changes - now instant!
-  useEffect(() => {
-    if (backdropCloudinaryId && subjectCloudinaryId) {
-      // Reduced debounce for snappier response
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current);
-      }
-      
-      updateTimerRef.current = setTimeout(() => {
-        generateCloudinaryPreview();
-      }, 50); // Much faster debounce since we're building URL directly
-    }
-    
-    return () => {
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current);
-      }
-    };
-  }, [backdropCloudinaryId, subjectCloudinaryId, placement, floorBaseline, baselineNudge, addBlur]);
+  }, [backdropCloudinaryId, subjectCloudinaryId, placement.x, placement.y, placement.scale, addBlur]);
   
   // Upload subject to Cloudinary when backdrop is uploaded
   useEffect(() => {
@@ -318,7 +289,22 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
 
-  const handlePreviewClick = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+    updatePosition(event);
+  };
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    updatePosition(event);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const updatePosition = (event: React.MouseEvent<HTMLDivElement>) => {
     const preview = previewRef.current;
     if (!preview || !previewUrl) return;
 
@@ -376,9 +362,9 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     if (!backdrop || !backdropCloudinaryId) return;
     
     try {
-      // Calculate floor baseline in pixels (from backdrop dimensions)
+      // Calculate floor baseline from placement Y position
       const backdropDims = await getImageDimensions(backdrop);
-      const floorBaselinePx = Math.round((floorBaseline * backdropDims.height) + baselineNudge);
+      const floorBaselinePx = Math.round(placement.y * backdropDims.height);
       
       console.log('🎯 Final placement values:', {
         x: placement.x,
@@ -661,40 +647,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Floor Baseline (Y Position)</Label>
-                    <Slider
-                      value={[floorBaseline]}
-                      onValueChange={(value) => setFloorBaseline(value[0])}
-                      max={1.0}
-                      min={0.0}
-                      step={0.01}
-                      className="w-full"
-                    />
-                    <div className="text-xs text-muted-foreground text-center">
-                      Floor at {Math.round(floorBaseline * 100)}% down backdrop
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Baseline Nudge (Fine Adjustment)</Label>
-                    <Slider
-                      value={[baselineNudge]}
-                      onValueChange={(value) => setBaselineNudge(value[0])}
-                      max={40}
-                      min={-40}
-                      step={1}
-                      className="w-full"
-                    />
-                    <div className="text-xs text-muted-foreground text-center">
-                      {baselineNudge > 0 ? '+' : ''}{baselineNudge}px adjustment
-                    </div>
-                  </div>
-
                   <div className="bg-muted/50 p-3 rounded-lg">
                     <p className="text-sm font-medium mb-1">Positioning Instructions:</p>
                     <p className="text-xs text-muted-foreground">
-                      Click and drag on the preview to position your product. Use the size slider to adjust scale. Floor baseline controls where shadows/reflections are anchored.
+                      Drag the product in the preview to position it. The backdrop stays fixed. Use the size slider to scale the product.
                     </p>
                   </div>
                 </div>
@@ -728,28 +684,25 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                 <div className="space-y-4">
                   <div 
                     ref={previewRef}
-                    className="relative flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 overflow-hidden cursor-crosshair" 
+                    className="relative flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 overflow-hidden cursor-move select-none" 
                     style={{ minHeight: '400px' }}
-                    onClick={handlePreviewClick}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
                   >
                     {previewUrl ? (
-                      <>
-                        <img 
-                          src={previewUrl} 
-                          alt="Live Cloudinary Preview" 
-                          className="max-w-full max-h-[500px] object-contain"
-                        />
-                        {isGeneratingPreview && (
-                          <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                          </div>
-                        )}
-                      </>
+                      <img 
+                        src={previewUrl} 
+                        alt="Live Cloudinary Preview" 
+                        className="max-w-full max-h-[500px] object-contain pointer-events-none"
+                        draggable={false}
+                      />
                     ) : (
                       <div className="flex flex-col items-center justify-center p-8 text-center">
                         <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
                         <p className="text-sm text-muted-foreground">
-                          Generating live Cloudinary preview...
+                          Generating live preview...
                         </p>
                       </div>
                     )}
@@ -759,7 +712,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                       Position: ({Math.round(placement.x * 100)}%, {Math.round(placement.y * 100)}%)
                     </div>
                     <div className="text-xs text-primary/70 text-center font-medium">
-                      ✓ Live Cloudinary Preview - What you see is what you get
+                      ✓ Real-time Preview - Drag to position instantly
                     </div>
                   </div>
                 </div>
