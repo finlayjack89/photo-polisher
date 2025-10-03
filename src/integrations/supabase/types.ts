@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       backdrop_library: {
         Row: {
+          cloudinary_public_id: string | null
           created_at: string
           dimensions: Json | null
           file_size: number | null
@@ -27,6 +28,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cloudinary_public_id?: string | null
           created_at?: string
           dimensions?: Json | null
           file_size?: number | null
@@ -38,6 +40,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cloudinary_public_id?: string | null
           created_at?: string
           dimensions?: Json | null
           file_size?: number | null

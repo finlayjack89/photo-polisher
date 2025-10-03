@@ -149,7 +149,14 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     reader.readAsDataURL(backdropFile);
   };
   
-  const uploadBackdropToCloudinary = async (backdropData: string) => {
+  const uploadBackdropToCloudinary = async (backdropData: string, existingCloudinaryId?: string) => {
+    // Check if we already have a Cloudinary ID (from library)
+    if (existingCloudinaryId) {
+      console.log('✓ Using existing Cloudinary ID from library:', existingCloudinaryId);
+      setBackdropCloudinaryId(existingCloudinaryId);
+      return;
+    }
+    
     try {
       setIsOptimizing(true);
       toast({
@@ -573,8 +580,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                                     description: `Using "${backdrop.name}" from library`
                                   });
                                   
-                                  // Upload to Cloudinary for live preview
-                                  await uploadBackdropToCloudinary(backdropData);
+                                  // Use existing Cloudinary ID if available, otherwise upload
+                                  await uploadBackdropToCloudinary(backdropData, backdrop.cloudinary_public_id);
                                 }
                               };
                               reader.readAsDataURL(blob);

@@ -24,6 +24,7 @@ interface Backdrop {
   file_size: number;
   dimensions: { width: number; height: number };
   created_at: string;
+  cloudinary_public_id?: string;
 }
 
 interface BackdropLibraryProps {
