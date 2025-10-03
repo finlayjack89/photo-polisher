@@ -563,14 +563,18 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                               const response = await fetch(imageUrl);
                               const blob = await response.blob();
                               const reader = new FileReader();
-                              reader.onload = (e) => {
+                              reader.onload = async (e) => {
                                 if (e.target?.result) {
-                                  setBackdrop(e.target.result as string);
+                                  const backdropData = e.target.result as string;
+                                  setBackdrop(backdropData);
                                   setBackdropFile(null); // Clear file reference for library images
                                   toast({
                                     title: "Backdrop Selected",
                                     description: `Using "${backdrop.name}" from library`
                                   });
+                                  
+                                  // Upload to Cloudinary for live preview
+                                  await uploadBackdropToCloudinary(backdropData);
                                 }
                               };
                               reader.readAsDataURL(blob);
