@@ -153,7 +153,7 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
   // Calculate bag dimensions based on scale
   const bagScaledWidth = Math.round(canvas.w * placement.scale);
   
-  // Add contact shadow first (below bag)
+  // Add contact shadow (tight, directly below bag)
   if (shadow.contact.opacity > 0) {
     const contactShadow = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
@@ -164,13 +164,13 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
       `w_${bagScaledWidth}`,
       `g_center`,
       `x_${bagCenterX - canvas.w / 2}`,
-      `y_${bagCenterY - canvas.h / 2 + shadow.contact.offset_y_px}`,
+      `y_${placement.y_baseline_px - canvas.h / 2 + shadow.contact.offset_y_px}`,
       'fl_layer_apply',
     ];
     transformations.push(contactShadow.join(','));
   }
 
-  // Add ground shadow (elongated)
+  // Add ground shadow (wider, elongated at floor baseline)
   if (shadow.ground.opacity > 0) {
     const groundShadow = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
@@ -182,13 +182,13 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
       `h_${Math.round(bagScaledWidth * shadow.ground.elongation_y * 0.5)}`,
       `g_center`,
       `x_${bagCenterX - canvas.w / 2}`,
-      `y_${Math.max(placement.y_baseline_px - canvas.h / 2, bagCenterY - canvas.h / 2 + 20)}`,
+      `y_${placement.y_baseline_px - canvas.h / 2}`,
       'fl_layer_apply',
     ];
     transformations.push(groundShadow.join(','));
   }
 
-  // Add reflection below baseline
+  // Add ONE reflection at floor baseline (mirrored from bottom of bag)
   if (reflection.enabled && reflection.opacity > 0) {
     const reflectionOverlay = [
       `l_${bag_public_id.replace(/\//g, ':')}`,
@@ -200,7 +200,7 @@ function buildCloudinaryTransformation(params: RenderRequest): string {
       `w_${bagScaledWidth}`,
       `g_center`,
       `x_${bagCenterX - canvas.w / 2}`,
-      `y_${Math.max(placement.y_baseline_px - canvas.h / 2 + reflection.offset_y_px, bagCenterY - canvas.h / 2 + 40)}`,
+      `y_${placement.y_baseline_px - canvas.h / 2 + reflection.offset_y_px}`,
       'fl_layer_apply',
     ];
     transformations.push(reflectionOverlay.join(','));

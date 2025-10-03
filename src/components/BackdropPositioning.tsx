@@ -211,10 +211,11 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const bagScaledWidth = Math.round(canvas.w * placement.scale);
       
       // Build transformation string - backdrop stays static, subject moves
+      // Cloudinary y-axis: positive = down from center (0,0 is center of image)
       const transformations = [
         `w_${canvas.w},h_${canvas.h},c_fill,f_${canvas.format}`,
         addBlur ? `e_blur:2000` : null,
-        `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${canvas.h / 2 - bagCenterY},fl_layer_apply`
+        `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${bagCenterY - canvas.h / 2},fl_layer_apply`
       ].filter(Boolean).join('/');
       
       return `https://res.cloudinary.com/dkbz3p4li/image/upload/${transformations}/${backdropCloudinaryId}`;
@@ -362,16 +363,25 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     if (!backdrop || !backdropCloudinaryId) return;
     
     try {
-      // Calculate floor baseline from placement Y position
-      const backdropDims = await getImageDimensions(backdrop);
-      const floorBaselinePx = Math.round(placement.y * backdropDims.height);
+      // Calculate floor baseline BELOW the bag position in canvas coordinates
+      const canvas = MARBLE_STUDIO_GLOSS_V1.canvas!;
+      const bagCenterY = Math.round(placement.y * canvas.h);
+      
+      // Get bag dimensions to find its bottom edge
+      const bagDims = await getImageDimensions(firstSubject);
+      const bagScaledHeight = Math.round((bagDims.height / bagDims.width) * (canvas.w * placement.scale));
+      
+      // Floor baseline is at the bottom edge of the bag + small offset
+      const floorBaselinePx = Math.round(bagCenterY + (bagScaledHeight / 2) + 10);
       
       console.log('🎯 Final placement values:', {
         x: placement.x,
         y: placement.y,
         scale: placement.scale,
+        bagCenterY,
+        bagScaledHeight,
         floorBaseline: floorBaselinePx,
-        backdropHeight: backdropDims.height
+        canvasHeight: canvas.h
       });
 
       toast({
