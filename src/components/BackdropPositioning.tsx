@@ -210,10 +210,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const bagCenterY = Math.round(placement.y * canvas.h);
       const bagScaledWidth = Math.round(canvas.w * placement.scale);
       
-      // Build transformation string - backdrop stays static, subject moves
-      // Cloudinary y-axis: positive = down from center (0,0 is center of image)
+      // Build transformation string - backdrop FIXED at canvas size, only subject scales/moves
+      // Use c_limit to prevent backdrop from scaling/cropping - keeps it at original size within bounds
       const transformations = [
-        `w_${canvas.w},h_${canvas.h},c_fill,f_${canvas.format}`,
+        `w_${canvas.w},h_${canvas.h},c_limit,b_white,f_${canvas.format}`,
         addBlur ? `e_blur:2000` : null,
         `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${bagCenterY - canvas.h / 2},fl_layer_apply`
       ].filter(Boolean).join('/');
