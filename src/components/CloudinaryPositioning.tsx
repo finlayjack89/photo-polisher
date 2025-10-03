@@ -86,9 +86,9 @@ export const CloudinaryPositioning = ({
     const xOffset = subjectCenterX - (CANVAS_WIDTH / 2);
     const yOffset = subjectCenterY - (CANVAS_HEIGHT / 2);
     
-    // Build transformation: backdrop at fixed size, subject overlaid
+    // Build transformation: backdrop FILLS entire canvas (c_fill), subject overlaid
     const transformations = [
-      `w_${CANVAS_WIDTH},h_${CANVAS_HEIGHT},c_limit,b_white,f_png`,
+      `w_${CANVAS_WIDTH},h_${CANVAS_HEIGHT},c_fill,f_png`,
       `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${subjectWidth},g_center,x_${xOffset},y_${yOffset},fl_layer_apply`
     ].join('/');
     
