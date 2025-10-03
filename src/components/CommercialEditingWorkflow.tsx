@@ -59,10 +59,11 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
 
   // Auto-start processing when we have all required data
   React.useEffect(() => {
-    if (currentStep === 'cloudinary-rendering' && processedImages.backdropCloudinaryId && processedImages.placement && processedSubjects.length > 0) {
+    const hasSubjects = processedSubjects.length > 0 || processedImages.backgroundRemoved.length > 0;
+    if (currentStep === 'cloudinary-rendering' && processedImages.backdropCloudinaryId && processedImages.placement && hasSubjects) {
       startCloudinaryRendering();
     }
-  }, [currentStep, processedImages.backdropCloudinaryId, processedImages.placement, processedSubjects.length]);
+  }, [currentStep, processedImages.backdropCloudinaryId, processedImages.placement, processedSubjects.length, processedImages.backgroundRemoved.length]);
 
   const analyzeImages = () => {
     // Check if all images are pre-cut (transparent backgrounds already removed)

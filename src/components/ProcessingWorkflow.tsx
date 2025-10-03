@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { renderComposite, uploadToCloudinary, MARBLE_STUDIO_GLOSS_V1, type RenderParams } from '@/lib/cloudinary-render';
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProcessedSubject {
   original_filename: string;
@@ -21,6 +22,8 @@ interface ProcessingWorkflowProps {
   files: File[];
   onComplete: (processedFiles: ProcessedFile[]) => void;
   floorBaseline?: number; // Y coordinate in pixels of floor line
+  placement?: { x: number; y: number; scale: number }; // User's positioning from BackdropPositioning
+  backdropCloudinaryId?: string; // Existing Cloudinary ID to avoid re-upload
 }
 
 interface ProcessedFile {
@@ -44,7 +47,7 @@ const processingSteps = [
   { id: 'complete', label: 'Processing Complete', icon: Download },
 ];
 
-export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onComplete, floorBaseline }: ProcessingWorkflowProps) => {
+export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onComplete, floorBaseline, placement, backdropCloudinaryId }: ProcessingWorkflowProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [completedFiles, setCompletedFiles] = useState(0);
@@ -84,31 +87,44 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
       
       console.log('Starting Cloudinary upload and render workflow...');
       
-      // Step 1: Upload backdrop to Cloudinary
-      console.log('Uploading backdrop to Cloudinary...');
-      let backdropDataUrl: string;
-      if (typeof backdrop === 'string' && backdrop.startsWith('data:')) {
-        backdropDataUrl = backdrop;
-      } else if (backdrop.url) {
-        // Fetch and convert to data URL
-        const response = await fetch(backdrop.url);
-        const blob = await response.blob();
-        backdropDataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
+      // Step 1: Get or upload backdrop to Cloudinary
+      let backdropPublicId: string;
+      
+      if (backdropCloudinaryId) {
+        // Use existing Cloudinary ID
+        console.log('✓ Using existing backdrop from Cloudinary:', backdropCloudinaryId);
+        backdropPublicId = backdropCloudinaryId;
       } else {
-        throw new Error('Invalid backdrop format');
+        // Upload new backdrop
+        console.log('Uploading backdrop to Cloudinary...');
+        let backdropDataUrl: string;
+        if (typeof backdrop === 'string' && backdrop.startsWith('data:')) {
+          backdropDataUrl = backdrop;
+        } else if (backdrop.url) {
+          // Fetch and convert to data URL
+          const response = await fetch(backdrop.url);
+          const blob = await response.blob();
+          backdropDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } else {
+          throw new Error('Invalid backdrop format');
+        }
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || 'anonymous';
+        
+        const uploadResult = await uploadToCloudinary(
+          backdropDataUrl,
+          'backdrop',
+          userId
+        );
+        backdropPublicId = uploadResult.public_id;
+        console.log('Backdrop uploaded:', backdropPublicId);
       }
       
-      const { public_id: backdropPublicId } = await uploadToCloudinary(
-        backdropDataUrl,
-        'backdrop',
-        'user' // TODO: Get actual user ID
-      );
-      
-      console.log('Backdrop uploaded:', backdropPublicId);
       setProgress(10);
       
       const processedFiles: ProcessedFile[] = [];
@@ -119,21 +135,39 @@ export const ProcessingWorkflow = ({ processedSubjects, backdrop, files, onCompl
         
         console.log(`Uploading subject ${i + 1}/${processedSubjects.length}: ${subject.name}`);
         
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || 'anonymous';
+        
         // Upload subject to Cloudinary
         const { public_id: bagPublicId } = await uploadToCloudinary(
           subject.backgroundRemovedData,
           'bag',
-          'user' // TODO: Get actual user ID
+          userId
         );
         
         console.log(`Subject uploaded: ${bagPublicId}`);
         
-        // Build render params using house preset
+        // Calculate y_baseline_px for Cloudinary
+        const y_baseline_px = floorBaseline || Math.round((placement?.y || 0.7) * 2048);
+        
+        // Build render params using user's placement from positioning stage
         const renderParams: RenderParams = {
-          ...MARBLE_STUDIO_GLOSS_V1,
           bag_public_id: bagPublicId,
           backdrop_public_id: backdropPublicId,
-        } as RenderParams;
+          canvas: MARBLE_STUDIO_GLOSS_V1.canvas!,
+          placement: {
+            mode: MARBLE_STUDIO_GLOSS_V1.placement!.mode,
+            x: placement?.x || 0.5,
+            y: placement?.y || 0.7,
+            y_baseline_px,
+            rotation_deg: MARBLE_STUDIO_GLOSS_V1.placement!.rotation_deg,
+            scale: placement?.scale || 0.5,
+          },
+          shadow: MARBLE_STUDIO_GLOSS_V1.shadow!,
+          reflection: MARBLE_STUDIO_GLOSS_V1.reflection!,
+          backdrop_fx: MARBLE_STUDIO_GLOSS_V1.backdrop_fx!,
+          safeguards: MARBLE_STUDIO_GLOSS_V1.safeguards!,
+        };
         
         console.log(`Rendering ${subject.name} with Cloudinary...`);
         setCurrentStep(1);
