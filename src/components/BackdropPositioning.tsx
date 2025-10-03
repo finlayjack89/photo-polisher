@@ -203,57 +203,57 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
   
+  // Build Cloudinary URL directly for instant preview (no API call needed)
+  const buildCloudinaryPreviewUrl = () => {
+    if (!backdropCloudinaryId || !subjectCloudinaryId || !backdrop) return null;
+    
+    try {
+      const canvas = MARBLE_STUDIO_GLOSS_V1.canvas!;
+      const bagCenterX = Math.round(placement.x * canvas.w);
+      const bagCenterY = Math.round(placement.y * canvas.h);
+      const bagScaledWidth = Math.round(canvas.w * placement.scale);
+      
+      // Build transformation string
+      const transformations = [
+        `w_${canvas.w},h_${canvas.h},c_fill,g_south,f_${canvas.format}`,
+        addBlur ? `e_blur:2000` : null,
+        `l_${subjectCloudinaryId.replace(/\//g, ':')},c_fit,w_${bagScaledWidth},g_center,x_${bagCenterX - canvas.w / 2},y_${bagCenterY - canvas.h / 2},fl_layer_apply`
+      ].filter(Boolean).join('/');
+      
+      return `https://res.cloudinary.com/dkbz3p4li/image/upload/${transformations}/${backdropCloudinaryId}`;
+    } catch (error) {
+      console.error('Failed to build preview URL:', error);
+      return null;
+    }
+  };
+
   const generateCloudinaryPreview = async () => {
     if (!backdropCloudinaryId || !subjectCloudinaryId) return;
     
     try {
-      setIsGeneratingPreview(true);
-      
-      // Get backdrop dimensions for baseline calculation
-      const backdropDims = await getImageDimensions(backdrop);
-      const floorBaselinePx = Math.round((floorBaseline * backdropDims.height) + baselineNudge);
-      
-      // Call render-composite with current placement
-      const renderResult = await renderComposite({
-        bag_public_id: subjectCloudinaryId,
-        backdrop_public_id: backdropCloudinaryId,
-        canvas: MARBLE_STUDIO_GLOSS_V1.canvas!,
-        placement: {
-          mode: MARBLE_STUDIO_GLOSS_V1.placement!.mode,
-          x: placement.x,
-          y: placement.y,
-          y_baseline_px: floorBaselinePx,
-          rotation_deg: MARBLE_STUDIO_GLOSS_V1.placement!.rotation_deg,
-          scale: placement.scale
-        },
-        shadow: {
-          contact: { opacity: 0, radius_px: 0, offset_y_px: 0 },
-          ground: { opacity: 0, radius_px: 0, elongation_y: 0 }
-        },
-        reflection: { enabled: false, opacity: 0, fade_pct: 0, blur_px: 0, offset_y_px: 0 },
-        backdrop_fx: { wall_blur_px: addBlur ? 20 : 0 },
-        safeguards: MARBLE_STUDIO_GLOSS_V1.safeguards!
-      });
-      
-      setPreviewUrl(renderResult.url);
+      // Instant preview with direct URL construction
+      const instantUrl = buildCloudinaryPreviewUrl();
+      if (instantUrl) {
+        setPreviewUrl(instantUrl);
+      }
+      setIsGeneratingPreview(false);
     } catch (error) {
       console.error('Failed to generate preview:', error);
-    } finally {
       setIsGeneratingPreview(false);
     }
   };
 
-  // Generate Cloudinary preview when placement changes
+  // Generate Cloudinary preview when placement changes - now instant!
   useEffect(() => {
     if (backdropCloudinaryId && subjectCloudinaryId) {
-      // Debounce preview updates
+      // Reduced debounce for snappier response
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
       }
       
       updateTimerRef.current = setTimeout(() => {
         generateCloudinaryPreview();
-      }, 300);
+      }, 50); // Much faster debounce since we're building URL directly
     }
     
     return () => {
