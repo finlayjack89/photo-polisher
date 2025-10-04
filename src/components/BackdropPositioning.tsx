@@ -432,7 +432,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             <h1 className="text-3xl font-bold">Backdrop & Positioning</h1>
           </div>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Upload a backdrop and position your product. This placement will guide the AI for all your images.
+            Upload a backdrop and position your product. This placement will be applied to all your images.
           </p>
         </div>
 

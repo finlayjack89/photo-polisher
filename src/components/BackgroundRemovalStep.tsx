@@ -114,7 +114,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       );
 
       setProgress(20);
-      setCurrentProcessingStep('Removing backgrounds with AI...');
+      setCurrentProcessingStep('Removing backgrounds...');
 
       // Process images one by one to avoid CPU timeouts
       const allResults: ProcessedImage[] = [];
@@ -208,7 +208,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
           <CardHeader className="text-center">
             <Scissors className="h-12 w-12 mx-auto text-primary mb-4" />
             <CardTitle>Removing Backgrounds</CardTitle>
-            <CardDescription>AI is removing backgrounds from your images...</CardDescription>
+            <CardDescription>Removing backgrounds from your images...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Progress value={progress} className="w-full" />
@@ -239,7 +239,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {largeImages.length} image(s) are larger than 5MB and may need compression for optimal AI processing.
+                {largeImages.length} image(s) are larger than 5MB and may need compression for optimal processing.
                 Large images can cause processing delays or failures.
               </AlertDescription>
             </Alert>

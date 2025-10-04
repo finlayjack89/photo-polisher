@@ -93,25 +93,25 @@ const Index = () => {
             <div className="max-w-4xl mx-auto">
               <h2 className="text-5xl font-bold text-foreground mb-6">
                 Transform Your Product Photos Into
-                <span className="bg-gradient-electric bg-clip-text text-transparent"> Studio Quality</span>
+                <span className="bg-gradient-electric bg-clip-text text-transparent"> Professional Images</span>
               </h2>
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Professional background removal, AI-powered compositing, and studio lighting in seconds. 
+                Remove backgrounds, position products on custom backdrops, and create professional composites in seconds. 
                 Perfect for resellers and e-commerce shops.
               </p>
               
               <div className="flex items-center justify-center space-x-8 mb-12">
-                <div className="flex items-center space-x-2 text-muted-foreground">
-                  <Upload className="w-5 h-5 text-electric" />
-                  <span>Batch Upload</span>
-                </div>
+              <div className="flex items-center space-x-2 text-muted-foreground">
+                <Upload className="w-5 h-5 text-electric" />
+                <span>Batch Upload</span>
+              </div>
               <div className="flex items-center space-x-2 text-muted-foreground">
                 <ImageIcon className="w-5 h-5 text-electric" />
-                <span>AI Background Removal</span>
+                <span>Background Removal</span>
               </div>
               <div className="flex items-center space-x-2 text-muted-foreground">
                 <Sparkles className="w-5 h-5 text-electric" />
-                <span>Canvas Compositing</span>
+                <span>Custom Backdrops</span>
               </div>
               </div>
             </div>
