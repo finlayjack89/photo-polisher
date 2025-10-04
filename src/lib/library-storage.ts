@@ -72,7 +72,7 @@ export const saveBatchToLibrary = async ({
       const storagePath = `${userId}/${batchId}/${type}/${fileName}`;
       
       const { error: uploadError } = await supabase.storage
-        .from('project-images')
+        .from('processed-images')
         .upload(storagePath, blob, {
           contentType: 'image/png',
           upsert: false
@@ -153,7 +153,7 @@ export const loadTransparentImagesFromBatch = async (
     const imageData = await Promise.all(
       (images as any[]).map(async (image) => {
         const { data: blob, error: downloadError } = await supabase.storage
-          .from('project-images')
+          .from('processed-images')
           .download(image.storage_path);
 
         if (downloadError) throw downloadError;

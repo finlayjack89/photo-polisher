@@ -53,6 +53,50 @@ export type Database = {
         }
         Relationships: []
       }
+      batch_images: {
+        Row: {
+          batch_id: string
+          created_at: string
+          dimensions: Json
+          file_size: number
+          id: string
+          image_type: string
+          name: string
+          sort_order: number
+          storage_path: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          dimensions?: Json
+          file_size: number
+          id?: string
+          image_type: string
+          name: string
+          sort_order?: number
+          storage_path: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          dimensions?: Json
+          file_size?: number
+          id?: string
+          image_type?: string
+          name?: string
+          sort_order?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_images_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "project_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       final_renders: {
         Row: {
           backdrop_url: string

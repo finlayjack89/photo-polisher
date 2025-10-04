@@ -101,7 +101,7 @@ const Library = () => {
       for (const batch of formattedBatches) {
         for (const image of batch.images) {
           const { data: urlData } = await supabase.storage
-            .from('project-images')
+            .from('processed-images')
             .createSignedUrl(image.storage_path, 3600);
           
           if (urlData?.signedUrl) {
@@ -112,7 +112,7 @@ const Library = () => {
         // Get thumbnail URL
         if (batch.thumbnail_url) {
           const { data: thumbData } = await supabase.storage
-            .from('project-images')
+            .from('processed-images')
             .createSignedUrl(batch.thumbnail_url, 3600);
           
           if (thumbData?.signedUrl) {
