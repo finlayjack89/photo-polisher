@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { UploadZone } from "./UploadZone";
 import { BackgroundRemovalStep } from "./BackgroundRemovalStep";
-import { CloudinaryPositioning } from "./CloudinaryPositioning";
-import { ProcessingStep } from "./ProcessingStep";
+import { CanvasPositioning, PositioningData } from "./CanvasPositioning";
 import { Card } from "./ui/card";
+import { Button } from "./ui/button";
 
-export type WorkflowStep = "upload" | "remove-bg" | "position" | "processing" | "complete";
+export type WorkflowStep = "upload" | "remove-bg" | "position" | "complete";
 
 interface ImageData {
   file?: File;
   original: string;
   noBg?: string;
-  cloudinaryId?: string;
   backdrop?: string;
-  finalUrl?: string;
+  compositeUrl?: string;
+  positioningData?: PositioningData;
 }
 
 export const SimpleWorkflow = () => {
@@ -38,19 +38,28 @@ export const SimpleWorkflow = () => {
       setImageData(prev => ({
         ...prev,
         noBg: subject.backgroundRemovedData,
-        cloudinaryId: subject.cloudinaryPublicId || ""
       }));
       setCurrentStep("position");
     }
   };
 
-  const handlePositioningComplete = (backdropUrl: string) => {
-    setImageData(prev => ({ ...prev, backdrop: backdropUrl }));
-    setCurrentStep("processing");
+  const handleBackdropUpload = (files: File[]) => {
+    if (files.length > 0) {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImageData(prev => ({ ...prev, backdrop: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleFinalRender = (finalUrl: string) => {
-    setImageData(prev => ({ ...prev, finalUrl }));
+  const handlePositioningComplete = (compositeUrl: string, positioningData: PositioningData) => {
+    setImageData(prev => ({ 
+      ...prev, 
+      compositeUrl,
+      positioningData 
+    }));
     setCurrentStep("complete");
   };
 
@@ -86,45 +95,47 @@ export const SimpleWorkflow = () => {
         />
       )}
 
-      {currentStep === "position" && imageData.noBg && imageData.cloudinaryId && (
-        <CloudinaryPositioning
+      {currentStep === "position" && !imageData.backdrop && (
+        <Card className="p-8">
+          <h2 className="text-2xl font-semibold mb-4">Step 3: Upload Backdrop</h2>
+          <UploadZone onFilesUploaded={handleBackdropUpload} />
+        </Card>
+      )}
+
+      {currentStep === "position" && imageData.noBg && imageData.backdrop && (
+        <CanvasPositioning
           subjectUrl={imageData.noBg}
-          subjectCloudinaryId={imageData.cloudinaryId}
+          backdropUrl={imageData.backdrop}
           onComplete={handlePositioningComplete}
-          onBack={() => setCurrentStep("remove-bg")}
+          onBack={() => {
+            setImageData(prev => ({ ...prev, backdrop: undefined }));
+          }}
         />
       )}
 
-      {currentStep === "processing" && (
-        <ProcessingStep
-          subjectCloudinaryId={imageData.cloudinaryId!}
-          backdropUrl={imageData.backdrop!}
-          onComplete={handleFinalRender}
-        />
-      )}
-
-      {currentStep === "complete" && imageData.finalUrl && (
+      {currentStep === "complete" && imageData.compositeUrl && (
         <Card className="p-8">
           <h2 className="text-2xl font-semibold mb-4">Final Result</h2>
           <div className="max-w-4xl mx-auto">
-            <img src={imageData.finalUrl} alt="Final render" className="w-full rounded-lg shadow-lg" />
+            <img src={imageData.compositeUrl} alt="Final composite" className="w-full rounded-lg shadow-lg" />
             <div className="mt-6 flex gap-4">
               <a
-                href={imageData.finalUrl}
-                download="luxsnap-render.png"
+                href={imageData.compositeUrl}
+                download="luxsnap-composite.png"
                 className="flex-1 px-6 py-3 bg-primary text-primary-foreground rounded-md text-center font-medium hover:opacity-90"
               >
                 Download Image
               </a>
-              <button
+              <Button
                 onClick={() => {
                   setImageData({ original: "" });
                   setCurrentStep("upload");
                 }}
-                className="px-6 py-3 bg-secondary text-secondary-foreground rounded-md font-medium hover:opacity-90"
+                variant="secondary"
+                className="flex-1"
               >
                 Start New
-              </button>
+              </Button>
             </div>
           </div>
         </Card>
