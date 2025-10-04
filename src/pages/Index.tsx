@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { Upload, Sparkles, Image as ImageIcon, Zap, Settings, LogOut, FolderOpen } from "lucide-react";
+import { Upload, Sparkles, Image as ImageIcon, Settings, LogOut, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
-import { ProcessingWorkflow } from "@/components/ProcessingWorkflow";
 import { CommercialEditingWorkflow } from "@/components/CommercialEditingWorkflow";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import heroImage from "@/assets/hero-studio.jpg";
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState<'upload' | 'processing' | 'commercial'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'commercial'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const navigate = useNavigate();
   const { user, signOut, loading } = useAuth();
@@ -106,14 +105,14 @@ const Index = () => {
                   <Upload className="w-5 h-5 text-electric" />
                   <span>Batch Upload</span>
                 </div>
-                <div className="flex items-center space-x-2 text-muted-foreground">
-                  <ImageIcon className="w-5 h-5 text-electric" />
-                  <span>AI Background Removal</span>
-                </div>
-                <div className="flex items-center space-x-2 text-muted-foreground">
-                  <Zap className="w-5 h-5 text-electric" />
-                  <span>Studio Lighting</span>
-                </div>
+              <div className="flex items-center space-x-2 text-muted-foreground">
+                <ImageIcon className="w-5 h-5 text-electric" />
+                <span>AI Background Removal</span>
+              </div>
+              <div className="flex items-center space-x-2 text-muted-foreground">
+                <Sparkles className="w-5 h-5 text-electric" />
+                <span>Canvas Compositing</span>
+              </div>
               </div>
             </div>
           </div>
@@ -124,13 +123,6 @@ const Index = () => {
       <main className="container mx-auto px-6 py-8">
         {currentStep === 'upload' && (
           <UploadZone onFilesUploaded={handleFilesUploaded} />
-        )}
-        
-        {currentStep === 'processing' && uploadedFiles.length > 0 && (
-          <ProcessingWorkflow 
-            files={uploadedFiles}
-            onComplete={() => {}} // Not used in current workflow
-          />
         )}
 
         {currentStep === 'commercial' && uploadedFiles.length > 0 && (
