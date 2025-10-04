@@ -135,46 +135,19 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
           }
         }
         
-        // Convert ALL images to PNG format before compression
-        if (processedFile.type !== 'image/png') {
-          console.log(`Converting ${processedFile.name} to PNG format...`);
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const img = new Image();
-          
-          await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = URL.createObjectURL(processedFile);
-          });
-          
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          ctx?.drawImage(img, 0, 0);
-          
-          const pngBlob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob((blob) => resolve(blob as Blob), 'image/png', 1.0);
-          });
-          
-          const pngFileName = processedFile.name.replace(/\.[^/.]+$/, '.png');
-          processedFile = new File([pngBlob], pngFileName, {
-            type: 'image/png',
-            lastModified: Date.now()
-          });
-          console.log(`Converted to PNG: ${pngFileName}, size: ${(processedFile.size / (1024 * 1024)).toFixed(2)}MB`);
-        }
+        // Process and compress the image
+        console.log(`Processing image: ${processedFile.name}, original size: ${(originalSize / (1024 * 1024)).toFixed(2)}MB`);
+        const compressedBlob = await processAndCompressImage(processedFile, originalSize);
         
-        // Process and compress the PNG using iterative method (use PNG's actual size, not original)
-        console.log(`Processing image: ${processedFile.name}, size: ${(processedFile.size / (1024 * 1024)).toFixed(2)}MB`);
-        const compressedBlob = await processAndCompressImage(processedFile);
-        
-        // All files are now PNG format
-        const fileName = processedFile.name.toLowerCase().endsWith('.png') 
-          ? processedFile.name
-          : processedFile.name.replace(/\.[^/.]+$/, '.png');
+        // Determine correct file type and name
+        const wasCompressed = originalSize > 5 * 1024 * 1024;
+        const mimeType = wasCompressed ? 'image/png' : processedFile.type;
+        const fileName = wasCompressed && !processedFile.name.toLowerCase().endsWith('.png') 
+          ? processedFile.name.replace(/\.[^/.]+$/, '.png')
+          : processedFile.name;
         
         const finalFile = new File([compressedBlob], fileName, {
-          type: 'image/png',
+          type: mimeType,
           lastModified: Date.now()
         }) as FileWithOriginalSize;
         finalFile.originalSize = originalSize;

@@ -1,66 +1,64 @@
-import { useEffect, useState } from "react";
-import { Card } from "./ui/card";
-import { Progress } from "./ui/progress";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Wand2 } from "lucide-react";
 
 interface ProcessingStepProps {
-  subjectCloudinaryId: string;
-  backdropUrl: string;
-  onComplete: (finalUrl: string) => void;
+  title: string;
+  description: string;
+  progress: number;
+  currentStep: string;
+  files: File[];
 }
 
-export const ProcessingStep = ({ subjectCloudinaryId, backdropUrl, onComplete }: ProcessingStepProps) => {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("Preparing to render...");
-
-  useEffect(() => {
-    const renderFinal = async () => {
-      try {
-        setProgress(20);
-        setStatus("Parsing positioning data...");
-        
-        const positionData = JSON.parse(backdropUrl);
-        
-        setProgress(40);
-        setStatus("Compositing subject with backdrop...");
-        
-        // Call edge function to render final composite
-        const { data, error } = await supabase.functions.invoke('render-final-composite', {
-          body: positionData,
-        });
-
-        if (error) throw error;
-        
-        setProgress(80);
-        setStatus("Adding shadows and reflection...");
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setProgress(100);
-        setStatus("Complete!");
-        
-        onComplete(data.url);
-      } catch (error) {
-        console.error("Error rendering final composite:", error);
-        toast({
-          title: "Error",
-          description: "Failed to render final image",
-          variant: "destructive",
-        });
-      }
-    };
-
-    renderFinal();
-  }, [subjectCloudinaryId, backdropUrl, onComplete]);
-
+export const ProcessingStep: React.FC<ProcessingStepProps> = ({
+  title,
+  description,
+  progress,
+  currentStep,
+  files
+}) => {
   return (
-    <Card className="p-8">
-      <h2 className="text-2xl font-semibold mb-4">Generating Your Final Image</h2>
-      <div className="space-y-4">
-        <Progress value={progress} className="w-full" />
-        <p className="text-center text-muted-foreground">{status}</p>
-      </div>
-    </Card>
+    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader className="text-center">
+          <div className="flex items-center justify-center gap-2 text-primary mb-2">
+            <Wand2 className="h-8 w-8" />
+            <CardTitle className="text-2xl">{title}</CardTitle>
+          </div>
+          <p className="text-muted-foreground">{description}</p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Progress</span>
+              <span className="font-medium">{Math.round(progress)}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="font-medium">{currentStep}</span>
+          </div>
+
+          <div className="bg-muted/30 p-4 rounded-lg">
+            <h4 className="font-medium mb-2">Processing Files:</h4>
+            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+              {files.map((file, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary/60"></div>
+                  <span>{file.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="text-center text-sm text-muted-foreground">
+            Please wait while we process your images with AI...
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };

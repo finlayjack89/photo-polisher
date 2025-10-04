@@ -1,0 +1,397 @@
+/**
+ * Canvas utilities for AI commercial photo editing workflow
+ * Handles client-side precision operations for mask correction and background removal
+ */
+
+/**
+ * Step 3: Client-Side Mask Correction
+ * Converts black areas in AI-generated masks to transparent
+ */
+export const convertBlackToTransparent = (imageDataUrl: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return reject('Could not get canvas context');
+
+      ctx.drawImage(image, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        // If pixel is black or near-black, make it transparent
+        if (data[i] < 50 && data[i + 1] < 50 && data[i + 2] < 50) {
+          data[i + 3] = 0; // Set alpha channel to 0 (fully transparent)
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    image.onerror = reject;
+    image.src = imageDataUrl;
+  });
+};
+
+/**
+ * Step 4: Client-Side Background Removal
+ * Uses corrected mask to perform pixel-perfect cutout
+ */
+export const applyMaskToImage = (originalImageDataUrl: string, maskImageDataUrl: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const originalImage = new Image();
+    const maskImage = new Image();
+    let loadedCount = 0;
+
+    const onImageLoad = () => {
+      loadedCount++;
+      if (loadedCount === 2) {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = originalImage.naturalWidth;
+          canvas.height = originalImage.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) return reject('Could not get canvas context');
+
+          // 1. Draw the original image
+          ctx.drawImage(originalImage, 0, 0);
+
+          // 2. Set composite operation: keeps destination pixels that are within the source
+          ctx.globalCompositeOperation = 'destination-in';
+
+          // 3. Draw the mask, scaled to fit, on top to perform the "cut"
+          ctx.drawImage(maskImage, 0, 0, canvas.width, canvas.height);
+
+          resolve(canvas.toDataURL('image/png'));
+        } catch (error) {
+          reject(error);
+        }
+      }
+    };
+
+    originalImage.onload = onImageLoad;
+    maskImage.onload = onImageLoad;
+    originalImage.onerror = reject;
+    maskImage.onerror = reject;
+    
+    originalImage.src = originalImageDataUrl;
+    maskImage.src = maskImageDataUrl;
+  });
+};
+
+/**
+ * Step 5: Backdrop & Placement
+ * Positions subject on transparent canvas matching backdrop dimensions
+ */
+export interface SubjectPlacement {
+  x: number; // fraction of canvas width (0-1)
+  y: number; // fraction of canvas height (0-1)
+  scale: number; // fraction of canvas width for subject width
+}
+
+export const positionSubjectOnCanvas = (
+  subjectDataUrl: string, 
+  targetWidth: number, 
+  targetHeight: number, 
+  placement: SubjectPlacement
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return reject('Could not get canvas context');
+
+    const subjectImage = new Image();
+    subjectImage.onload = () => {
+      try {
+        // Calculate dimensions maintaining aspect ratio
+        const subjectAspectRatio = subjectImage.naturalWidth / subjectImage.naturalHeight;
+        const scaledWidth = targetWidth * placement.scale;
+        const scaledHeight = scaledWidth / subjectAspectRatio;
+        
+        // Calculate position (centered on the placement point)
+        const dx = (placement.x * targetWidth) - (scaledWidth / 2);
+        const dy = (placement.y * targetHeight) - (scaledHeight / 2);
+
+        console.log('positionSubjectOnCanvas - Positioning details:', {
+          targetDimensions: `${targetWidth}x${targetHeight}`,
+          subjectDimensions: `${subjectImage.naturalWidth}x${subjectImage.naturalHeight}`,
+          placement: placement,
+          calculatedSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+          calculatedPosition: `${Math.round(dx)}, ${Math.round(dy)}`,
+          scaleAsPixels: Math.round(scaledWidth),
+          scaleAsPercentage: Math.round(placement.scale * 100) + '%'
+        });
+
+        // Draw subject on transparent canvas
+        ctx.drawImage(subjectImage, dx, dy, scaledWidth, scaledHeight);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    subjectImage.onerror = reject;
+    subjectImage.src = subjectDataUrl;
+  });
+};
+
+/**
+ * Utility to get image dimensions from data URL
+ */
+export const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+};
+
+/**
+ * Convert File to data URL
+ */
+export const fileToDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        resolve(e.target.result as string);
+      } else {
+        reject('Failed to read file');
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * Composite shadow layer with backdrop and subject to create final high-quality image
+ */
+export const compositeLayers = async (
+  backdropUrl: string,
+  shadowLayerUrl: string | null,
+  subjectUrl: string,
+  placement: SubjectPlacement
+): Promise<string> => {
+  console.log('🎨 SECURE COMPOSITING: Starting pure layer composition');
+  console.log('📊 Input validation:', {
+    backdropLength: backdropUrl?.length,
+    shadowLayerLength: shadowLayerUrl?.length || 0,
+    subjectLength: subjectUrl?.length,
+    backdropFormat: backdropUrl?.substring(0, 50),
+    shadowLayerFormat: shadowLayerUrl?.substring(0, 50) || 'N/A (no shadow layer)',
+    subjectFormat: subjectUrl?.substring(0, 50),
+    placement
+  });
+
+  // PHASE 3: Critical security validation
+  if (!subjectUrl?.includes('data:image/png')) {
+    const error = 'CRITICAL SECURITY VIOLATION: Subject image must be PNG with transparency. Original image contamination detected!';
+    console.error('🚨', error);
+    throw new Error(error);
+  }
+  
+  if (!backdropUrl?.startsWith('data:image/')) {
+    const error = 'CRITICAL ERROR: Invalid backdrop data format';
+    console.error('🚨', error);
+    throw new Error(error);
+  }
+  
+  if (shadowLayerUrl && !shadowLayerUrl.startsWith('data:image/')) {
+    const error = 'CRITICAL ERROR: Invalid shadow layer data format';
+    console.error('🚨', error);
+    throw new Error(error);
+  }
+  
+  console.log('✅ SECURITY CHECK PASSED: All inputs are valid image data URLs');
+  console.log('✅ TRANSPARENCY CHECK PASSED: Subject is PNG with transparency');
+  console.log(shadowLayerUrl ? '✅ Shadow layer provided' : '⚠️ No shadow layer provided');
+
+  // Helper function to load image
+  const loadImage = (src: string, name: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      
+      img.onload = () => {
+        console.log(`compositeLayers - Successfully loaded ${name}: ${img.width}x${img.height}`);
+        resolve(img);
+      };
+      
+      img.onerror = (error) => {
+        console.error(`compositeLayers - Failed to load ${name}:`, error);
+        reject(new Error(`Failed to load ${name} image`));
+      };
+      
+      img.src = src;
+    });
+  };
+
+  try {
+    // Load backdrop and subject images
+    console.log('compositeLayers - Loading backdrop and subject images...');
+    const loadPromises = [
+      loadImage(backdropUrl, 'backdrop'),
+      loadImage(subjectUrl, 'subject')
+    ];
+    
+    // Add shadow layer to loading if provided
+    if (shadowLayerUrl) {
+      console.log('compositeLayers - Adding shadow layer to loading queue...');
+      loadPromises.push(loadImage(shadowLayerUrl, 'shadow layer'));
+    }
+    
+    const loadedImages = await Promise.all(loadPromises);
+    const backdrop = loadedImages[0];
+    const subject = loadedImages[1];
+    const shadowLayer = shadowLayerUrl ? loadedImages[2] : null;
+
+    console.log('compositeLayers - All required images loaded successfully');
+
+    // Create canvas with backdrop dimensions
+    const canvas = document.createElement('canvas');
+    canvas.width = backdrop.width;
+    canvas.height = backdrop.height;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('Failed to get canvas context');
+    }
+
+    console.log('compositeLayers - Canvas created:', `${canvas.width}x${canvas.height}`);
+
+    // Composite the layers
+    console.log('compositeLayers - Drawing backdrop...');
+    ctx.drawImage(backdrop, 0, 0);
+
+    // Draw shadow layer if available
+    if (shadowLayer) {
+      console.log('compositeLayers - Drawing shadow layer (scaled to backdrop size)...');
+      ctx.drawImage(shadowLayer, 0, 0, canvas.width, canvas.height);
+    } else {
+      console.log('compositeLayers - Skipping shadow layer (not provided)');
+    }
+
+    console.log('compositeLayers - Drawing subject with placement:', placement);
+    // Calculate subject positioning based on placement settings
+    const subjectAspectRatio = subject.naturalWidth / subject.naturalHeight;
+    const scaledWidth = canvas.width * placement.scale;
+    const scaledHeight = scaledWidth / subjectAspectRatio;
+    const dx = (placement.x * canvas.width) - (scaledWidth / 2);
+    const dy = (placement.y * canvas.height) - (scaledHeight / 2);
+    
+    console.log('compositeLayers - Subject positioning:', {
+      originalSize: `${subject.naturalWidth}x${subject.naturalHeight}`,
+      scaledSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+      position: `${Math.round(dx)}, ${Math.round(dy)}`,
+      placement
+    });
+    
+    ctx.drawImage(subject, dx, dy, scaledWidth, scaledHeight);
+
+    // Return the final composited image as a high-quality data URL
+    const finalDataUrl = canvas.toDataURL('image/png');
+    console.log('compositeLayers - Compositing complete, final image size:', finalDataUrl.length);
+    
+    return finalDataUrl;
+
+  } catch (error) {
+    console.error('compositeLayers - Error during compositing:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create AI context image for shadow generation
+ * Composites subject on backdrop to create context for AI analysis
+ */
+export const createAiContextImage = async (
+  backdropUrl: string,
+  subjectUrl: string,
+  config: {
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    rotation: number;
+  }
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const backdrop = new Image();
+    backdrop.crossOrigin = "anonymous";
+    backdrop.src = backdropUrl;
+
+    backdrop.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context failed'));
+
+      canvas.width = backdrop.width;
+      canvas.height = backdrop.height;
+
+      ctx.drawImage(backdrop, 0, 0, canvas.width, canvas.height);
+
+      const subject = new Image();
+      subject.crossOrigin = "anonymous";
+      subject.src = subjectUrl;
+
+      subject.onload = () => {
+        ctx.save();
+        ctx.translate(config.position.x + config.size.width / 2, config.position.y + config.size.height / 2);
+        ctx.rotate(config.rotation * (Math.PI / 180));
+        ctx.translate(-(config.position.x + config.size.width / 2), -(config.position.y + config.size.height / 2));
+        ctx.drawImage(subject, config.position.x, config.position.y, config.size.width, config.size.height);
+        ctx.restore();
+        
+        // Return this composited view as a high-quality PNG data URL for the AI
+        resolve(canvas.toDataURL('image/png'));
+      };
+      subject.onerror = () => reject(new Error('Failed to load subject for AI context.'));
+    };
+    backdrop.onerror = () => reject(new Error('Failed to load backdrop for AI context.'));
+  });
+};
+
+/**
+ * Create a preview image for display purposes (with max dimensions)
+ */
+export const createPreviewImage = (dataUrl: string, maxWidth: number = 400, maxHeight: number = 400): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) return reject('Could not get canvas context');
+
+      // Calculate scaled dimensions
+      let { width, height } = img;
+      const aspectRatio = width / height;
+
+      if (width > maxWidth) {
+        width = maxWidth;
+        height = width / aspectRatio;
+      }
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * aspectRatio;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+};

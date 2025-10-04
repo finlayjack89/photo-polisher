@@ -122,7 +122,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
       
       for (let i = 0; i < imageData.length; i++) {
         const image = imageData[i];
-        const imageProgress = ((i / imageData.length) * 60) + 20; // 20-80% for BG removal
+        const imageProgress = ((i / imageData.length) * 80) + 20; // 20-100% range
         
         setCurrentProcessingStep(`Processing image ${i + 1} of ${imageData.length}: ${image.name}...`);
         setProgress(imageProgress);
@@ -130,29 +130,7 @@ export const BackgroundRemovalStep: React.FC<BackgroundRemovalStepProps> = ({
         const result = await processImageWithRetry(image);
         
         if (result) {
-          // Upload to Cloudinary
-          setCurrentProcessingStep(`Uploading ${image.name} to Cloudinary...`);
-          try {
-            const { uploadToCloudinary } = await import("@/lib/cloudinary-render");
-            const cloudinaryResult = await uploadToCloudinary(
-              result.backgroundRemovedData,
-              "bag",
-              "user-id" // TODO: use actual user ID
-            );
-            
-            allResults.push({
-              ...result,
-              cloudinaryPublicId: cloudinaryResult.public_id
-            } as any);
-          } catch (cloudinaryError) {
-            console.error('Cloudinary upload error:', cloudinaryError);
-            failed.push({
-              name: image.name,
-              error: 'Failed to upload to Cloudinary',
-              data: image.data,
-              originalSize: image.originalSize
-            });
-          }
+          allResults.push(result);
         } else {
           failed.push({
             name: image.name,

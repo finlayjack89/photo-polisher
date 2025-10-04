@@ -49,11 +49,17 @@ verify_jwt = false
 [functions.composite-images]
 verify_jwt = false
 
+[functions.finalize-images]
+verify_jwt = false
+
+[functions.finalize-image-v3]
+verify_jwt = false
+
 [functions.retry-single-image-enhancement]
 verify_jwt = false
 
-[functions.render-composite]
+[functions.v5-process-single-image]
 verify_jwt = false
 
-[functions.upload-to-cloudinary]
+[functions.generate-shadow-layer]
 verify_jwt = false
