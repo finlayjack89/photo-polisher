@@ -11,14 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const { images, azimuth = 0, elevation = 90, spread = 5 } = await req.json();
+    const { images, uploadPreview, image, azimuth = 0, elevation = 90, spread = 5 } = await req.json();
     
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      throw new Error('No images provided');
-    }
-
-    console.log(`Processing ${images.length} images for drop shadow with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
-
     const cloudName = Deno.env.get('CLOUDINARY_CLOUD_NAME');
     const apiKey = Deno.env.get('CLOUDINARY_API_KEY');
     const apiSecret = Deno.env.get('CLOUDINARY_API_SECRET');
@@ -26,6 +20,50 @@ serve(async (req) => {
     if (!cloudName || !apiKey || !apiSecret) {
       throw new Error('Cloudinary credentials not configured');
     }
+
+    // Handle preview upload request
+    if (uploadPreview && image) {
+      console.log('Uploading preview image to Cloudinary...');
+      
+      const timestamp = Math.floor(Date.now() / 1000);
+      const folder = 'shadow_preview_temp';
+      const signatureString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+      const uploadSignature = await generateSignature(signatureString, apiSecret);
+
+      const uploadData = new FormData();
+      uploadData.append('file', image.data);
+      uploadData.append('api_key', apiKey);
+      uploadData.append('timestamp', timestamp.toString());
+      uploadData.append('signature', uploadSignature);
+      uploadData.append('folder', folder);
+
+      const uploadResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: uploadData,
+        }
+      );
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`Preview upload failed: ${uploadResponse.status} - ${errorText}`);
+      }
+
+      const uploadResult = await uploadResponse.json();
+      console.log('✅ Preview uploaded:', uploadResult.public_id);
+
+      return new Response(
+        JSON.stringify({ success: true, publicId: uploadResult.public_id }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      throw new Error('No images provided');
+    }
+
+    console.log(`Processing ${images.length} images for drop shadow with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
     const processedImages = [];
 

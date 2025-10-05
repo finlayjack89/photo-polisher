@@ -37,12 +37,69 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [azimuth, setAzimuth] = useState(0);
   const [elevation, setElevation] = useState(90);
   const [spread, setSpread] = useState(5);
+  
+  // Live preview state
+  const [cloudinaryPublicId, setCloudinaryPublicId] = useState<string>('');
+  const [isUploadingPreview, setIsUploadingPreview] = useState(false);
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string>('');
 
   useEffect(() => {
     if (images.length > 0) {
       setPreviewBefore(images[0].data);
+      uploadPreviewToCloudinary();
     }
   }, [images]);
+
+  // Update live preview when parameters change
+  useEffect(() => {
+    if (cloudinaryPublicId) {
+      updateLivePreview();
+    }
+  }, [azimuth, elevation, spread, cloudinaryPublicId]);
+
+  const uploadPreviewToCloudinary = async () => {
+    setIsUploadingPreview(true);
+    try {
+      console.log('Uploading preview image to Cloudinary...');
+      
+      const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
+        body: { 
+          uploadPreview: true,
+          image: images[0]
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.publicId) {
+        setCloudinaryPublicId(data.publicId);
+        console.log('Preview uploaded successfully:', data.publicId);
+        // Generate initial preview
+        updateLivePreviewWithId(data.publicId);
+      }
+    } catch (error) {
+      console.error('Preview upload error:', error);
+      toast({
+        title: "Preview Upload Failed",
+        description: "Live preview unavailable. You can still generate shadows.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploadingPreview(false);
+    }
+  };
+
+  const updateLivePreviewWithId = (publicId: string) => {
+    const cloudName = 'dmbpo0dhh';
+    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png`;
+    setLivePreviewUrl(transformUrl);
+  };
+
+  const updateLivePreview = () => {
+    if (cloudinaryPublicId) {
+      updateLivePreviewWithId(cloudinaryPublicId);
+    }
+  };
 
   const generateShadows = async () => {
     setIsProcessing(true);
@@ -244,19 +301,22 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground text-center">With Shadow (Live Preview)</p>
+                        <p className="text-xs text-muted-foreground text-center">With Drop Shadow (Live Preview)</p>
                         <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
-                          {previewBefore ? (
+                          {isUploadingPreview ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                              <p className="text-xs text-muted-foreground">Preparing preview...</p>
+                            </div>
+                          ) : livePreviewUrl ? (
                             <img 
-                              src={previewBefore} 
+                              src={livePreviewUrl} 
                               alt="Shadow preview" 
                               className="max-w-full max-h-full object-contain"
-                              style={{
-                                filter: `drop-shadow(${Math.cos((azimuth * Math.PI) / 180) * (spread / 2)}px ${Math.sin((azimuth * Math.PI) / 180) * (spread / 2)}px ${spread}px rgba(0, 0, 0, ${0.3 + (elevation / 90) * 0.4}))`
-                              }}
+                              key={livePreviewUrl}
                             />
                           ) : (
-                            <p className="text-muted-foreground text-sm">Loading...</p>
+                            <p className="text-muted-foreground text-sm">Adjust sliders</p>
                           )}
                         </div>
                       </div>
