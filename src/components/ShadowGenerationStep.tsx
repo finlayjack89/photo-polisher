@@ -27,6 +27,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [currentImage, setCurrentImage] = useState(0);
   const [previewBefore, setPreviewBefore] = useState<string>('');
   const [previewAfter, setPreviewAfter] = useState<string>('');
+  const [shadowedResults, setShadowedResults] = useState<Array<{ name: string; shadowedData: string }>>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,6 +57,9 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           setPreviewAfter(shadowedImages[0].shadowedData);
         }
 
+        // Store results for manual confirmation
+        setShadowedResults(shadowedImages);
+
         // Check for any errors
         const failedImages = shadowedImages.filter((img: any) => img.error);
         if (failedImages.length > 0) {
@@ -67,15 +71,13 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           });
         } else {
           toast({
-            title: "Shadows Added",
-            description: `Successfully added drop shadows to ${shadowedImages.length} images`,
+            title: "Shadows Generated",
+            description: `Successfully added drop shadows to ${shadowedImages.length} images. Review the preview below.`,
           });
         }
 
         setProgress(100);
-        setTimeout(() => {
-          onComplete(shadowedImages);
-        }, 500);
+        setIsProcessing(false);
       } else {
         throw new Error('No data returned from shadow generation');
       }
@@ -190,11 +192,17 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
             )}
 
             {previewAfter && !isProcessing && (
-              <div className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-6">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
+                  <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                    ✓ Shadows generated successfully! Review the preview below on transparent background.
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Before</h4>
-                    <div className="relative border rounded-lg overflow-hidden bg-muted/20 aspect-square flex items-center justify-center">
+                    <h4 className="text-sm font-medium text-center">Before (Transparent Background)</h4>
+                    <div className="relative border-2 border-border rounded-lg overflow-hidden aspect-square flex items-center justify-center bg-checkered">
                       <img 
                         src={previewBefore} 
                         alt="Before shadow" 
@@ -203,8 +211,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium">After (with shadow)</h4>
-                    <div className="relative border rounded-lg overflow-hidden bg-muted/20 aspect-square flex items-center justify-center">
+                    <h4 className="text-sm font-medium text-center">After (With Drop Shadow)</h4>
+                    <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden aspect-square flex items-center justify-center bg-checkered">
                       <img 
                         src={previewAfter} 
                         alt="After shadow" 
@@ -213,9 +221,29 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                     </div>
                   </div>
                 </div>
-                <p className="text-sm text-center text-muted-foreground">
-                  ✓ Shadows added successfully! Continuing to next step...
-                </p>
+
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    The checkerboard pattern indicates transparent areas. The shadow is now part of the image.
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => onComplete(shadowedResults)}
+                    className="flex-1"
+                    size="lg"
+                  >
+                    Continue with Shadows
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleSkip}
+                    size="lg"
+                  >
+                    Skip Shadows Instead
+                  </Button>
+                </div>
               </div>
             )}
 
