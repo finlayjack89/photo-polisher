@@ -91,7 +91,10 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
 
   const updateLivePreviewWithId = (publicId: string) => {
     const cloudName = 'dmbpo0dhh';
-    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png`;
+    // Add timestamp to force reload and prevent caching issues
+    const timestamp = Date.now();
+    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png?t=${timestamp}`;
+    console.log('Live preview URL:', transformUrl);
     setLivePreviewUrl(transformUrl);
   };
 
@@ -313,10 +316,20 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                               src={livePreviewUrl} 
                               alt="Shadow preview" 
                               className="max-w-full max-h-full object-contain"
-                              key={livePreviewUrl}
+                              crossOrigin="anonymous"
+                              onLoad={() => console.log('Preview image loaded successfully')}
+                              onError={(e) => {
+                                console.error('Failed to load preview image:', livePreviewUrl);
+                                console.error('Error details:', e);
+                              }}
                             />
+                          ) : cloudinaryPublicId ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                              <p className="text-xs text-muted-foreground">Loading preview...</p>
+                            </div>
                           ) : (
-                            <p className="text-muted-foreground text-sm">Adjust sliders</p>
+                            <p className="text-muted-foreground text-sm">Preparing...</p>
                           )}
                         </div>
                       </div>
