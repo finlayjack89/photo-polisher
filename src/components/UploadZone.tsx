@@ -123,12 +123,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onFilesUploaded }) => {
         if (needsConversion) {
           console.log(`Converting ${file.name} to PNG...`);
           try {
-            processedFile = await convertFileWithCloudConvert(file);
+            processedFile = await convertFileWithCloudConvert(orientationCorrectedFile);
           } catch (conversionError) {
             console.error(`Failed to convert ${file.name}:`, conversionError);
             // Try HEIC conversion as fallback for HEIC files
             if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
-              processedFile = await convertHeicToPng(file);
+              processedFile = await convertHeicToPng(orientationCorrectedFile);
             } else {
               throw conversionError;
             }
