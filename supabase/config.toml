@@ -63,3 +63,6 @@ verify_jwt = false
 
 [functions.generate-shadow-layer]
 verify_jwt = false
+
+[functions.add-drop-shadow]
+verify_jwt = false

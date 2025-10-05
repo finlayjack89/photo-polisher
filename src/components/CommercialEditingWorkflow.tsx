@@ -11,16 +11,18 @@ import {
 } from "@/lib/canvas-utils";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { ShadowGenerationStep } from './ShadowGenerationStep';
 
 interface CommercialEditingWorkflowProps {
   files: (File & { isPreCut?: boolean })[];
   onBack: () => void;
 }
 
-type WorkflowStep = 'analysis' | 'background-removal' | 'rotation' | 'positioning' | 'compositing' | 'complete' | 'precut-rotation';
+type WorkflowStep = 'analysis' | 'background-removal' | 'rotation' | 'shadow-generation' | 'positioning' | 'compositing' | 'complete' | 'precut-rotation';
 
 interface ProcessedImages {
   backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
+  shadowed?: Array<{ name: string; shadowedData: string; }>;
   backdrop?: string;
   placement?: SubjectPlacement;
   finalComposited?: Array<{ name: string; compositedData: string; }>;
@@ -117,6 +119,23 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     
     console.log('Rotation complete - Final processed images:', processedRotatedImages);
     setProcessedImages({ backgroundRemoved: processedRotatedImages });
+    setCurrentStep('shadow-generation');
+  };
+
+  const handleShadowGenerationComplete = (shadowedImages: Array<{ name: string; shadowedData: string }>) => {
+    console.log('Shadow generation complete:', shadowedImages);
+    setProcessedImages(prev => ({ ...prev, shadowed: shadowedImages }));
+    setCurrentStep('positioning');
+  };
+
+  const handleShadowSkip = () => {
+    console.log('Shadow generation skipped, using transparent images');
+    // Use the transparent images as-is, create shadowed array from them
+    const shadowedFromTransparent = processedImages.backgroundRemoved.map(img => ({
+      name: img.name,
+      shadowedData: img.backgroundRemovedData
+    }));
+    setProcessedImages(prev => ({ ...prev, shadowed: shadowedFromTransparent }));
     setCurrentStep('positioning');
   };
 
@@ -136,7 +155,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     
     console.log('Pre-cut rotation complete - maintaining transparent-only subjects');
     setProcessedImages({ backgroundRemoved: processedRotatedImages });
-    setCurrentStep('positioning');
+    setCurrentStep('shadow-generation');
   };
 
   const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => {
@@ -179,7 +198,7 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
   const startClientSideCompositing = async () => {
     console.log('🚀 Starting client-side compositing workflow');
     
-    if (!processedImages.backgroundRemoved?.length || !processedImages.backdrop || !processedImages.placement) {
+    if (!processedImages.shadowed?.length || !processedImages.backdrop || !processedImages.placement) {
       console.error('❌ Missing required data for compositing');
       toast({
         title: "Compositing Error", 
@@ -189,21 +208,21 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       return;
     }
 
-    console.log(`📋 Compositing ${processedImages.backgroundRemoved.length} subjects`);
+    console.log(`📋 Compositing ${processedImages.shadowed.length} subjects with shadows`);
 
     const results: Array<{ name: string; compositedData: string }> = [];
 
     try {
-      // Composite each image
-      for (let i = 0; i < processedImages.backgroundRemoved.length; i++) {
-        const image = processedImages.backgroundRemoved[i];
+      // Composite each shadowed image
+      for (let i = 0; i < processedImages.shadowed.length; i++) {
+        const image = processedImages.shadowed[i];
         
-        console.log(`Compositing image ${i + 1}/${processedImages.backgroundRemoved.length}: ${image.name}`);
+        console.log(`Compositing image ${i + 1}/${processedImages.shadowed.length}: ${image.name}`);
 
-        // Simple client-side compositing
+        // Client-side compositing with shadowed images
         const compositedImage = await compositeLayers(
           processedImages.backdrop,
-          image.backgroundRemovedData,
+          image.shadowedData,
           processedImages.placement
         );
         
@@ -302,15 +321,32 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     );
   }
 
+  if (currentStep === 'shadow-generation') {
+    const imagesForShadows = processedImages.backgroundRemoved.map(img => ({
+      name: img.name,
+      data: img.backgroundRemovedData
+    }));
+
+    return (
+      <ShadowGenerationStep
+        images={imagesForShadows}
+        onComplete={handleShadowGenerationComplete}
+        onSkip={handleShadowSkip}
+        onBack={() => setCurrentStep('rotation')}
+      />
+    );
+  }
+
   if (currentStep === 'positioning') {
+    // Use shadowed images if available, otherwise fall back to transparent
+    const imagesForPositioning = processedImages.shadowed?.map(img => img.shadowedData) || 
+                                  processedImages.backgroundRemoved.map(img => img.backgroundRemovedData);
+
     return (
       <BackdropPositioning
-        cutoutImages={processedSubjects.length > 0 
-          ? processedSubjects.map(subject => subject.backgroundRemovedData || subject.processedImageUrl)
-          : processedImages.backgroundRemoved.map(subject => subject.backgroundRemovedData)
-        }
+        cutoutImages={imagesForPositioning}
         onPositioningComplete={handlePositioningComplete}
-        onBack={() => setCurrentStep('rotation')}
+        onBack={() => setCurrentStep('shadow-generation')}
       />
     );
   }
