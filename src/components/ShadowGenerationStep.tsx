@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Loader2, Sparkles, SkipForward, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,22 +32,109 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [previewAfter, setPreviewAfter] = useState<string>('');
   const [shadowedResults, setShadowedResults] = useState<Array<{ name: string; shadowedData: string }>>([]);
   const { toast } = useToast();
+  
+  // Shadow parameters
+  const [azimuth, setAzimuth] = useState(0);
+  const [elevation, setElevation] = useState(90);
+  const [spread, setSpread] = useState(5);
+  
+  // Live preview
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string>('');
+  const [cloudinaryPublicId, setCloudinaryPublicId] = useState<string>('');
+  const [isUploadingPreview, setIsUploadingPreview] = useState(false);
 
   useEffect(() => {
     if (images.length > 0) {
       setPreviewBefore(images[0].data);
+      uploadPreviewImage();
     }
   }, [images]);
+
+  // Update live preview when parameters change
+  useEffect(() => {
+    if (cloudinaryPublicId) {
+      updateLivePreview();
+    }
+  }, [azimuth, elevation, spread, cloudinaryPublicId]);
+
+  const uploadPreviewImage = async () => {
+    setIsUploadingPreview(true);
+    try {
+      const cloudName = 'dmbpo0dhh'; // Your Cloudinary cloud name
+      const timestamp = Math.floor(Date.now() / 1000);
+      const folder = 'shadow_preview_temp';
+      
+      // Get credentials from edge function
+      const { data: credsData, error: credsError } = await supabase.functions.invoke('add-drop-shadow', {
+        body: { getCredentials: true }
+      });
+      
+      if (credsError) throw credsError;
+      
+      const { apiKey, apiSecret } = credsData;
+      
+      // Generate signature
+      const signatureString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+      const signature = await generateSignature(signatureString, apiSecret);
+      
+      // Upload first image
+      const uploadData = new FormData();
+      uploadData.append('file', images[0].data);
+      uploadData.append('api_key', apiKey);
+      uploadData.append('timestamp', timestamp.toString());
+      uploadData.append('signature', signature);
+      uploadData.append('folder', folder);
+      
+      const uploadResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: uploadData,
+        }
+      );
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload preview image');
+      }
+      
+      const uploadResult = await uploadResponse.json();
+      setCloudinaryPublicId(uploadResult.public_id);
+    } catch (error) {
+      console.error('Preview upload error:', error);
+    } finally {
+      setIsUploadingPreview(false);
+    }
+  };
+
+  const generateSignature = async (stringToSign: string, apiSecret: string): Promise<string> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(stringToSign);
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  };
+
+  const updateLivePreview = () => {
+    const cloudName = 'dmbpo0dhh';
+    const transformationUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
+    setLivePreviewUrl(transformationUrl);
+  };
 
   const generateShadows = async () => {
     setIsProcessing(true);
     setProgress(0);
 
     try {
-      console.log(`Starting shadow generation for ${images.length} images`);
+      console.log(`Starting shadow generation for ${images.length} images with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
       const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
-        body: { images }
+        body: { 
+          images,
+          azimuth,
+          elevation,
+          spread
+        }
       });
 
       if (error) throw error;
@@ -124,34 +214,136 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           <CardContent className="space-y-6">
             {!isProcessing && !previewAfter && (
               <>
-                <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="h-5 w-5 text-primary mt-1" />
-                    <div>
-                      <h3 className="font-semibold mb-2">Shadow Configuration</h3>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• <strong>Azimuth:</strong> 0° (shadow directly behind)</li>
-                        <li>• <strong>Elevation:</strong> 90° (light from above)</li>
-                        <li>• <strong>Spread:</strong> 5 (soft shadow)</li>
-                      </ul>
+                <div className="space-y-6">
+                  <div className="bg-muted/50 rounded-lg p-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="h-5 w-5 text-primary mt-1" />
+                      <div className="flex-1">
+                        <h3 className="font-semibold mb-4">Shadow Configuration</h3>
+                        
+                        {/* Azimuth Control */}
+                        <div className="space-y-3 mb-4">
+                          <Label htmlFor="azimuth" className="text-sm font-medium">
+                            Azimuth: {azimuth}° (shadow direction)
+                          </Label>
+                          <div className="flex gap-3 items-center">
+                            <Slider
+                              id="azimuth"
+                              min={0}
+                              max={360}
+                              step={1}
+                              value={[azimuth]}
+                              onValueChange={(value) => setAzimuth(value[0])}
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              value={azimuth}
+                              onChange={(e) => setAzimuth(Math.max(0, Math.min(360, parseInt(e.target.value) || 0)))}
+                              className="w-20"
+                              min={0}
+                              max={360}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Elevation Control */}
+                        <div className="space-y-3 mb-4">
+                          <Label htmlFor="elevation" className="text-sm font-medium">
+                            Elevation: {elevation}° (light angle)
+                          </Label>
+                          <div className="flex gap-3 items-center">
+                            <Slider
+                              id="elevation"
+                              min={0}
+                              max={90}
+                              step={1}
+                              value={[elevation]}
+                              onValueChange={(value) => setElevation(value[0])}
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              value={elevation}
+                              onChange={(e) => setElevation(Math.max(0, Math.min(90, parseInt(e.target.value) || 0)))}
+                              className="w-20"
+                              min={0}
+                              max={90}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Spread Control */}
+                        <div className="space-y-3">
+                          <Label htmlFor="spread" className="text-sm font-medium">
+                            Spread: {spread} (shadow softness)
+                          </Label>
+                          <div className="flex gap-3 items-center">
+                            <Slider
+                              id="spread"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={[spread]}
+                              onValueChange={(value) => setSpread(value[0])}
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              value={spread}
+                              onChange={(e) => setSpread(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                              className="w-20"
+                              min={0}
+                              max={100}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Preview (First Image)</h4>
-                    <div className="relative border rounded-lg overflow-hidden bg-muted/20 aspect-square flex items-center justify-center">
-                      {previewBefore ? (
-                        <img 
-                          src={previewBefore} 
-                          alt="Subject preview" 
-                          className="max-w-full max-h-full object-contain"
-                        />
-                      ) : (
-                        <p className="text-muted-foreground text-sm">No preview available</p>
-                      )}
+                  {/* Live Preview */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-center">Live Shadow Preview</h4>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground text-center">Original (Transparent)</p>
+                        <div className="relative border rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
+                          {previewBefore ? (
+                            <img 
+                              src={previewBefore} 
+                              alt="Original subject" 
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          ) : (
+                            <p className="text-muted-foreground text-sm">Loading...</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground text-center">With Shadow (Live)</p>
+                        <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
+                          {isUploadingPreview ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                              <p className="text-xs text-muted-foreground">Preparing preview...</p>
+                            </div>
+                          ) : livePreviewUrl ? (
+                            <img 
+                              src={livePreviewUrl} 
+                              alt="Shadow preview" 
+                              className="max-w-full max-h-full object-contain"
+                              key={livePreviewUrl}
+                            />
+                          ) : (
+                            <p className="text-muted-foreground text-sm">Adjust sliders</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Adjust the sliders above to see the shadow update in real-time
+                    </p>
                   </div>
                 </div>
 

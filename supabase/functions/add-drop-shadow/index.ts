@@ -11,14 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const { images } = await req.json();
+    const { images, getCredentials, azimuth = 0, elevation = 90, spread = 5 } = await req.json();
     
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      throw new Error('No images provided');
-    }
-
-    console.log(`Processing ${images.length} images for drop shadow`);
-
     const cloudName = Deno.env.get('CLOUDINARY_CLOUD_NAME');
     const apiKey = Deno.env.get('CLOUDINARY_API_KEY');
     const apiSecret = Deno.env.get('CLOUDINARY_API_SECRET');
@@ -26,6 +20,20 @@ serve(async (req) => {
     if (!cloudName || !apiKey || !apiSecret) {
       throw new Error('Cloudinary credentials not configured');
     }
+
+    // Handle credential request for preview upload
+    if (getCredentials) {
+      return new Response(
+        JSON.stringify({ apiKey, apiSecret }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      throw new Error('No images provided');
+    }
+
+    console.log(`Processing ${images.length} images for drop shadow with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
     const processedImages = [];
 
@@ -67,9 +75,8 @@ serve(async (req) => {
         const uploadResult = await uploadResponse.json();
         console.log(`✅ Uploaded ${image.name} to Cloudinary:`, uploadResult.public_id);
 
-        // Apply drop shadow transformation
-        // e_dropshadow:azimuth_0;elevation_90;spread_5
-        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_0;elevation_90;spread_5/${uploadResult.public_id}.png`;
+        // Apply drop shadow transformation with custom parameters
+        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${uploadResult.public_id}.png`;
         
         console.log(`Transformation URL: ${transformedUrl}`);
 
