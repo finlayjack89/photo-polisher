@@ -37,89 +37,12 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [azimuth, setAzimuth] = useState(0);
   const [elevation, setElevation] = useState(90);
   const [spread, setSpread] = useState(5);
-  
-  // Live preview
-  const [livePreviewUrl, setLivePreviewUrl] = useState<string>('');
-  const [cloudinaryPublicId, setCloudinaryPublicId] = useState<string>('');
-  const [isUploadingPreview, setIsUploadingPreview] = useState(false);
 
   useEffect(() => {
     if (images.length > 0) {
       setPreviewBefore(images[0].data);
-      uploadPreviewImage();
     }
   }, [images]);
-
-  // Update live preview when parameters change
-  useEffect(() => {
-    if (cloudinaryPublicId) {
-      updateLivePreview();
-    }
-  }, [azimuth, elevation, spread, cloudinaryPublicId]);
-
-  const uploadPreviewImage = async () => {
-    setIsUploadingPreview(true);
-    try {
-      const cloudName = 'dmbpo0dhh'; // Your Cloudinary cloud name
-      const timestamp = Math.floor(Date.now() / 1000);
-      const folder = 'shadow_preview_temp';
-      
-      // Get credentials from edge function
-      const { data: credsData, error: credsError } = await supabase.functions.invoke('add-drop-shadow', {
-        body: { getCredentials: true }
-      });
-      
-      if (credsError) throw credsError;
-      
-      const { apiKey, apiSecret } = credsData;
-      
-      // Generate signature
-      const signatureString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-      const signature = await generateSignature(signatureString, apiSecret);
-      
-      // Upload first image
-      const uploadData = new FormData();
-      uploadData.append('file', images[0].data);
-      uploadData.append('api_key', apiKey);
-      uploadData.append('timestamp', timestamp.toString());
-      uploadData.append('signature', signature);
-      uploadData.append('folder', folder);
-      
-      const uploadResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        {
-          method: 'POST',
-          body: uploadData,
-        }
-      );
-      
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload preview image');
-      }
-      
-      const uploadResult = await uploadResponse.json();
-      setCloudinaryPublicId(uploadResult.public_id);
-    } catch (error) {
-      console.error('Preview upload error:', error);
-    } finally {
-      setIsUploadingPreview(false);
-    }
-  };
-
-  const generateSignature = async (stringToSign: string, apiSecret: string): Promise<string> => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(stringToSign);
-    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
-  };
-
-  const updateLivePreview = () => {
-    const cloudName = 'dmbpo0dhh';
-    const transformationUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
-    setLivePreviewUrl(transformationUrl);
-  };
 
   const generateShadows = async () => {
     setIsProcessing(true);
@@ -321,28 +244,25 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground text-center">With Shadow (Live)</p>
+                        <p className="text-xs text-muted-foreground text-center">With Shadow (Live Preview)</p>
                         <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
-                          {isUploadingPreview ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <p className="text-xs text-muted-foreground">Preparing preview...</p>
-                            </div>
-                          ) : livePreviewUrl ? (
+                          {previewBefore ? (
                             <img 
-                              src={livePreviewUrl} 
+                              src={previewBefore} 
                               alt="Shadow preview" 
                               className="max-w-full max-h-full object-contain"
-                              key={livePreviewUrl}
+                              style={{
+                                filter: `drop-shadow(${Math.cos((azimuth * Math.PI) / 180) * (spread / 2)}px ${Math.sin((azimuth * Math.PI) / 180) * (spread / 2)}px ${spread}px rgba(0, 0, 0, ${0.3 + (elevation / 90) * 0.4}))`
+                              }}
                             />
                           ) : (
-                            <p className="text-muted-foreground text-sm">Adjust sliders</p>
+                            <p className="text-muted-foreground text-sm">Loading...</p>
                           )}
                         </div>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground text-center">
-                      Adjust the sliders above to see the shadow update in real-time
+                      Adjust the sliders above to see the shadow update in real-time. Click "Generate Shadows" to apply using Cloudinary.
                     </p>
                   </div>
                 </div>

@@ -11,8 +11,14 @@ serve(async (req) => {
   }
 
   try {
-    const { images, getCredentials, azimuth = 0, elevation = 90, spread = 5 } = await req.json();
+    const { images, azimuth = 0, elevation = 90, spread = 5 } = await req.json();
     
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      throw new Error('No images provided');
+    }
+
+    console.log(`Processing ${images.length} images for drop shadow with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
+
     const cloudName = Deno.env.get('CLOUDINARY_CLOUD_NAME');
     const apiKey = Deno.env.get('CLOUDINARY_API_KEY');
     const apiSecret = Deno.env.get('CLOUDINARY_API_SECRET');
@@ -20,20 +26,6 @@ serve(async (req) => {
     if (!cloudName || !apiKey || !apiSecret) {
       throw new Error('Cloudinary credentials not configured');
     }
-
-    // Handle credential request for preview upload
-    if (getCredentials) {
-      return new Response(
-        JSON.stringify({ apiKey, apiSecret }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      throw new Error('No images provided');
-    }
-
-    console.log(`Processing ${images.length} images for drop shadow with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
     const processedImages = [];
 
