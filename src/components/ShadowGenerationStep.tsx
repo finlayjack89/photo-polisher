@@ -38,78 +38,27 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [elevation, setElevation] = useState(90);
   const [spread, setSpread] = useState(5);
   
-  // Live preview state
-  const [cloudinaryPublicId, setCloudinaryPublicId] = useState<string>('');
-  const [isUploadingPreview, setIsUploadingPreview] = useState(false);
-  const [livePreviewUrl, setLivePreviewUrl] = useState<string>('');
-
   useEffect(() => {
     if (images.length > 0) {
       setPreviewBefore(images[0].data);
-      uploadPreviewToCloudinary();
     }
   }, [images]);
 
-  // Update live preview when parameters change
-  useEffect(() => {
-    if (cloudinaryPublicId) {
-      updateLivePreview();
-    }
-  }, [azimuth, elevation, spread, cloudinaryPublicId]);
-
-  const uploadPreviewToCloudinary = async () => {
-    setIsUploadingPreview(true);
-    try {
-      console.log('Uploading preview image to Cloudinary...');
-      
-      const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
-        body: { 
-          uploadPreview: true,
-          image: images[0]
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.publicId) {
-        setCloudinaryPublicId(data.publicId);
-        console.log('Preview uploaded successfully:', data.publicId);
-        // Generate initial preview
-        updateLivePreviewWithId(data.publicId);
-      }
-    } catch (error) {
-      console.error('Preview upload error:', error);
-      toast({
-        title: "Preview Upload Failed",
-        description: "Live preview unavailable. You can still generate shadows.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsUploadingPreview(false);
-    }
-  };
-
-  const updateLivePreviewWithId = (publicId: string) => {
-    const cloudName = 'dmbpo0dhh';
-    // Add cache busting and format specification
-    const timestamp = Date.now();
-    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png`;
-    console.log('🎨 Generating live preview URL:', transformUrl);
-    console.log('📊 Shadow params:', { azimuth, elevation, spread });
+  // Calculate CSS drop-shadow filter based on parameters
+  const getDropShadowFilter = () => {
+    // Convert azimuth (0-360°) and elevation (0-90°) to x,y offsets
+    const azimuthRad = (azimuth * Math.PI) / 180;
+    const elevationFactor = Math.cos((elevation * Math.PI) / 180);
     
-    // Small delay to ensure Cloudinary has processed the upload
-    setTimeout(() => {
-      setLivePreviewUrl(`${transformUrl}?t=${timestamp}`);
-    }, 100);
-  };
-
-  const updateLivePreview = () => {
-    if (cloudinaryPublicId) {
-      console.log('🔄 Updating live preview with publicId:', cloudinaryPublicId);
-      updateLivePreviewWithId(cloudinaryPublicId);
-    } else {
-      console.warn('⚠️ No cloudinaryPublicId available for preview update');
-    }
+    // Calculate shadow offset
+    const offsetX = Math.cos(azimuthRad) * elevationFactor * 20;
+    const offsetY = Math.sin(azimuthRad) * elevationFactor * 20;
+    
+    // Spread affects blur radius
+    const blur = spread * 0.5;
+    
+    // Create CSS drop-shadow filter
+    return `drop-shadow(${offsetX}px ${offsetY}px ${blur}px rgba(0, 0, 0, 0.5))`;
   };
 
   const generateShadows = async () => {
@@ -314,47 +263,27 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground text-center">With Drop Shadow (Live Preview)</p>
                         <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
-                          {isUploadingPreview ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <p className="text-xs text-muted-foreground">Uploading to Cloudinary...</p>
-                            </div>
-                          ) : livePreviewUrl ? (
+                          {previewBefore ? (
                             <>
                               <img 
-                                src={livePreviewUrl} 
-                                alt="Shadow preview with transformation" 
+                                src={previewBefore} 
+                                alt="Shadow preview" 
                                 className="max-w-full max-h-full object-contain"
-                                crossOrigin="anonymous"
-                                onLoad={() => {
-                                  console.log('✅ Preview image loaded successfully!');
-                                  console.log('URL:', livePreviewUrl);
-                                }}
-                                onError={(e) => {
-                                  console.error('❌ Failed to load preview image');
-                                  console.error('URL:', livePreviewUrl);
-                                  console.error('Error:', e);
-                                }}
+                                style={{ filter: getDropShadowFilter() }}
                               />
                               {/* Debug info overlay */}
                               <div className="absolute bottom-2 right-2 text-xs bg-black/50 text-white px-2 py-1 rounded">
                                 Az:{azimuth}° El:{elevation}° Sp:{spread}
                               </div>
                             </>
-                          ) : cloudinaryPublicId ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <p className="text-xs text-muted-foreground">Generating preview...</p>
-                              <p className="text-xs text-muted-foreground">ID: {cloudinaryPublicId.slice(-8)}</p>
-                            </div>
                           ) : (
-                            <p className="text-muted-foreground text-sm">Preparing...</p>
+                            <p className="text-muted-foreground text-sm">Loading...</p>
                           )}
                         </div>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground text-center">
-                      Adjust the sliders above to see the shadow update in real-time. Click "Generate Shadows" to apply using Cloudinary.
+                      Adjust the sliders above to see the shadow update in real-time. Click "Generate Shadows" to apply the exact effect using Cloudinary.
                     </p>
                   </div>
                 </div>
