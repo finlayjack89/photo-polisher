@@ -50,7 +50,7 @@ export const processAndCompressImage = (file: File, originalFileSize?: number): 
           return reject(new Error('Failed to get canvas context'));
         }
         
-        // Start with original dimensions and progressively reduce if needed
+        // Use natural dimensions (EXIF orientation already corrected at upload)
         let currentWidth = img.naturalWidth;
         let currentHeight = img.naturalHeight;
         
