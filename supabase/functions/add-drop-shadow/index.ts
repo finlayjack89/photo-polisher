@@ -54,7 +54,11 @@ serve(async (req) => {
       console.log('✅ Preview uploaded:', uploadResult.public_id);
 
       return new Response(
-        JSON.stringify({ success: true, publicId: uploadResult.public_id }),
+        JSON.stringify({ 
+          success: true, 
+          publicId: uploadResult.public_id,
+          cloudName: cloudName 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
