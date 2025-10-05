@@ -34,11 +34,21 @@ serve(async (req) => {
       console.log(`Processing image ${i + 1}/${images.length}: ${image.name}`);
 
       try {
-        // Upload to Cloudinary
+        // Generate timestamp and signature for authenticated upload
+        const timestamp = Math.floor(Date.now() / 1000);
+        const folder = 'drop_shadow_temp';
+        const signatureString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+        const uploadSignature = await generateSignature(signatureString, apiSecret);
+
+        // Upload to Cloudinary with authentication
         const uploadData = new FormData();
         uploadData.append('file', image.data);
-        uploadData.append('upload_preset', 'unsigned_preset');
         uploadData.append('api_key', apiKey);
+        uploadData.append('timestamp', timestamp.toString());
+        uploadData.append('signature', uploadSignature);
+        uploadData.append('folder', folder);
+
+        console.log(`Uploading ${image.name} to Cloudinary with signed upload...`);
 
         const uploadResponse = await fetch(
           `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
@@ -51,11 +61,11 @@ serve(async (req) => {
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
           console.error(`Upload failed for ${image.name}:`, errorText);
-          throw new Error(`Upload failed: ${uploadResponse.status}`);
+          throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
         }
 
         const uploadResult = await uploadResponse.json();
-        console.log(`Uploaded ${image.name} to Cloudinary:`, uploadResult.public_id);
+        console.log(`✅ Uploaded ${image.name} to Cloudinary:`, uploadResult.public_id);
 
         // Apply drop shadow transformation
         // e_dropshadow:azimuth_0;elevation_90;spread_5
@@ -90,23 +100,27 @@ serve(async (req) => {
 
         // Clean up: Delete from Cloudinary after processing
         try {
-          const timestamp = Math.floor(Date.now() / 1000);
-          const signature = await generateSignature(uploadResult.public_id, timestamp, apiSecret);
+          const deleteTimestamp = Math.floor(Date.now() / 1000);
+          const deleteSignatureString = `public_id=${uploadResult.public_id}&timestamp=${deleteTimestamp}${apiSecret}`;
+          const deleteSignature = await generateSignature(deleteSignatureString, apiSecret);
           
           const deleteData = new FormData();
           deleteData.append('public_id', uploadResult.public_id);
-          deleteData.append('signature', signature);
+          deleteData.append('signature', deleteSignature);
           deleteData.append('api_key', apiKey);
-          deleteData.append('timestamp', timestamp.toString());
+          deleteData.append('timestamp', deleteTimestamp.toString());
 
-          await fetch(
+          const deleteResponse = await fetch(
             `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`,
             {
               method: 'POST',
               body: deleteData,
             }
           );
-          console.log(`Cleaned up temporary Cloudinary image: ${uploadResult.public_id}`);
+          
+          if (deleteResponse.ok) {
+            console.log(`🗑️ Cleaned up temporary Cloudinary image: ${uploadResult.public_id}`);
+          }
         } catch (cleanupError) {
           console.warn('Failed to cleanup Cloudinary image:', cleanupError);
         }
@@ -139,8 +153,7 @@ serve(async (req) => {
   }
 });
 
-async function generateSignature(publicId: string, timestamp: number, apiSecret: string): Promise<string> {
-  const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+async function generateSignature(stringToSign: string, apiSecret: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(stringToSign);
   const hashBuffer = await crypto.subtle.digest('SHA-1', data);
