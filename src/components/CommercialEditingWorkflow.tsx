@@ -178,11 +178,18 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           backgroundRemovedData: rotatedSubjects[index] || subject.backgroundRemovedData
         }));
         
+        // CRITICAL FIX: Also update shadowed images with rotated versions
+        const updatedShadowed = processedImages.shadowed?.map((subject, index) => ({
+          ...subject,
+          shadowedData: rotatedSubjects[index] || subject.shadowedData
+        }));
+        
         setProcessedImages(prev => ({ 
           ...prev, 
           backdrop, 
           placement,
-          backgroundRemoved: updatedBackgroundRemoved 
+          backgroundRemoved: updatedBackgroundRemoved,
+          shadowed: updatedShadowed
         }));
       }
       
