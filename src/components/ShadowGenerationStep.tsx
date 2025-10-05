@@ -91,16 +91,24 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
 
   const updateLivePreviewWithId = (publicId: string) => {
     const cloudName = 'dmbpo0dhh';
-    // Add timestamp to force reload and prevent caching issues
+    // Add cache busting and format specification
     const timestamp = Date.now();
-    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png?t=${timestamp}`;
-    console.log('Live preview URL:', transformUrl);
-    setLivePreviewUrl(transformUrl);
+    const transformUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${publicId}.png`;
+    console.log('🎨 Generating live preview URL:', transformUrl);
+    console.log('📊 Shadow params:', { azimuth, elevation, spread });
+    
+    // Small delay to ensure Cloudinary has processed the upload
+    setTimeout(() => {
+      setLivePreviewUrl(`${transformUrl}?t=${timestamp}`);
+    }, 100);
   };
 
   const updateLivePreview = () => {
     if (cloudinaryPublicId) {
+      console.log('🔄 Updating live preview with publicId:', cloudinaryPublicId);
       updateLivePreviewWithId(cloudinaryPublicId);
+    } else {
+      console.warn('⚠️ No cloudinaryPublicId available for preview update');
     }
   };
 
@@ -309,24 +317,35 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                           {isUploadingPreview ? (
                             <div className="flex flex-col items-center gap-2">
                               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <p className="text-xs text-muted-foreground">Preparing preview...</p>
+                              <p className="text-xs text-muted-foreground">Uploading to Cloudinary...</p>
                             </div>
                           ) : livePreviewUrl ? (
-                            <img 
-                              src={livePreviewUrl} 
-                              alt="Shadow preview" 
-                              className="max-w-full max-h-full object-contain"
-                              crossOrigin="anonymous"
-                              onLoad={() => console.log('Preview image loaded successfully')}
-                              onError={(e) => {
-                                console.error('Failed to load preview image:', livePreviewUrl);
-                                console.error('Error details:', e);
-                              }}
-                            />
+                            <>
+                              <img 
+                                src={livePreviewUrl} 
+                                alt="Shadow preview with transformation" 
+                                className="max-w-full max-h-full object-contain"
+                                crossOrigin="anonymous"
+                                onLoad={() => {
+                                  console.log('✅ Preview image loaded successfully!');
+                                  console.log('URL:', livePreviewUrl);
+                                }}
+                                onError={(e) => {
+                                  console.error('❌ Failed to load preview image');
+                                  console.error('URL:', livePreviewUrl);
+                                  console.error('Error:', e);
+                                }}
+                              />
+                              {/* Debug info overlay */}
+                              <div className="absolute bottom-2 right-2 text-xs bg-black/50 text-white px-2 py-1 rounded">
+                                Az:{azimuth}° El:{elevation}° Sp:{spread}
+                              </div>
+                            </>
                           ) : cloudinaryPublicId ? (
                             <div className="flex flex-col items-center gap-2">
                               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <p className="text-xs text-muted-foreground">Loading preview...</p>
+                              <p className="text-xs text-muted-foreground">Generating preview...</p>
+                              <p className="text-xs text-muted-foreground">ID: {cloudinaryPublicId.slice(-8)}</p>
                             </div>
                           ) : (
                             <p className="text-muted-foreground text-sm">Preparing...</p>
