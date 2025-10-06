@@ -205,20 +205,11 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         
-        // Set display size to fit in container (max 600x400)
-        const maxDisplayWidth = 600;
-        const maxDisplayHeight = 400;
-        
-        let displayWidth = Math.min(maxDisplayWidth, canvasWidth);
-        let displayHeight = displayWidth / backdropAspectRatio;
-        
-        if (displayHeight > maxDisplayHeight) {
-          displayHeight = maxDisplayHeight;
-          displayWidth = displayHeight * backdropAspectRatio;
-        }
-        
-        canvas.style.width = `${displayWidth}px`;
-        canvas.style.height = `${displayHeight}px`;
+        // Remove display size constraints to show full shadow
+        canvas.style.width = 'auto';
+        canvas.style.height = 'auto';
+        canvas.style.maxWidth = '100%';
+        canvas.style.maxHeight = '600px';
 
         // Clear canvas and draw backdrop
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -613,10 +604,10 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             <CardContent>
               {backdrop && firstSubject ? (
                 <div className="space-y-4">
-                  <div className="flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 p-4" style={{ minHeight: '300px' }}>
+                  <div className="flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 p-4 overflow-auto" style={{ minHeight: '300px', maxHeight: '600px' }}>
                     <canvas
                       ref={canvasRef}
-                      className="max-w-full max-h-full object-contain cursor-move border border-muted-foreground/20 rounded shadow-sm"
+                      className="cursor-move border border-muted-foreground/20 rounded shadow-sm"
                       onMouseDown={handleCanvasMouseDown}
                       onMouseMove={handleCanvasMouseMove}
                       onMouseUp={handleCanvasMouseUp}
