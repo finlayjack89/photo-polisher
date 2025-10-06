@@ -110,7 +110,8 @@ serve(async (req) => {
         console.log(`✅ Uploaded ${image.name} to Cloudinary:`, uploadResult.public_id);
 
         // Apply drop shadow transformation with custom parameters
-        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${uploadResult.public_id}.png`;
+        // fl_layer_apply,g_center ensures the canvas expands to show the full shadow without cropping
+        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/fl_layer_apply,g_center/${uploadResult.public_id}.png`;
         
         console.log(`Transformation URL: ${transformedUrl}`);
 
