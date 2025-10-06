@@ -93,7 +93,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const updateLivePreview = () => {
-    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
+    // Add padding before applying shadow to ensure full shadow is visible
+    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/c_pad,b_rgb:00000000,w_1.3,h_1.3/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
     const timestamp = Date.now();
     console.log('🔄 Updating live preview:', transformUrl);
     console.log('Shadow params:', { azimuth, elevation, spread });
