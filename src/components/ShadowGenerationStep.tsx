@@ -288,12 +288,12 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground text-center">Original (Transparent)</p>
-                        <div className="relative border rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
+                        <div className="relative border rounded-lg overflow-hidden bg-checkered flex items-center justify-center min-h-[300px] max-h-[500px]">
                           {previewBefore ? (
                             <img 
                               src={previewBefore} 
                               alt="Original subject" 
-                              className="max-w-full max-h-full object-contain"
+                              className="w-full h-full object-contain"
                             />
                           ) : (
                             <p className="text-muted-foreground text-sm">Loading...</p>
@@ -302,7 +302,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                       </div>
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground text-center">With Cloudinary Drop Shadow</p>
-                        <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered aspect-square flex items-center justify-center">
+                        <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered flex items-center justify-center min-h-[300px] max-h-[500px]">
                           {isUploadingPreview ? (
                             <div className="flex flex-col items-center gap-2">
                               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -313,7 +313,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                               <img 
                                 src={livePreviewUrl} 
                                 alt="Shadow preview with transformation" 
-                                className="max-w-full max-h-full object-contain"
+                                className="w-full h-full object-contain"
                                 crossOrigin="anonymous"
                                 onLoad={() => {
                                   console.log('✅ Preview image loaded successfully!');
@@ -388,21 +388,21 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium text-center">Before (Transparent Background)</h4>
-                    <div className="relative border-2 border-border rounded-lg overflow-hidden aspect-square flex items-center justify-center bg-checkered">
+                    <div className="relative border-2 border-border rounded-lg overflow-hidden flex items-center justify-center bg-checkered min-h-[300px] max-h-[500px]">
                       <img 
                         src={previewBefore} 
                         alt="Before shadow" 
-                        className="max-w-full max-h-full object-contain"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium text-center">After (With Drop Shadow)</h4>
-                    <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden aspect-square flex items-center justify-center bg-checkered">
+                    <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden flex items-center justify-center bg-checkered min-h-[300px] max-h-[500px]">
                       <img 
                         src={previewAfter} 
                         alt="After shadow" 
-                        className="max-w-full max-h-full object-contain"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   </div>

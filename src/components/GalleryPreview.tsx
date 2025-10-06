@@ -271,11 +271,11 @@ export const GalleryPreview = ({
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted relative">
+                  <div className="rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted relative min-h-[300px] max-h-[500px] flex items-center justify-center">
                     <img
                       src={getCurrentImageData(image)}
                       alt={image.name}
-                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                      className="w-full h-full object-contain transition-transform hover:scale-105"
                       loading="lazy"
                     />
                     {image.retryStatus === 'processing' && (
@@ -335,22 +335,22 @@ export const GalleryPreview = ({
                   {image.originalData && (
                     <div className="space-y-2">
                       <h4 className="font-medium">Original</h4>
-                      <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                      <div className="rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted min-h-[300px] max-h-[500px] flex items-center justify-center">
                         <img
                           src={image.originalData}
                           alt={`${image.name} - Original`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       </div>
                     </div>
                   )}
                   <div className="space-y-2">
                     <h4 className="font-medium">Processed</h4>
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted">
+                    <div className="rounded-lg overflow-hidden bg-gradient-to-br from-background to-muted min-h-[300px] max-h-[500px] flex items-center justify-center">
                       <img
                         src={getCurrentImageData(image)}
                         alt={`${image.name} - Processed`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   </div>
