@@ -93,11 +93,13 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const updateLivePreview = () => {
-    // Cloudinary automatically expands canvas to fit the shadow - no size constraints needed
-    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
+    // Calculate padding based on spread to ensure shadow never gets cropped
+    const padding = Math.max(150, spread * 3);
+    // Expand canvas to fit the shadow using c_pad with dynamic padding
+    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/fl_layer_apply,g_center/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_gen_fill/${cloudinaryPublicId}.png`;
     const timestamp = Date.now();
     console.log('🔄 Updating live preview:', transformUrl);
-    console.log('Shadow params:', { azimuth, elevation, spread });
+    console.log('Shadow params:', { azimuth, elevation, spread, padding });
     setLivePreviewUrl(`${transformUrl}?t=${timestamp}`);
   };
 

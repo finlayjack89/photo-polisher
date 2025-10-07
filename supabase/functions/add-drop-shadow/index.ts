@@ -109,9 +109,13 @@ serve(async (req) => {
         const uploadResult = await uploadResponse.json();
         console.log(`✅ Uploaded ${image.name} to Cloudinary:`, uploadResult.public_id);
 
-        // Apply drop shadow transformation - Cloudinary automatically expands canvas to fit the shadow
-        // No size constraints or flags needed - just apply the effect directly
-        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${uploadResult.public_id}.png`;
+        // Calculate padding based on spread to ensure shadow never gets cropped
+        const padding = Math.max(150, spread * 3);
+        // Apply drop shadow transformation with explicit canvas expansion
+        // fl_layer_apply,g_center: Apply shadow layer centered
+        // c_pad: Expand canvas with padding to fit the shadow
+        // b_gen_fill: Use transparent background for padding
+        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/fl_layer_apply,g_center/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_gen_fill/${uploadResult.public_id}.png`;
         
         console.log(`Transformation URL: ${transformedUrl}`);
 
