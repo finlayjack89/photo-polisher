@@ -93,8 +93,11 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const updateLivePreview = () => {
-    // Calculate padding based on spread to ensure shadow never gets cropped
-    const padding = Math.max(150, spread * 3);
+    // Calculate aggressive padding based on spread to ensure shadow never gets cropped
+    // Minimum 400px (200px per side), scales up dramatically with spread
+    const padding = Math.max(400, spread * 50);
+    console.log(`Using padding: ${padding}px for spread: ${spread}`);
+    
     // Apply padding BEFORE drop shadow - this expands the canvas first, then applies shadow
     const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_transparent/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
     const timestamp = Date.now();
