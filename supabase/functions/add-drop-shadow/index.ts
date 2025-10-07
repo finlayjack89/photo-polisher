@@ -111,11 +111,10 @@ serve(async (req) => {
 
         // Calculate padding based on spread to ensure shadow never gets cropped
         const padding = Math.max(150, spread * 3);
-        // Apply drop shadow transformation with explicit canvas expansion
-        // fl_layer_apply,g_center: Apply shadow layer centered
-        // c_pad: Expand canvas with padding to fit the shadow
-        // b_gen_fill: Use transparent background for padding
-        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/fl_layer_apply,g_center/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_gen_fill/${uploadResult.public_id}.png`;
+        // Apply padding BEFORE drop shadow transformation
+        // c_pad: Expand canvas first with transparent background
+        // Then e_dropshadow: Apply shadow effect to the expanded canvas
+        const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_transparent/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${uploadResult.public_id}.png`;
         
         console.log(`Transformation URL: ${transformedUrl}`);
 
