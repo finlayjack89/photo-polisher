@@ -298,7 +298,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                               <img 
                                 src={livePreviewUrl} 
                                 alt="Shadow preview with transformation" 
-                                className="w-full h-full object-contain"
+                                className="object-contain"
+                                style={{ maxWidth: '50%', maxHeight: '50%' }}
                                 crossOrigin="anonymous"
                                 onLoad={() => {
                                   console.log('✅ Preview image loaded successfully!');
