@@ -286,8 +286,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                   <div className="space-y-3">
                     <h4 className="text-sm font-medium text-center">Live Cloudinary Drop Shadow Preview</h4>
                     <div className="flex justify-center">
-                      <div className="w-full max-w-4xl space-y-2">
-                        <div className="relative border-2 border-primary/50 rounded-lg overflow-hidden bg-checkered flex items-center justify-center min-h-[600px] max-h-[900px]">
+                      <div className="w-full space-y-2">
+                        <div className="relative border-2 border-primary/50 rounded-lg overflow-auto bg-checkered flex items-center justify-center" style={{ minHeight: '800px', maxHeight: '1200px', width: '100%' }}>
                           {isUploadingPreview ? (
                             <div className="flex flex-col items-center gap-2">
                               <Loader2 className="h-8 w-8 animate-spin text-primary" />
