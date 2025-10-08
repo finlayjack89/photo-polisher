@@ -8,13 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Sparkles, SkipForward, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { generateReflections } from "@/lib/reflection-utils";
 
 interface ShadowGenerationStepProps {
   images: Array<{
     name: string;
     data: string;
   }>;
-  onComplete: (shadowedImages: Array<{ name: string; shadowedData: string }>) => void;
+  onComplete: (
+    shadowedImages: Array<{ name: string; shadowedData: string }>,
+    reflections: Array<{ name: string; reflectionData: string }>
+  ) => void;
   onSkip: () => void;
   onBack: () => void;
 }
@@ -31,6 +35,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [previewBefore, setPreviewBefore] = useState<string>('');
   const [previewAfter, setPreviewAfter] = useState<string>('');
   const [shadowedResults, setShadowedResults] = useState<Array<{ name: string; shadowedData: string }>>([]);
+  const [reflections, setReflections] = useState<Array<{ name: string; reflectionData: string }>>([]);
   const { toast } = useToast();
   
   // Shadow parameters
@@ -114,6 +119,22 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
     try {
       console.log(`Starting shadow generation for ${images.length} images with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
+      // Step 1: Generate reflections BEFORE sending to Cloudinary
+      console.log('🪞 Step 1: Generating reflections from transparent subjects...');
+      const generatedReflections = await generateReflections(images, {
+        intensity: 0.3,
+        height: 0.5,
+        blur: 3,
+        fadeStrength: 0.7,
+        offset: 5
+      });
+      
+      console.log(`✅ Generated ${generatedReflections.length} reflections`);
+      setReflections(generatedReflections);
+      setProgress(30);
+
+      // Step 2: Send to Cloudinary for shadow generation
+      console.log('☁️ Step 2: Sending to Cloudinary for shadow generation...');
       const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
         body: { 
           images,
@@ -147,8 +168,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           });
         } else {
           toast({
-            title: "Shadows Generated",
-            description: `Successfully added drop shadows to ${shadowedImages.length} images. Review the preview below.`,
+            title: "Shadows & Reflections Generated",
+            description: `Successfully added drop shadows and reflections to ${shadowedImages.length} images.`,
           });
         }
 
@@ -169,12 +190,34 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
     }
   };
 
-  const handleSkip = () => {
-    toast({
-      title: "Shadows Skipped",
-      description: "Continuing without drop shadows",
-    });
-    onSkip();
+  const handleSkip = async () => {
+    console.log('🪞 Generating reflections even though shadows are skipped...');
+    try {
+      const generatedReflections = await generateReflections(images, {
+        intensity: 0.3,
+        height: 0.5,
+        blur: 3,
+        fadeStrength: 0.7,
+        offset: 5
+      });
+      
+      console.log(`✅ Generated ${generatedReflections.length} reflections without shadows`);
+      setReflections(generatedReflections);
+      
+      toast({
+        title: "Reflections Generated",
+        description: "Continuing with reflections but no shadows",
+      });
+      onSkip();
+    } catch (error) {
+      console.error('Error generating reflections:', error);
+      toast({
+        title: "Warning",
+        description: "Continuing without reflections or shadows",
+        variant: "default"
+      });
+      onSkip();
+    }
   };
 
   return (
@@ -408,11 +451,11 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
 
                 <div className="flex gap-3">
                   <Button
-                    onClick={() => onComplete(shadowedResults)}
+                    onClick={() => onComplete(shadowedResults, reflections)}
                     className="flex-1"
                     size="lg"
                   >
-                    Continue with Shadows
+                    Continue with Shadows & Reflections
                   </Button>
                   <Button
                     variant="outline"

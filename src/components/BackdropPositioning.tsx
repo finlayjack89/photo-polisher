@@ -14,13 +14,21 @@ import { BackdropLibrary } from "@/components/BackdropLibrary";
 import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-rotation-utils";
 
 interface BackdropPositioningProps {
-  cutoutImages: string[]; // Data URLs of cut-out subjects
-  onPositioningComplete: (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => void;
+  cutoutImages: string[]; // Data URLs of cut-out subjects (with shadows)
+  reflections?: string[]; // Data URLs of reflections (generated from transparent subjects)
+  onPositioningComplete: (
+    backdrop: string, 
+    placement: SubjectPlacement, 
+    addBlur: boolean, 
+    rotatedSubjects?: string[],
+    rotatedReflections?: string[]
+  ) => void;
   onBack: () => void;
 }
 
 export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   cutoutImages,
+  reflections = [],
   onPositioningComplete,
   onBack
 }) => {
@@ -41,6 +49,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     scale: 0.8 // 80% of backdrop width
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
+  const [rotatedReflections, setRotatedReflections] = useState<string[]>(reflections);
   const [isRotating, setIsRotating] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -129,7 +138,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     if (backdrop && firstSubject && canvasRef.current) {
       drawPreview();
     }
-  }, [backdrop, firstSubject, placement]);
+  }, [backdrop, firstSubject, placement, rotatedReflections]);
 
   const handleBackdropUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -184,11 +193,14 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
 
     const backdropImg = new Image();
     const subjectImg = new Image();
+    const reflectionImg = rotatedReflections.length > 0 ? new Image() : null;
+    
     let loadedCount = 0;
+    const totalImages = reflectionImg ? 3 : 2;
 
     const onLoad = () => {
       loadedCount++;
-      if (loadedCount === 2) {
+      if (loadedCount === totalImages) {
         // Use consistent canvas dimensions for preview (normalize to max 800px)
         const maxCanvasSize = 800;
         const backdropAspectRatio = backdropImg.naturalWidth / backdropImg.naturalHeight;
@@ -205,7 +217,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         
-        // Remove display size constraints to show full shadow
+        // Remove display size constraints to show full shadow and reflection
         canvas.style.width = 'auto';
         canvas.style.height = 'auto';
         canvas.style.maxWidth = '100%';
@@ -215,7 +227,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(backdropImg, 0, 0, canvas.width, canvas.height);
 
-        // Draw subject at specified position
+        // Calculate subject positioning
         const subjectAspectRatio = subjectImg.naturalWidth / subjectImg.naturalHeight;
         const scaledWidth = canvas.width * placement.scale;
         const scaledHeight = scaledWidth / subjectAspectRatio;
@@ -223,6 +235,19 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         const dx = (placement.x * canvas.width) - (scaledWidth / 2);
         const dy = (placement.y * canvas.height) - (scaledHeight / 2);
 
+        // Draw reflection FIRST (below subject)
+        if (reflectionImg) {
+          const reflectionAspectRatio = reflectionImg.naturalWidth / reflectionImg.naturalHeight;
+          const reflectionScaledWidth = canvas.width * placement.scale;
+          const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
+          
+          const reflectionDx = (placement.x * canvas.width) - (reflectionScaledWidth / 2);
+          const reflectionDy = (placement.y * canvas.height) - (reflectionScaledHeight / 2);
+          
+          ctx.drawImage(reflectionImg, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);
+        }
+
+        // Draw subject WITH shadow on top of reflection
         ctx.drawImage(subjectImg, dx, dy, scaledWidth, scaledHeight);
       }
     };
@@ -231,6 +256,11 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     subjectImg.onload = onLoad;
     backdropImg.src = backdrop;
     subjectImg.src = firstSubject;
+    
+    if (reflectionImg && rotatedReflections.length > 0) {
+      reflectionImg.onload = onLoad;
+      reflectionImg.src = rotatedReflections[0];
+    }
   };
 
   const handleCanvasMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -289,9 +319,21 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const allRotatedSubjects = await Promise.all(rotatedDataPromises);
       setRotatedSubjects(allRotatedSubjects);
       
+      // Also rotate ALL reflections
+      if (rotatedReflections.length > 0) {
+        const rotatedReflectionPromises = rotatedReflections.map(async (reflectionData) => {
+          return direction === 'clockwise' 
+            ? await rotateImageClockwise(reflectionData)
+            : await rotateImageCounterClockwise(reflectionData);
+        });
+
+        const allRotatedReflections = await Promise.all(rotatedReflectionPromises);
+        setRotatedReflections(allRotatedReflections);
+      }
+      
       toast({
-        title: "All subjects rotated",
-        description: `All ${rotatedSubjects.length} subjects rotated ${direction}`,
+        title: "All subjects & reflections rotated",
+        description: `Rotated ${rotatedSubjects.length} subjects and ${rotatedReflections.length} reflections ${direction}`,
       });
     } catch (error) {
       console.error('Error rotating subjects:', error);
@@ -319,8 +361,12 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         isDataUrl: backdrop.startsWith('data:image/'),
         backdropType: backdrop.split(';')[0]
       });
-      console.log('✅ VERIFIED: Passing PURE backdrop (not contaminated with subject)');
-      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects);
+      console.log('🪞 Reflections:', {
+        count: rotatedReflections.length,
+        hasReflections: rotatedReflections.length > 0
+      });
+      console.log('✅ VERIFIED: Passing backdrop, subjects, and reflections');
+      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects, rotatedReflections);
     }
   };
 

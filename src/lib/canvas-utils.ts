@@ -175,13 +175,14 @@ export const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 /**
- * Composite backdrop and subject to create final image
- * Simplified version without AI-generated shadows
+ * Composite backdrop, reflection, and subject to create final image
+ * Layers: backdrop → reflection → subject (with shadow)
  */
 export const compositeLayers = async (
   backdropUrl: string,
   subjectUrl: string,
-  placement: SubjectPlacement
+  placement: SubjectPlacement,
+  reflectionUrl?: string
 ): Promise<string> => {
   console.log('🎨 COMPOSITING: Starting layer composition');
   console.log('📊 Input validation:', {
@@ -228,14 +229,23 @@ export const compositeLayers = async (
   };
 
   try {
-    // Load backdrop and subject images
-    console.log('Loading backdrop and subject images...');
-    const [backdrop, subject] = await Promise.all([
+    // Load backdrop, subject, and reflection images
+    console.log('Loading backdrop, subject, and reflection images...');
+    const imagesToLoad: Promise<HTMLImageElement>[] = [
       loadImage(backdropUrl, 'backdrop'),
       loadImage(subjectUrl, 'subject')
-    ]);
+    ];
+    
+    if (reflectionUrl) {
+      imagesToLoad.push(loadImage(reflectionUrl, 'reflection'));
+    }
+    
+    const loadedImages = await Promise.all(imagesToLoad);
+    const backdrop = loadedImages[0];
+    const subject = loadedImages[1];
+    const reflection = reflectionUrl ? loadedImages[2] : null;
 
-    console.log('All images loaded successfully');
+    console.log('All images loaded successfully', reflection ? 'including reflection' : '');
 
     // Create canvas with backdrop dimensions
     const canvas = document.createElement('canvas');
@@ -254,7 +264,6 @@ export const compositeLayers = async (
     ctx.drawImage(backdrop, 0, 0);
 
     // Calculate subject positioning based on placement settings
-    console.log('Drawing subject with placement:', placement);
     const subjectAspectRatio = subject.naturalWidth / subject.naturalHeight;
     const scaledWidth = canvas.width * placement.scale;
     const scaledHeight = scaledWidth / subjectAspectRatio;
@@ -267,7 +276,27 @@ export const compositeLayers = async (
       position: `${Math.round(dx)}, ${Math.round(dy)}`,
       placement
     });
+
+    // Draw reflection FIRST (below subject layer)
+    if (reflection) {
+      console.log('Drawing reflection...');
+      const reflectionAspectRatio = reflection.naturalWidth / reflection.naturalHeight;
+      const reflectionScaledWidth = canvas.width * placement.scale;
+      const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
+      const reflectionDx = (placement.x * canvas.width) - (reflectionScaledWidth / 2);
+      const reflectionDy = (placement.y * canvas.height) - (reflectionScaledHeight / 2);
+      
+      console.log('Reflection positioning:', {
+        originalSize: `${reflection.naturalWidth}x${reflection.naturalHeight}`,
+        scaledSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
+        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`
+      });
+      
+      ctx.drawImage(reflection, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);
+    }
     
+    // Draw subject WITH shadow on top of reflection
+    console.log('Drawing subject with shadow...');
     ctx.drawImage(subject, dx, dy, scaledWidth, scaledHeight);
 
     // Return the final composited image as a high-quality data URL

@@ -23,6 +23,7 @@ type WorkflowStep = 'analysis' | 'background-removal' | 'rotation' | 'shadow-gen
 interface ProcessedImages {
   backgroundRemoved: Array<{ name: string; originalData: string; backgroundRemovedData: string; size: number; }>;
   shadowed?: Array<{ name: string; shadowedData: string; }>;
+  reflections?: Array<{ name: string; reflectionData: string; }>;
   backdrop?: string;
   placement?: SubjectPlacement;
   finalComposited?: Array<{ name: string; compositedData: string; }>;
@@ -122,20 +123,33 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentStep('shadow-generation');
   };
 
-  const handleShadowGenerationComplete = (shadowedImages: Array<{ name: string; shadowedData: string }>) => {
+  const handleShadowGenerationComplete = (
+    shadowedImages: Array<{ name: string; shadowedData: string }>,
+    reflections: Array<{ name: string; reflectionData: string }>
+  ) => {
     console.log('Shadow generation complete:', shadowedImages);
-    setProcessedImages(prev => ({ ...prev, shadowed: shadowedImages }));
+    console.log('Reflections generated:', reflections);
+    setProcessedImages(prev => ({ 
+      ...prev, 
+      shadowed: shadowedImages,
+      reflections: reflections
+    }));
     setCurrentStep('positioning');
   };
 
   const handleShadowSkip = () => {
-    console.log('Shadow generation skipped, using transparent images');
-    // Use the transparent images as-is, create shadowed array from them
+    console.log('Shadow generation skipped, but reflections should have been generated');
+    // Use the transparent images as-is for shadowed array
     const shadowedFromTransparent = processedImages.backgroundRemoved.map(img => ({
       name: img.name,
       shadowedData: img.backgroundRemovedData
     }));
-    setProcessedImages(prev => ({ ...prev, shadowed: shadowedFromTransparent }));
+    
+    // Reflections should already be set by the skip handler in ShadowGenerationStep
+    setProcessedImages(prev => ({ 
+      ...prev, 
+      shadowed: shadowedFromTransparent
+    }));
     setCurrentStep('positioning');
   };
 
@@ -158,7 +172,13 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     setCurrentStep('shadow-generation');
   };
 
-  const handlePositioningComplete = (backdrop: string, placement: SubjectPlacement, addBlur: boolean, rotatedSubjects?: string[]) => {
+  const handlePositioningComplete = (
+    backdrop: string, 
+    placement: SubjectPlacement, 
+    addBlur: boolean, 
+    rotatedSubjects?: string[],
+    rotatedReflections?: string[]
+  ) => {
     console.log('🎯 Positioning completed');
     console.log(`📊 Backdrop format: ${backdrop?.substring(0, 50)}`);
     console.log(`📐 Placement: ${JSON.stringify(placement)}`);
@@ -178,18 +198,27 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
           backgroundRemovedData: rotatedSubjects[index] || subject.backgroundRemovedData
         }));
         
-        // CRITICAL FIX: Also update shadowed images with rotated versions
+        // Update shadowed images with rotated versions
         const updatedShadowed = processedImages.shadowed?.map((subject, index) => ({
           ...subject,
           shadowedData: rotatedSubjects[index] || subject.shadowedData
         }));
+        
+        // Update reflections with rotated versions
+        const updatedReflections = rotatedReflections && rotatedReflections.length > 0
+          ? processedImages.reflections?.map((reflection, index) => ({
+              ...reflection,
+              reflectionData: rotatedReflections[index] || reflection.reflectionData
+            }))
+          : processedImages.reflections;
         
         setProcessedImages(prev => ({ 
           ...prev, 
           backdrop, 
           placement,
           backgroundRemoved: updatedBackgroundRemoved,
-          shadowed: updatedShadowed
+          shadowed: updatedShadowed,
+          reflections: updatedReflections
         }));
       }
       
@@ -220,17 +249,22 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     const results: Array<{ name: string; compositedData: string }> = [];
 
     try {
-      // Composite each shadowed image
+      // Composite each shadowed image with its reflection
       for (let i = 0; i < processedImages.shadowed.length; i++) {
         const image = processedImages.shadowed[i];
+        const reflection = processedImages.reflections?.[i];
         
         console.log(`Compositing image ${i + 1}/${processedImages.shadowed.length}: ${image.name}`);
+        if (reflection) {
+          console.log(`  Including reflection for ${image.name}`);
+        }
 
-        // Client-side compositing with shadowed images
+        // Client-side compositing with shadowed images and reflections
         const compositedImage = await compositeLayers(
           processedImages.backdrop,
           image.shadowedData,
-          processedImages.placement
+          processedImages.placement,
+          reflection?.reflectionData
         );
         
         console.log(`✅ Compositing complete for ${image.name}`);
@@ -348,10 +382,14 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
     // Use shadowed images if available, otherwise fall back to transparent
     const imagesForPositioning = processedImages.shadowed?.map(img => img.shadowedData) || 
                                   processedImages.backgroundRemoved.map(img => img.backgroundRemovedData);
+    
+    // Pass reflections to positioning component
+    const reflectionsForPositioning = processedImages.reflections?.map(r => r.reflectionData) || [];
 
     return (
       <BackdropPositioning
         cutoutImages={imagesForPositioning}
+        reflections={reflectionsForPositioning}
         onPositioningComplete={handlePositioningComplete}
         onBack={() => setCurrentStep('shadow-generation')}
       />
