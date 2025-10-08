@@ -93,16 +93,17 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const updateLivePreview = () => {
-    // Calculate aggressive padding based on spread to ensure shadow never gets cropped
-    // Minimum 400px (200px per side), scales up dramatically with spread
-    const padding = Math.max(400, spread * 50);
-    console.log(`Using padding: ${padding}px for spread: ${spread}`);
+    // Calculate padding multiplier - minimum 1.5x canvas size, scales with spread
+    // For spread=5: 1.5x, for spread=50: 1.5x (max of formula), for spread=100: 2x
+    const paddingMultiplier = Math.max(1.5, 1 + (spread / 100));
+    console.log(`Using padding multiplier: ${paddingMultiplier}x for spread: ${spread}`);
     
-    // Apply padding BEFORE drop shadow - this expands the canvas first, then applies shadow
-    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/c_pad,w_iw_add_${padding},h_ih_add_${padding},b_transparent/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
+    // Use c_lpad (letterbox pad) with multiplication syntax - VALID Cloudinary syntax
+    // w_iw_mul_X multiplies the original width by X (this actually works!)
+    const transformUrl = `https://res.cloudinary.com/${cloudinaryCloudName}/image/upload/c_lpad,w_iw_mul_${paddingMultiplier},h_ih_mul_${paddingMultiplier},b_transparent/e_dropshadow:azimuth_${azimuth};elevation_${elevation};spread_${spread}/${cloudinaryPublicId}.png`;
     const timestamp = Date.now();
     console.log('🔄 Updating live preview:', transformUrl);
-    console.log('Shadow params:', { azimuth, elevation, spread, padding });
+    console.log('Shadow params:', { azimuth, elevation, spread, paddingMultiplier });
     setLivePreviewUrl(`${transformUrl}?t=${timestamp}`);
   };
 
