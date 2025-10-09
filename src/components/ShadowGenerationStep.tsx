@@ -17,9 +17,10 @@ interface ShadowGenerationStepProps {
   }>;
   onComplete: (
     shadowedImages: Array<{ name: string; shadowedData: string }>,
-    reflections: Array<{ name: string; reflectionData: string }>
+    reflections: Array<{ name: string; reflectionData: string }>,
+    cleanSubjects: Array<{ name: string; cleanData: string }>
   ) => void;
-  onSkip: () => void;
+  onSkip: (cleanSubjects: Array<{ name: string; cleanData: string }>) => void;
   onBack: () => void;
 }
 
@@ -175,6 +176,15 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
 
         setProgress(100);
         setIsProcessing(false);
+        
+        // Prepare clean subjects for CSS reflection
+        const cleanSubjects = images.map(img => ({
+          name: img.name,
+          cleanData: img.data
+        }));
+        
+        // Auto-continue with all data
+        onComplete(shadowedImages, generatedReflections, cleanSubjects);
       } else {
         throw new Error('No data returned from shadow generation');
       }
@@ -204,19 +214,32 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       console.log(`✅ Generated ${generatedReflections.length} mirror reflections without shadows`);
       setReflections(generatedReflections);
       
+      // Prepare clean subjects for CSS reflection
+      const cleanSubjects = images.map(img => ({
+        name: img.name,
+        cleanData: img.data
+      }));
+      
       toast({
         title: "🪞 Mirror Reflections Generated",
         description: "Continuing with realistic reflections but no shadows",
       });
-      onSkip();
+      onSkip(cleanSubjects);
     } catch (error) {
       console.error('Error generating reflections:', error);
+      
+      // Still pass clean subjects even if reflection generation fails
+      const cleanSubjects = images.map(img => ({
+        name: img.name,
+        cleanData: img.data
+      }));
+      
       toast({
         title: "Warning",
         description: "Continuing without reflections or shadows",
         variant: "default"
       });
-      onSkip();
+      onSkip(cleanSubjects);
     }
   };
 
@@ -451,7 +474,13 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
 
                 <div className="flex gap-3">
                   <Button
-                    onClick={() => onComplete(shadowedResults, reflections)}
+                    onClick={() => {
+                      const cleanSubjects = images.map(img => ({
+                        name: img.name,
+                        cleanData: img.data
+                      }));
+                      onComplete(shadowedResults, reflections, cleanSubjects);
+                    }}
                     className="flex-1"
                     size="lg"
                   >

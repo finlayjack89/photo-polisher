@@ -140,7 +140,42 @@ All colors MUST be HSL.
 
 @layer utilities {
   /* Checkered background for transparency visualization */
-  .bg-checkered {
+/* Professional CSS-based reflection for product photography */
+.css-reflection {
+  /* Flip the image vertically to create reflection */
+  transform: scaleY(-1) translateX(-50%);
+  transform-origin: top center;
+  
+  /* Create fade-out effect using CSS mask (professional gradient) */
+  mask-image: linear-gradient(
+    to bottom, 
+    rgba(0, 0, 0, 0.5) 0%,      /* 50% opacity at top (touching product) */
+    rgba(0, 0, 0, 0.3) 20%,     /* 30% at 20% */
+    rgba(0, 0, 0, 0.1) 50%,     /* 10% at midpoint */
+    transparent 70%              /* Fully transparent at 70% */
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom, 
+    rgba(0, 0, 0, 0.5) 0%, 
+    rgba(0, 0, 0, 0.3) 20%,
+    rgba(0, 0, 0, 0.1) 50%,
+    transparent 70%
+  );
+  
+  /* Apply subtle filters for photorealistic reflection */
+  filter: blur(2px) brightness(0.8);
+  
+  /* Set global opacity (controls overall reflection strength) */
+  opacity: 0.4;
+  
+  /* Clip reflection to only show bottom portion */
+  clip-path: inset(0 0 65% 0); /* Show only top 35% of flipped image */
+  
+  /* Smooth transitions when position changes */
+  transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out;
+}
+
+.bg-checkered {
     background-image: 
       linear-gradient(45deg, hsl(var(--muted)) 25%, transparent 25%), 
       linear-gradient(-45deg, hsl(var(--muted)) 25%, transparent 25%), 

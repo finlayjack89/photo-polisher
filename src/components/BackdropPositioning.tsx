@@ -15,7 +15,8 @@ import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-r
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects (with shadows)
-  reflections?: string[]; // Data URLs of reflections (generated from transparent subjects)
+  reflections?: string[]; // Data URLs of reflections (for canvas-based final compositing)
+  cleanSubjects?: string[]; // Data URLs of clean subjects (for CSS reflection preview)
   onPositioningComplete: (
     backdrop: string, 
     placement: SubjectPlacement, 
@@ -29,6 +30,7 @@ interface BackdropPositioningProps {
 export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   cutoutImages,
   reflections = [],
+  cleanSubjects = [],
   onPositioningComplete,
   onBack
 }) => {
@@ -50,15 +52,19 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
   const [rotatedReflections, setRotatedReflections] = useState<string[]>(reflections);
+  const [rotatedCleanSubjects, setRotatedCleanSubjects] = useState<string[]>(cleanSubjects);
   const [isRotating, setIsRotating] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const subjectRef = useRef<HTMLImageElement>(null);
+  const reflectionRef = useRef<HTMLImageElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const { toast } = useToast();
 
   const firstSubject = rotatedSubjects[0]; // Use first rotated image for positioning
+  const firstCleanSubject = rotatedCleanSubjects.length > 0 ? rotatedCleanSubjects[0] : null;
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -135,9 +141,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   };
 
   useEffect(() => {
-    if (backdrop && firstSubject && canvasRef.current) {
-      drawPreview();
-    }
+    // Canvas is now only used for backward compatibility and final compositing
+    // Real-time preview is handled by CSS-based approach
   }, [backdrop, firstSubject, placement, rotatedReflections]);
 
   const handleBackdropUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,124 +189,6 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     }
   };
 
-  const drawPreview = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const backdropImg = new Image();
-    const subjectImg = new Image();
-    const reflectionImg = rotatedReflections.length > 0 ? new Image() : null;
-    
-    let loadedCount = 0;
-    const totalImages = reflectionImg ? 3 : 2;
-
-    const onLoad = () => {
-      loadedCount++;
-      if (loadedCount === totalImages) {
-        // Use consistent canvas dimensions for preview (normalize to max 800px)
-        const maxCanvasSize = 800;
-        const backdropAspectRatio = backdropImg.naturalWidth / backdropImg.naturalHeight;
-        
-        let canvasWidth, canvasHeight;
-        if (backdropAspectRatio > 1) {
-          canvasWidth = Math.min(maxCanvasSize, backdropImg.naturalWidth);
-          canvasHeight = canvasWidth / backdropAspectRatio;
-        } else {
-          canvasHeight = Math.min(maxCanvasSize, backdropImg.naturalHeight);
-          canvasWidth = canvasHeight * backdropAspectRatio;
-        }
-        
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        
-        // Remove display size constraints to show full shadow and reflection
-        canvas.style.width = 'auto';
-        canvas.style.height = 'auto';
-        canvas.style.maxWidth = '100%';
-        canvas.style.maxHeight = '600px';
-
-        // Clear canvas and draw backdrop
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(backdropImg, 0, 0, canvas.width, canvas.height);
-
-        // Calculate subject positioning
-        const subjectAspectRatio = subjectImg.naturalWidth / subjectImg.naturalHeight;
-        const scaledWidth = canvas.width * placement.scale;
-        const scaledHeight = scaledWidth / subjectAspectRatio;
-        
-        const dx = (placement.x * canvas.width) - (scaledWidth / 2);
-        const dy = (placement.y * canvas.height) - (scaledHeight / 2);
-
-        // Draw reflection FIRST (below subject)
-        if (reflectionImg) {
-          const reflectionAspectRatio = reflectionImg.naturalWidth / reflectionImg.naturalHeight;
-          const reflectionScaledWidth = canvas.width * placement.scale;
-          const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
-          
-          const reflectionDx = (placement.x * canvas.width) - (reflectionScaledWidth / 2);
-          const reflectionDy = (placement.y * canvas.height) - (reflectionScaledHeight / 2);
-          
-          ctx.drawImage(reflectionImg, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);
-        }
-
-        // Draw subject WITH shadow on top of reflection
-        ctx.drawImage(subjectImg, dx, dy, scaledWidth, scaledHeight);
-      }
-    };
-
-    backdropImg.onload = onLoad;
-    subjectImg.onload = onLoad;
-    backdropImg.src = backdrop;
-    subjectImg.src = firstSubject;
-    
-    if (reflectionImg && rotatedReflections.length > 0) {
-      reflectionImg.onload = onLoad;
-      reflectionImg.src = rotatedReflections[0];
-    }
-  };
-
-  const handleCanvasMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
-
-    setIsDragging(true);
-    setDragStart({ x, y });
-  };
-
-  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
-
-    setPlacement(prev => ({
-      ...prev,
-      x: Math.max(0, Math.min(1, x / canvas.width)),
-      y: Math.max(0, Math.min(1, y / canvas.height))
-    }));
-  };
-
-  const handleCanvasMouseUp = () => {
-    setIsDragging(false);
-  };
-
   const handleScaleChange = (value: number[]) => {
     setPlacement(prev => ({ ...prev, scale: value[0] }));
   };
@@ -329,6 +216,18 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
 
         const allRotatedReflections = await Promise.all(rotatedReflectionPromises);
         setRotatedReflections(allRotatedReflections);
+      }
+      
+      // Also rotate ALL clean subjects for CSS reflection
+      if (rotatedCleanSubjects.length > 0) {
+        const rotatedCleanPromises = rotatedCleanSubjects.map(async (cleanData) => {
+          return direction === 'clockwise' 
+            ? await rotateImageClockwise(cleanData)
+            : await rotateImageCounterClockwise(cleanData);
+        });
+
+        const allRotatedClean = await Promise.all(rotatedCleanPromises);
+        setRotatedCleanSubjects(allRotatedClean);
       }
       
       toast({
@@ -650,19 +549,87 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
             <CardContent>
               {backdrop && firstSubject ? (
                 <div className="space-y-4">
-                  <div className="flex justify-center items-center bg-muted/50 rounded-lg border-2 border-muted-foreground/10 p-4 overflow-auto" style={{ minHeight: '300px', maxHeight: '600px' }}>
-                    <canvas
-                      ref={canvasRef}
-                      className="cursor-move border border-muted-foreground/20 rounded shadow-sm"
-                      onMouseDown={handleCanvasMouseDown}
-                      onMouseMove={handleCanvasMouseMove}
-                      onMouseUp={handleCanvasMouseUp}
-                      onMouseLeave={handleCanvasMouseUp}
+                  {/* CSS-based interactive preview with real-time reflection */}
+                  <div 
+                    className="relative overflow-hidden rounded-lg border-2 border-primary/50"
+                    style={{
+                      width: '100%',
+                      height: '500px',
+                      backgroundImage: `url(${backdrop})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center'
+                    }}
+                    onMouseDown={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsDragging(true);
+                      setDragStart({ x: e.clientX, y: e.clientY });
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isDragging) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const deltaX = e.clientX - dragStart.x;
+                      const deltaY = e.clientY - dragStart.y;
+                      
+                      setPlacement(prev => ({
+                        ...prev,
+                        x: Math.max(0, Math.min(1, prev.x + (deltaX / rect.width))),
+                        y: Math.max(0, Math.min(1, prev.y + (deltaY / rect.height)))
+                      }));
+                      
+                      setDragStart({ x: e.clientX, y: e.clientY });
+                    }}
+                    onMouseUp={() => setIsDragging(false)}
+                    onMouseLeave={() => setIsDragging(false)}
+                  >
+                    {/* CSS Reflection Layer (clean subject, hidden from screen readers) */}
+                    {firstCleanSubject && (
+                      <img
+                        ref={reflectionRef}
+                        src={firstCleanSubject}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute pointer-events-none css-reflection"
+                        style={{
+                          left: `${placement.x * 100}%`,
+                          top: `${(placement.y * 100) + 10}%`,
+                          width: `${placement.scale * 100}%`,
+                          maxWidth: '100%',
+                          height: 'auto',
+                          zIndex: 1
+                        }}
+                      />
+                    )}
+                    
+                    {/* Main Subject with Shadow (draggable) */}
+                    <img
+                      ref={subjectRef}
+                      src={firstSubject}
+                      alt="Product with shadow"
+                      className="absolute cursor-move select-none"
+                      style={{
+                        left: `${placement.x * 100}%`,
+                        top: `${placement.y * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: `${placement.scale * 100}%`,
+                        maxWidth: '100%',
+                        height: 'auto',
+                        zIndex: 2
+                      }}
+                      draggable={false}
                     />
+                    
+                    {/* Positioning guide */}
+                    <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
+                      X: {Math.round(placement.x * 100)}% Y: {Math.round(placement.y * 100)}% Scale: {Math.round(placement.scale * 100)}%
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground text-center">
-                    Position: ({Math.round(placement.x * 100)}%, {Math.round(placement.y * 100)}%)
-                  </div>
+                  
+                  <p className="text-sm text-muted-foreground text-center">
+                    Drag the product to position it. The reflection updates in real-time using CSS.
+                  </p>
+                  
+                  {/* Hidden canvas for backward compatibility */}
+                  <canvas ref={canvasRef} className="hidden" />
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-64 bg-muted/20 rounded-lg border-2 border-dashed">
