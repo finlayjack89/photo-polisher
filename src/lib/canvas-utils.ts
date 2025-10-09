@@ -280,23 +280,24 @@ export const compositeLayers = async (
     // Draw reflection FIRST (positioned directly below subject)
     if (reflection) {
       console.log('Drawing reflection below subject...');
-      const reflectionAspectRatio = reflection.naturalWidth / reflection.naturalHeight;
       
       // Reflection must match subject's EXACT width and position
-      const reflectionScaledWidth = scaledWidth; // Use subject's width exactly
-      const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
+      const reflectionScaledWidth = scaledWidth; // Match subject width exactly
+      // Calculate reflection height as proportion of subject's scaled height (not aspect ratio!)
+      const reflectionHeightRatio = reflection.naturalHeight / subject.naturalHeight;
+      const reflectionScaledHeight = scaledHeight * reflectionHeightRatio;
       const reflectionDx = dx; // Use subject's X position exactly
       
       // Position reflection directly below subject (at subject's bottom edge)
       const reflectionOffset = 0; // No gap for realistic surface reflection
       const reflectionDy = dy + scaledHeight + reflectionOffset;
       
-      console.log('Reflection positioning:', {
+      console.log('Reflection positioning (professional):', {
         originalSize: `${reflection.naturalWidth}x${reflection.naturalHeight}`,
         scaledSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
         position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
-        subjectWidth: Math.round(scaledWidth),
-        subjectBottomY: Math.round(dy + scaledHeight),
+        subjectScaledSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`,
         widthMatch: reflectionScaledWidth === scaledWidth ? '✓ MATCHED' : '✗ MISMATCH'
       });
       

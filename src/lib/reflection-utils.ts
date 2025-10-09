@@ -12,11 +12,11 @@ export interface ReflectionOptions {
 }
 
 const DEFAULT_OPTIONS: ReflectionOptions = {
-  intensity: 0.45,   // 45% opacity (more visible)
-  height: 0.7,       // 70% of subject height (more recognizable)
-  blur: 3,           // 3px blur (preserve details)
-  fadeStrength: 0.85, // 85% fade (strong fade toward bottom)
-  offset: 0          // 0px gap (reflection starts immediately at surface)
+  intensity: 0.18,    // 18% opacity (subtle, professional)
+  height: 0.35,       // 35% of subject height (short, realistic)
+  blur: 2,            // 2px blur (preserve product details)
+  fadeStrength: 0.95, // 95% rapid fade (exponential drop-off)
+  offset: 0           // 0px gap (seamless surface contact)
 };
 
 /**
@@ -81,11 +81,12 @@ export const generateReflection = async (
           reflectionHeight
         );
         
-        // Fade from more visible at top to fully transparent at bottom
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${1 - opts.intensity})`); // Start at 45% opacity
-        gradient.addColorStop(opts.fadeStrength * 0.5, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.5)})`); // Mid-fade
-        gradient.addColorStop(opts.fadeStrength, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.2)})`); // Near bottom
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 1)'); // Fully transparent at bottom
+        // Exponential fade: strong at top, drops rapidly (professional product photography)
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${1 - opts.intensity})`);     // 18% at top
+        gradient.addColorStop(0.3, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.4)})`); // 7% at 30%
+        gradient.addColorStop(0.6, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.15)})`); // 2.7% at 60%
+        gradient.addColorStop(opts.fadeStrength, `rgba(255, 255, 255, 0.98)`);      // Nearly gone at 95%
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 1)');                         // Fully transparent
         
         ctx.globalCompositeOperation = 'destination-out';
         ctx.fillStyle = gradient;
