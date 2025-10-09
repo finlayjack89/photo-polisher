@@ -120,16 +120,16 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       console.log(`Starting shadow generation for ${images.length} images with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
       // Step 1: Generate reflections BEFORE sending to Cloudinary
-      console.log('🪞 Step 1: Generating reflections from transparent subjects...');
+      console.log('🪞 Step 1: Generating mirror reflections from transparent subjects...');
       const generatedReflections = await generateReflections(images, {
-        intensity: 0.3,
-        height: 0.5,
-        blur: 3,
-        fadeStrength: 0.7,
-        offset: 5
+        intensity: 0.25,   // Subtle 25% opacity
+        height: 0.4,       // 40% of subject height
+        blur: 5,           // Realistic blur
+        fadeStrength: 0.8, // Strong fade
+        offset: 0          // No gap
       });
       
-      console.log(`✅ Generated ${generatedReflections.length} reflections`);
+      console.log(`✅ Generated ${generatedReflections.length} mirror reflections`);
       setReflections(generatedReflections);
       setProgress(30);
 
@@ -168,8 +168,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           });
         } else {
           toast({
-            title: "Shadows & Reflections Generated",
-            description: `Successfully added drop shadows and reflections to ${shadowedImages.length} images.`,
+            title: "✓ Shadows & Mirror Reflections Generated",
+            description: `Successfully added drop shadows and realistic mirror reflections to ${shadowedImages.length} images.`,
           });
         }
 
@@ -191,22 +191,22 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const handleSkip = async () => {
-    console.log('🪞 Generating reflections even though shadows are skipped...');
+    console.log('🪞 Generating mirror reflections even though shadows are skipped...');
     try {
       const generatedReflections = await generateReflections(images, {
-        intensity: 0.3,
-        height: 0.5,
-        blur: 3,
-        fadeStrength: 0.7,
-        offset: 5
+        intensity: 0.25,   // Subtle 25% opacity
+        height: 0.4,       // 40% of subject height
+        blur: 5,           // Realistic blur
+        fadeStrength: 0.8, // Strong fade
+        offset: 0          // No gap
       });
       
-      console.log(`✅ Generated ${generatedReflections.length} reflections without shadows`);
+      console.log(`✅ Generated ${generatedReflections.length} mirror reflections without shadows`);
       setReflections(generatedReflections);
       
       toast({
-        title: "Reflections Generated",
-        description: "Continuing with reflections but no shadows",
+        title: "🪞 Mirror Reflections Generated",
+        description: "Continuing with realistic reflections but no shadows",
       });
       onSkip();
     } catch (error) {

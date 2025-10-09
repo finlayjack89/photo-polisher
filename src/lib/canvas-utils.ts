@@ -277,19 +277,23 @@ export const compositeLayers = async (
       placement
     });
 
-    // Draw reflection FIRST (below subject layer)
+    // Draw reflection FIRST (positioned directly below subject)
     if (reflection) {
-      console.log('Drawing reflection...');
+      console.log('Drawing reflection below subject...');
       const reflectionAspectRatio = reflection.naturalWidth / reflection.naturalHeight;
       const reflectionScaledWidth = canvas.width * placement.scale;
       const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
       const reflectionDx = (placement.x * canvas.width) - (reflectionScaledWidth / 2);
-      const reflectionDy = (placement.y * canvas.height) - (reflectionScaledHeight / 2);
+      
+      // Position reflection directly below subject (at subject's bottom edge)
+      const reflectionOffset = 0; // No gap for realistic surface reflection
+      const reflectionDy = dy + scaledHeight + reflectionOffset;
       
       console.log('Reflection positioning:', {
         originalSize: `${reflection.naturalWidth}x${reflection.naturalHeight}`,
         scaledSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
-        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`
+        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
+        belowSubjectAt: Math.round(dy + scaledHeight)
       });
       
       ctx.drawImage(reflection, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);

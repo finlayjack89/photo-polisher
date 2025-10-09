@@ -12,11 +12,11 @@ export interface ReflectionOptions {
 }
 
 const DEFAULT_OPTIONS: ReflectionOptions = {
-  intensity: 0.3,
-  height: 0.5,
-  blur: 3,
-  fadeStrength: 0.7,
-  offset: 5
+  intensity: 0.25,   // 25% opacity (subtle realistic reflection)
+  height: 0.4,       // 40% of subject height (realistic for surface reflection)
+  blur: 5,           // 5px blur (realistic softness)
+  fadeStrength: 0.8, // 80% fade (stronger fade toward bottom)
+  offset: 0          // 0px gap (reflection starts immediately at surface)
 };
 
 /**
@@ -44,45 +44,40 @@ export const generateReflection = async (
         // Calculate reflection dimensions
         const reflectionHeight = Math.floor(img.height * opts.height);
         
-        // Canvas height = subject + offset + reflection
+        // Canvas contains ONLY the reflection (not subject)
         canvas.width = img.width;
-        canvas.height = img.height + opts.offset + reflectionHeight;
+        canvas.height = reflectionHeight;
 
         console.log('🪞 Generating reflection:', {
           subjectSize: `${img.width}x${img.height}`,
           reflectionHeight,
-          totalCanvasHeight: canvas.height,
+          reflectionCanvasHeight: canvas.height,
           options: opts
         });
 
-        // 1. Draw the original subject at the top
-        ctx.drawImage(img, 0, 0);
-
-        // 2. Create reflection below
+        // Create horizontally flipped reflection (mirror effect)
         ctx.save();
         
-        // Move to position below subject (after offset)
-        ctx.translate(0, img.height + opts.offset);
+        // Flip horizontally for mirror reflection
+        ctx.scale(-1, 1);
+        ctx.translate(-img.width, 0);
         
-        // Flip vertically for reflection
-        ctx.scale(1, -1);
-        
-        // Draw the reflected image (flipped)
+        // Draw the reflected image (horizontally flipped)
         // Only draw the top portion based on height setting
         ctx.drawImage(
           img,
           0, 0, img.width, reflectionHeight,  // Source: top portion of image
-          0, 0, img.width, reflectionHeight   // Destination: flipped below
+          0, 0, img.width, reflectionHeight   // Destination: flipped
         );
         
         ctx.restore();
 
-        // 3. Apply fade gradient to reflection area
+        // Apply fade gradient to create realistic reflection fade
         const gradient = ctx.createLinearGradient(
           0,
-          img.height + opts.offset,
           0,
-          img.height + opts.offset + reflectionHeight
+          0,
+          reflectionHeight
         );
         
         // Fade from semi-transparent to fully transparent
@@ -94,17 +89,17 @@ export const generateReflection = async (
         ctx.fillStyle = gradient;
         ctx.fillRect(
           0,
-          img.height + opts.offset,
+          0,
           canvas.width,
           reflectionHeight
         );
 
-        // 4. Apply blur to reflection area only (optional, can be expensive)
+        // Apply blur to reflection for realism
         if (opts.blur > 0) {
-          // Get reflection area as image data
+          // Get reflection as image data
           const reflectionImageData = ctx.getImageData(
             0,
-            img.height + opts.offset,
+            0,
             canvas.width,
             reflectionHeight
           );
@@ -121,9 +116,9 @@ export const generateReflection = async (
             tempCtx.drawImage(tempCanvas, 0, 0);
             
             // Put blurred reflection back
-            ctx.clearRect(0, img.height + opts.offset, canvas.width, reflectionHeight);
+            ctx.clearRect(0, 0, canvas.width, reflectionHeight);
             ctx.globalCompositeOperation = 'source-over';
-            ctx.drawImage(tempCanvas, 0, img.height + opts.offset);
+            ctx.drawImage(tempCanvas, 0, 0);
           }
         }
 
