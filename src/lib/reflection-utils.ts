@@ -12,7 +12,7 @@ export interface ReflectionOptions {
 }
 
 const DEFAULT_OPTIONS: ReflectionOptions = {
-  intensity: 0.18,    // 18% opacity (subtle, professional)
+  intensity: 0.50,    // 50% opacity (more visible)
   height: 0.35,       // 35% of subject height (short, realistic)
   blur: 2,            // 2px blur (preserve product details)
   fadeStrength: 0.95, // 95% rapid fade (exponential drop-off)
