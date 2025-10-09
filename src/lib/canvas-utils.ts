@@ -281,9 +281,11 @@ export const compositeLayers = async (
     if (reflection) {
       console.log('Drawing reflection below subject...');
       const reflectionAspectRatio = reflection.naturalWidth / reflection.naturalHeight;
-      const reflectionScaledWidth = canvas.width * placement.scale;
+      
+      // Reflection must match subject's EXACT width and position
+      const reflectionScaledWidth = scaledWidth; // Use subject's width exactly
       const reflectionScaledHeight = reflectionScaledWidth / reflectionAspectRatio;
-      const reflectionDx = (placement.x * canvas.width) - (reflectionScaledWidth / 2);
+      const reflectionDx = dx; // Use subject's X position exactly
       
       // Position reflection directly below subject (at subject's bottom edge)
       const reflectionOffset = 0; // No gap for realistic surface reflection
@@ -293,7 +295,9 @@ export const compositeLayers = async (
         originalSize: `${reflection.naturalWidth}x${reflection.naturalHeight}`,
         scaledSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
         position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
-        belowSubjectAt: Math.round(dy + scaledHeight)
+        subjectWidth: Math.round(scaledWidth),
+        subjectBottomY: Math.round(dy + scaledHeight),
+        widthMatch: reflectionScaledWidth === scaledWidth ? '✓ MATCHED' : '✗ MISMATCH'
       });
       
       ctx.drawImage(reflection, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);

@@ -12,10 +12,10 @@ export interface ReflectionOptions {
 }
 
 const DEFAULT_OPTIONS: ReflectionOptions = {
-  intensity: 0.25,   // 25% opacity (subtle realistic reflection)
-  height: 0.4,       // 40% of subject height (realistic for surface reflection)
-  blur: 5,           // 5px blur (realistic softness)
-  fadeStrength: 0.8, // 80% fade (stronger fade toward bottom)
+  intensity: 0.45,   // 45% opacity (more visible)
+  height: 0.7,       // 70% of subject height (more recognizable)
+  blur: 3,           // 3px blur (preserve details)
+  fadeStrength: 0.85, // 85% fade (strong fade toward bottom)
   offset: 0          // 0px gap (reflection starts immediately at surface)
 };
 
@@ -55,19 +55,20 @@ export const generateReflection = async (
           options: opts
         });
 
-        // Create horizontally flipped reflection (mirror effect)
+        // Create vertically flipped reflection (upside down)
         ctx.save();
         
-        // Flip horizontally for mirror reflection
-        ctx.scale(-1, 1);
-        ctx.translate(-img.width, 0);
+        // Flip vertically for proper reflection (upside down)
+        ctx.scale(1, -1);
+        ctx.translate(0, -reflectionHeight);
         
-        // Draw the reflected image (horizontally flipped)
-        // Only draw the top portion based on height setting
+        // Draw the reflection - take from BOTTOM of image and flip it
+        // For a 70% reflection, we want the bottom 70% of the bag reflected
+        const sourceStartY = img.height * (1 - opts.height);
         ctx.drawImage(
           img,
-          0, 0, img.width, reflectionHeight,  // Source: top portion of image
-          0, 0, img.width, reflectionHeight   // Destination: flipped
+          0, sourceStartY, img.width, img.height * opts.height,  // Source: bottom portion of bag
+          0, 0, img.width, reflectionHeight                       // Destination: flipped upside down
         );
         
         ctx.restore();
@@ -80,10 +81,11 @@ export const generateReflection = async (
           reflectionHeight
         );
         
-        // Fade from semi-transparent to fully transparent
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${1 - opts.intensity})`);
-        gradient.addColorStop(opts.fadeStrength, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.3)})`);
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 1)');
+        // Fade from more visible at top to fully transparent at bottom
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${1 - opts.intensity})`); // Start at 45% opacity
+        gradient.addColorStop(opts.fadeStrength * 0.5, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.5)})`); // Mid-fade
+        gradient.addColorStop(opts.fadeStrength, `rgba(255, 255, 255, ${1 - (opts.intensity * 0.2)})`); // Near bottom
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 1)'); // Fully transparent at bottom
         
         ctx.globalCompositeOperation = 'destination-out';
         ctx.fillStyle = gradient;
