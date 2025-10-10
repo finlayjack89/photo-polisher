@@ -175,32 +175,27 @@ export const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 /**
- * Composite backdrop, subject (with shadow), and generate reflection from clean subject
- * Layers: backdrop → reflection (generated from clean subject) → subject (with shadow)
+ * Composite backdrop, reflection, and subject to create final image
+ * Layers: backdrop → reflection → subject (with shadow)
  */
 export const compositeLayers = async (
   backdropUrl: string,
-  subjectWithShadowUrl: string,
-  cleanSubjectUrl: string,
-  placement: SubjectPlacement
+  subjectUrl: string,
+  placement: SubjectPlacement,
+  reflectionUrl?: string
 ): Promise<string> => {
-  console.log('🎨 COMPOSITING: Starting layer composition with canvas-generated reflection');
+  console.log('🎨 COMPOSITING: Starting layer composition');
   console.log('📊 Input validation:', {
     backdropLength: backdropUrl?.length,
-    subjectWithShadowLength: subjectWithShadowUrl?.length,
-    cleanSubjectLength: cleanSubjectUrl?.length,
+    subjectLength: subjectUrl?.length,
+    backdropFormat: backdropUrl?.substring(0, 50),
+    subjectFormat: subjectUrl?.substring(0, 50),
     placement
   });
 
   // Validate inputs
-  if (!subjectWithShadowUrl?.includes('data:image/png')) {
-    const error = 'ERROR: Subject with shadow must be PNG with transparency';
-    console.error('🚨', error);
-    throw new Error(error);
-  }
-  
-  if (!cleanSubjectUrl?.includes('data:image/png')) {
-    const error = 'ERROR: Clean subject must be PNG with transparency';
+  if (!subjectUrl?.includes('data:image/png')) {
+    const error = 'ERROR: Subject image must be PNG with transparency';
     console.error('🚨', error);
     throw new Error(error);
   }
@@ -234,15 +229,23 @@ export const compositeLayers = async (
   };
 
   try {
-    // Load backdrop, subject with shadow, and clean subject for reflection
-    console.log('Loading backdrop, subject with shadow, and clean subject...');
-    const [backdrop, subjectWithShadow, cleanSubject] = await Promise.all([
+    // Load backdrop, subject, and reflection images
+    console.log('Loading backdrop, subject, and reflection images...');
+    const imagesToLoad: Promise<HTMLImageElement>[] = [
       loadImage(backdropUrl, 'backdrop'),
-      loadImage(subjectWithShadowUrl, 'subject with shadow'),
-      loadImage(cleanSubjectUrl, 'clean subject')
-    ]);
+      loadImage(subjectUrl, 'subject')
+    ];
+    
+    if (reflectionUrl) {
+      imagesToLoad.push(loadImage(reflectionUrl, 'reflection'));
+    }
+    
+    const loadedImages = await Promise.all(imagesToLoad);
+    const backdrop = loadedImages[0];
+    const subject = loadedImages[1];
+    const reflection = reflectionUrl ? loadedImages[2] : null;
 
-    console.log('All images loaded successfully');
+    console.log('All images loaded successfully', reflection ? 'including reflection' : '');
 
     // Create canvas with backdrop dimensions
     const canvas = document.createElement('canvas');
@@ -261,110 +264,70 @@ export const compositeLayers = async (
     ctx.drawImage(backdrop, 0, 0);
 
     // Calculate subject positioning based on placement settings
-    const subjectAspectRatio = subjectWithShadow.naturalWidth / subjectWithShadow.naturalHeight;
+    const subjectAspectRatio = subject.naturalWidth / subject.naturalHeight;
     const scaledWidth = canvas.width * placement.scale;
     const scaledHeight = scaledWidth / subjectAspectRatio;
     const dx = (placement.x * canvas.width) - (scaledWidth / 2);
     const dy = (placement.y * canvas.height) - (scaledHeight / 2);
     
     console.log('Subject positioning:', {
-      originalSize: `${subjectWithShadow.naturalWidth}x${subjectWithShadow.naturalHeight}`,
+      originalSize: `${subject.naturalWidth}x${subject.naturalHeight}`,
       scaledSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
       position: `${Math.round(dx)}, ${Math.round(dy)}`,
       placement
     });
 
-    // Generate and draw reflection from clean subject (mimicking CSS .css-reflection-base)
-    console.log('🪞 Generating canvas-based reflection from clean subject...');
-    
-    ctx.save();
-    
-    // Position reflection directly below subject
-    ctx.translate(dx, dy + scaledHeight);
-    
-    // Flip vertically for reflection effect (CSS: transform: scaleY(-1))
-    ctx.scale(1, -1);
-    
-    // Calculate reflection height (CSS: max-height: 60%)
-    const reflectionHeight = scaledHeight * 0.6;
-    
-    // Draw the clean subject flipped
-    ctx.drawImage(cleanSubject, 0, 0, scaledWidth, reflectionHeight);
-    
-    // Apply fade gradient (CSS: mask-image gradient)
-    const gradient = ctx.createLinearGradient(0, 0, 0, reflectionHeight);
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');      // 50% visible at top
-    gradient.addColorStop(0.2, 'rgba(0, 0, 0, 0.35)');   // 35% visible
-    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.15)');   // 15% visible
-    gradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.05)');   // 5% visible
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');        // 0% visible (transparent)
-    
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, scaledWidth, reflectionHeight);
-    
-    // Apply blur (CSS: filter: blur(4px))
-    // Note: Canvas blur is applied during restore, so we capture the reflection first
-    ctx.globalCompositeOperation = 'source-over';
-    
-    ctx.restore();
-    
-    // Apply filter effects to the reflection area (CSS: brightness(1.3) contrast(1.7) saturate(1.6))
-    // We need to get the reflection area and apply pixel-level adjustments
-    const reflectionY = dy + scaledHeight;
-    const reflectionActualHeight = Math.min(reflectionHeight, canvas.height - reflectionY);
-    
-    if (reflectionActualHeight > 0) {
-      const imageData = ctx.getImageData(dx, reflectionY, scaledWidth, reflectionActualHeight);
-      const data = imageData.data;
+    // Draw reflection FIRST (positioned directly below subject)
+    if (reflection) {
+      console.log('Drawing reflection below subject...');
       
-      for (let i = 0; i < data.length; i += 4) {
-        // Apply brightness: multiply RGB by 1.3
-        let r = data[i] * 1.3;
-        let g = data[i + 1] * 1.3;
-        let b = data[i + 2] * 1.3;
+      // Since reflection was generated from the shadowed subject, dimensions match perfectly
+      const reflectionScaledWidth = scaledWidth; // Same width as subject
+      const reflectionScaledHeight = (reflection.naturalHeight / subject.naturalHeight) * scaledHeight;
+      
+      // Position reflection at bottom of subject
+      const reflectionDx = dx;
+      const reflectionDy = dy + scaledHeight; // Directly below subject
+      
+      // Handle canvas clipping
+      const availableHeight = Math.max(0, canvas.height - reflectionDy);
+      const heightToDraw = Math.min(reflectionScaledHeight, availableHeight);
+      
+      console.log('Reflection positioning:', {
+        subjectSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+        reflectionSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
+        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
+        availableHeight: Math.round(availableHeight),
+        heightToDraw: Math.round(heightToDraw),
+        willBeClipped: heightToDraw < reflectionScaledHeight
+      });
+      
+      if (heightToDraw > 0) {
+        const sourceHeightRatio = heightToDraw / reflectionScaledHeight;
         
-        // Apply contrast: (value - 128) * 1.7 + 128
-        r = (r - 128) * 1.7 + 128;
-        g = (g - 128) * 1.7 + 128;
-        b = (b - 128) * 1.7 + 128;
+        // Draw the pre-processed reflection AS-IS (already has gradient, blur, filters)
+        ctx.drawImage(
+          reflection,
+          0, 0,
+          reflection.naturalWidth,
+          reflection.naturalHeight * sourceHeightRatio,
+          reflectionDx, reflectionDy,
+          reflectionScaledWidth,
+          heightToDraw
+        );
         
-        // Apply saturation using luminance-based approach
-        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-        r = luminance + (r - luminance) * 1.6;
-        g = luminance + (g - luminance) * 1.6;
-        b = luminance + (b - luminance) * 1.6;
-        
-        // Clamp values and apply opacity (CSS: opacity: 0.9)
-        data[i] = Math.max(0, Math.min(255, r));
-        data[i + 1] = Math.max(0, Math.min(255, g));
-        data[i + 2] = Math.max(0, Math.min(255, b));
-        data[i + 3] = data[i + 3] * 0.9; // Apply opacity
+        console.log('Reflection drawn successfully:', {
+          sourceClipped: `${reflection.naturalHeight} -> ${Math.round(reflection.naturalHeight * sourceHeightRatio)}`,
+          clippedPercent: `${((1 - sourceHeightRatio) * 100).toFixed(1)}%`
+        });
+      } else {
+        console.warn('Reflection completely outside canvas bounds - not drawn');
       }
-      
-      ctx.putImageData(imageData, dx, reflectionY);
-      
-      // Apply blur to reflection using a temporary canvas
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = scaledWidth;
-      tempCanvas.height = reflectionActualHeight;
-      const tempCtx = tempCanvas.getContext('2d');
-      
-      if (tempCtx) {
-        tempCtx.putImageData(imageData, 0, 0);
-        tempCtx.filter = 'blur(4px)';
-        tempCtx.drawImage(tempCanvas, 0, 0);
-        
-        // Draw blurred reflection back to main canvas
-        ctx.drawImage(tempCanvas, dx, reflectionY);
-      }
-      
-      console.log('✅ Canvas reflection generated and applied');
     }
     
     // Draw subject WITH shadow on top of reflection
     console.log('Drawing subject with shadow...');
-    ctx.drawImage(subjectWithShadow, dx, dy, scaledWidth, scaledHeight);
+    ctx.drawImage(subject, dx, dy, scaledWidth, scaledHeight);
 
     // Return the final composited image as a high-quality data URL
     const finalDataUrl = canvas.toDataURL('image/png');
