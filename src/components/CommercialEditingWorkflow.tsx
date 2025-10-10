@@ -258,21 +258,19 @@ export const CommercialEditingWorkflow: React.FC<CommercialEditingWorkflowProps>
       // Composite each shadowed image with its reflection
       for (let i = 0; i < processedImages.shadowed.length; i++) {
         const image = processedImages.shadowed[i];
-        const cleanSubject = processedImages.cleanSubjects?.find(c => c.name === image.name);
+        const reflection = processedImages.reflections?.[i];
         
-        if (!cleanSubject) {
-          console.error(`Critical error: Could not find clean subject for ${image.name}. Skipping.`);
-          continue;
+        console.log(`Compositing image ${i + 1}/${processedImages.shadowed.length}: ${image.name}`);
+        if (reflection) {
+          console.log(`  Including reflection for ${image.name}`);
         }
 
-        console.log(`Compositing image ${i + 1}/${processedImages.shadowed.length}: ${image.name}`);
-
-        // Call the new compositeLayers function with the correct parameters
+        // Client-side compositing with shadowed images and reflections
         const compositedImage = await compositeLayers(
           processedImages.backdrop,
-          image.shadowedData,       // The subject with the shadow
-          cleanSubject.cleanData,   // The clean subject for the reflection
-          processedImages.placement
+          image.shadowedData,
+          processedImages.placement,
+          reflection?.reflectionData
         );
         
         console.log(`✅ Compositing complete for ${image.name}`);

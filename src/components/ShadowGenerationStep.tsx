@@ -137,6 +137,25 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       if (data?.images) {
         const shadowedImages = data.images;
         
+        // Step 2: Generate reflections from SHADOWED subjects (not clean subjects)
+        console.log('🪞 Step 2: Generating mirror reflections from shadowed subjects...');
+        
+        // Convert shadowedData to format expected by generateReflections
+        const shadowedForReflection = shadowedImages.map((img: any) => ({
+          name: img.name,
+          data: img.shadowedData
+        }));
+
+        const generatedReflections = await generateReflections(shadowedForReflection, {
+          intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
+          height: 0.6,       // 60% of subject height (matches CSS max-height)
+          blur: 4,           // Match CSS blur
+          fadeStrength: 0.8, // Strong fade
+          offset: 0          // No gap
+        });
+        
+        console.log(`✅ Generated ${generatedReflections.length} mirror reflections from shadowed subjects`);
+        setReflections(generatedReflections);
         setProgress(80);
         
         // Show preview of first result
@@ -157,9 +176,9 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
             variant: "default"
           });
         } else {
-        toast({
-            title: "✓ Shadows Generated",
-            description: `Successfully added drop shadows to ${shadowedImages.length} images.`,
+          toast({
+            title: "✓ Shadows & Mirror Reflections Generated",
+            description: `Successfully added drop shadows and realistic mirror reflections to ${shadowedImages.length} images.`,
           });
         }
 
@@ -173,7 +192,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
         }));
         
         // Auto-continue with all data
-        onComplete(shadowedImages, [], cleanSubjects);
+        onComplete(shadowedImages, generatedReflections, cleanSubjects);
       } else {
         throw new Error('No data returned from shadow generation');
       }
@@ -190,19 +209,46 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   };
 
   const handleSkip = async () => {
-    console.log('Skipping shadow generation...');
-    
-    // Prepare clean subjects for CSS reflection
-    const cleanSubjects = images.map(img => ({
-      name: img.name,
-      cleanData: img.data
-    }));
-    
-    toast({
-      title: "Shadows Skipped",
-      description: "Continuing without shadows",
-    });
-    onSkip(cleanSubjects);
+    console.log('🪞 Generating mirror reflections even though shadows are skipped...');
+    try {
+      const generatedReflections = await generateReflections(images, {
+        intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
+        height: 0.6,       // 60% of subject height (matches CSS max-height)
+        blur: 4,           // Match CSS blur
+        fadeStrength: 0.8, // Strong fade
+        offset: 0          // No gap
+      });
+      
+      console.log(`✅ Generated ${generatedReflections.length} mirror reflections without shadows`);
+      setReflections(generatedReflections);
+      
+      // Prepare clean subjects for CSS reflection
+      const cleanSubjects = images.map(img => ({
+        name: img.name,
+        cleanData: img.data
+      }));
+      
+      toast({
+        title: "🪞 Mirror Reflections Generated",
+        description: "Continuing with realistic reflections but no shadows",
+      });
+      onSkip(cleanSubjects);
+    } catch (error) {
+      console.error('Error generating reflections:', error);
+      
+      // Still pass clean subjects even if reflection generation fails
+      const cleanSubjects = images.map(img => ({
+        name: img.name,
+        cleanData: img.data
+      }));
+      
+      toast({
+        title: "Warning",
+        description: "Continuing without reflections or shadows",
+        variant: "default"
+      });
+      onSkip(cleanSubjects);
+    }
   };
 
   return (
