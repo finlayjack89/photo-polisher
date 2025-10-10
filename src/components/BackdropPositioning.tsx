@@ -588,14 +588,15 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                         src={firstCleanSubject}
                         alt=""
                         aria-hidden="true"
-                        className="absolute pointer-events-none css-reflection"
+                        className="absolute pointer-events-none css-reflection-base"
                         style={{
                           left: `${placement.x * 100}%`,
                           top: `${placement.y * 100}%`,
-                          transform: 'translate(-50%, -50%)',
+                          transform: `translate(-50%, -50%) translateY(${placement.scale * 50}%) scaleY(-1)`,
                           width: `${placement.scale * 100}%`,
                           maxWidth: '100%',
                           height: 'auto',
+                          transformOrigin: 'top center',
                           zIndex: 1
                         }}
                       />

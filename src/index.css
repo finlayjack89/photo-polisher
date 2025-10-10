@@ -141,38 +141,39 @@ All colors MUST be HSL.
 @layer utilities {
   /* Checkered background for transparency visualization */
 /* Professional CSS-based reflection for product photography */
-.css-reflection {
-  /* Flip the image vertically to create reflection */
-  transform: scaleY(-1);
-  transform-origin: bottom center;
-  
-  /* Create fade-out effect using CSS mask (professional gradient) */
+.css-reflection-base {
+  /* Create fade-out gradient mask - exponential fade for realism */
   mask-image: linear-gradient(
     to bottom, 
-    rgba(0, 0, 0, 0.7) 0%,      /* 70% opacity at top (touching product) */
-    rgba(0, 0, 0, 0.5) 30%,     /* 50% at 30% */
-    rgba(0, 0, 0, 0.2) 60%,     /* 20% at 60% */
-    transparent 100%             /* Fully transparent at bottom */
+    rgba(0, 0, 0, 0.35) 0%,      /* 35% opacity at top (touching product) */
+    rgba(0, 0, 0, 0.25) 15%,     /* 25% at 15% */
+    rgba(0, 0, 0, 0.12) 35%,     /* 12% at 35% */
+    rgba(0, 0, 0, 0.05) 50%,     /* 5% at 50% */
+    transparent 65%              /* Fully transparent at 65% */
   );
   -webkit-mask-image: linear-gradient(
     to bottom, 
-    rgba(0, 0, 0, 0.7) 0%, 
-    rgba(0, 0, 0, 0.5) 30%,
-    rgba(0, 0, 0, 0.2) 60%,
-    transparent 100%
+    rgba(0, 0, 0, 0.35) 0%, 
+    rgba(0, 0, 0, 0.25) 15%,
+    rgba(0, 0, 0, 0.12) 35%,
+    rgba(0, 0, 0, 0.05) 50%,
+    transparent 65%
   );
   
-  /* Apply subtle filters for photorealistic reflection */
-  filter: blur(1px) brightness(0.9);
+  /* Subtle blur for surface imperfection */
+  filter: blur(1.5px) brightness(0.88);
   
-  /* Set global opacity (controls overall reflection strength) */
-  opacity: 0.6;
+  /* Overall reflection strength */
+  opacity: 0.75;
   
-  /* Clip reflection to only show bottom portion */
-  clip-path: inset(50% 0 0 0);
+  /* Clip to show only top 35% of the flipped image (reflection height) */
+  clip-path: inset(0 0 65% 0);
   
-  /* Smooth transitions when position changes */
-  transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out;
+  /* Smooth transitions */
+  transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out, transform 0.05s ease-out;
+  
+  /* Prevent pointer events */
+  pointer-events: none;
 }
 
 .bg-checkered {
