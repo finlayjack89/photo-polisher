@@ -143,33 +143,33 @@ All colors MUST be HSL.
 /* Professional CSS-based reflection for product photography */
 .css-reflection {
   /* Flip the image vertically to create reflection */
-  transform: scaleY(-1) translateX(-50%);
-  transform-origin: top center;
+  transform: scaleY(-1);
+  transform-origin: bottom center;
   
   /* Create fade-out effect using CSS mask (professional gradient) */
   mask-image: linear-gradient(
     to bottom, 
-    rgba(0, 0, 0, 0.5) 0%,      /* 50% opacity at top (touching product) */
-    rgba(0, 0, 0, 0.3) 20%,     /* 30% at 20% */
-    rgba(0, 0, 0, 0.1) 50%,     /* 10% at midpoint */
-    transparent 70%              /* Fully transparent at 70% */
+    rgba(0, 0, 0, 0.7) 0%,      /* 70% opacity at top (touching product) */
+    rgba(0, 0, 0, 0.5) 30%,     /* 50% at 30% */
+    rgba(0, 0, 0, 0.2) 60%,     /* 20% at 60% */
+    transparent 100%             /* Fully transparent at bottom */
   );
   -webkit-mask-image: linear-gradient(
     to bottom, 
-    rgba(0, 0, 0, 0.5) 0%, 
-    rgba(0, 0, 0, 0.3) 20%,
-    rgba(0, 0, 0, 0.1) 50%,
-    transparent 70%
+    rgba(0, 0, 0, 0.7) 0%, 
+    rgba(0, 0, 0, 0.5) 30%,
+    rgba(0, 0, 0, 0.2) 60%,
+    transparent 100%
   );
   
   /* Apply subtle filters for photorealistic reflection */
-  filter: blur(2px) brightness(0.8);
+  filter: blur(1px) brightness(0.9);
   
   /* Set global opacity (controls overall reflection strength) */
-  opacity: 0.4;
+  opacity: 0.6;
   
   /* Clip reflection to only show bottom portion */
-  clip-path: inset(0 0 65% 0); /* Show only top 35% of flipped image */
+  clip-path: inset(50% 0 0 0);
   
   /* Smooth transitions when position changes */
   transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out;
