@@ -298,7 +298,10 @@ export const compositeLayers = async (
       const reflectionScaledWidth = actualSubjectWidth;
       
       // Calculate reflection height as proportion of actual subject height
-      const reflectionHeightRatio = reflection.naturalHeight / subject.naturalHeight;
+      // CRITICAL: The reflection was generated from the clean subject (before 1.5x padding was added)
+      // So we must compare it to the clean subject dimensions, not the padded shadowedData dimensions
+      const cleanSubjectHeight = subject.naturalHeight * subjectRatio; // Remove the 1.5x padding
+      const reflectionHeightRatio = reflection.naturalHeight / cleanSubjectHeight;
       const reflectionScaledHeight = actualSubjectHeight * reflectionHeightRatio;
       
       // Position reflection at the bottom of the ACTUAL subject (not the padded image)
@@ -322,6 +325,8 @@ export const compositeLayers = async (
       console.log('Reflection positioning (accounting for 1.5x padding):', {
         shadowedDataSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
         actualSubjectSize: `${Math.round(actualSubjectWidth)}x${Math.round(actualSubjectHeight)}`,
+        cleanSubjectHeight: Math.round(cleanSubjectHeight),
+        reflectionNaturalHeight: reflection.naturalHeight,
         paddingOffset: `${Math.round(paddingLeft)}, ${Math.round(paddingTop)}`,
         reflectionSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
         reflectionPosition: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
@@ -329,7 +334,7 @@ export const compositeLayers = async (
         availableHeight: Math.round(availableHeightForReflection),
         visiblePercent: `${((availableHeightForReflection / reflectionScaledHeight) * 100).toFixed(1)}%`,
         willBeClipped: reflectionScaledHeight > availableHeightForReflection,
-        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`
+        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}% (comparing to clean subject, not padded)`
       });
       
       // Only draw the portion of the reflection that fits within the canvas
