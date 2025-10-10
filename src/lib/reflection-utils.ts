@@ -82,14 +82,16 @@ export const generateReflection = async (
         // Apply fade gradient to create realistic reflection fade
         const gradient = ctx.createLinearGradient(0, 0, 0, reflectionHeight);
 
-        // Exponential fade: strong at top, drops rapidly (professional product photography)
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${1 - opts.intensity})`); // 18% at top
-        gradient.addColorStop(0.3, `rgba(255, 255, 255, ${1 - opts.intensity * 0.4})`); // 7% at 30%
-        gradient.addColorStop(0.6, `rgba(255, 255, 255, ${1 - opts.intensity * 0.15})`); // 2.7% at 60%
-        gradient.addColorStop(opts.fadeStrength, `rgba(255, 255, 255, 0.98)`); // Nearly gone at 95%
-        gradient.addColorStop(1, "rgba(255, 255, 255, 1)"); // Fully transparent
+        // Use BLACK with alpha values for the mask (not white!)
+        // This preserves the reflection color while controlling opacity
+        gradient.addColorStop(0, `rgba(0, 0, 0, 0.5)`); // 50% visible at top
+        gradient.addColorStop(0.2, `rgba(0, 0, 0, 0.35)`); // 35% at 20%
+        gradient.addColorStop(0.5, `rgba(0, 0, 0, 0.15)`); // 15% at midpoint
+        gradient.addColorStop(0.8, `rgba(0, 0, 0, 0.05)`); // 5% at 80%
+        gradient.addColorStop(1, `rgba(0, 0, 0, 0)`); // 0% at bottom
 
-        ctx.globalCompositeOperation = "destination-out";
+        // Change this to "destination-in" to PRESERVE color while masking
+        ctx.globalCompositeOperation = "destination-in";
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, reflectionHeight);
 
