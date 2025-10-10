@@ -281,24 +281,39 @@ export const compositeLayers = async (
     if (reflection) {
       console.log('Drawing reflection below subject...');
       
-      // Reflection must match subject's EXACT width and position
-      const reflectionScaledWidth = scaledWidth; // Match subject width exactly
-      // Calculate reflection height as proportion of subject's scaled height (not aspect ratio!)
+      // CRITICAL FIX: The shadowedData has 1.5x padding from Cloudinary's drop shadow transformation
+      // The actual subject within the shadowedData takes up 1/1.5 = 66.7% of the image
+      // and is centered, so we need to adjust the reflection position accordingly
+      const paddingMultiplier = 1.5; // Matches add-drop-shadow edge function
+      const subjectRatio = 1 / paddingMultiplier; // 0.667
+      const paddingRatio = (1 - subjectRatio) / 2; // 0.167 (padding on each side)
+      
+      // Calculate the actual subject dimensions within the padded shadowedData
+      const actualSubjectHeight = scaledHeight * subjectRatio;
+      const paddingTop = scaledHeight * paddingRatio;
+      
+      // Reflection must match the ACTUAL subject's width (accounting for padding)
+      const actualSubjectWidth = scaledWidth * subjectRatio;
+      const paddingLeft = scaledWidth * paddingRatio;
+      const reflectionScaledWidth = actualSubjectWidth;
+      
+      // Calculate reflection height as proportion of actual subject height
       const reflectionHeightRatio = reflection.naturalHeight / subject.naturalHeight;
-      const reflectionScaledHeight = scaledHeight * reflectionHeightRatio;
-      const reflectionDx = dx; // Use subject's X position exactly
+      const reflectionScaledHeight = actualSubjectHeight * reflectionHeightRatio;
       
-      // Position reflection directly below subject (at subject's bottom edge)
-      const reflectionOffset = 0; // No gap for realistic surface reflection
-      const reflectionDy = dy + scaledHeight + reflectionOffset;
+      // Position reflection at the bottom of the ACTUAL subject (not the padded image)
+      const actualSubjectDx = dx + paddingLeft;
+      const actualSubjectDy = dy + paddingTop;
+      const reflectionDx = actualSubjectDx;
+      const reflectionDy = actualSubjectDy + actualSubjectHeight; // No gap for surface reflection
       
-      console.log('Reflection positioning (professional):', {
-        originalSize: `${reflection.naturalWidth}x${reflection.naturalHeight}`,
-        scaledSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
-        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
-        subjectScaledSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
-        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`,
-        widthMatch: reflectionScaledWidth === scaledWidth ? '✓ MATCHED' : '✗ MISMATCH'
+      console.log('Reflection positioning (accounting for 1.5x padding):', {
+        shadowedDataSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
+        actualSubjectSize: `${Math.round(actualSubjectWidth)}x${Math.round(actualSubjectHeight)}`,
+        paddingOffset: `${Math.round(paddingLeft)}, ${Math.round(paddingTop)}`,
+        reflectionSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
+        reflectionPosition: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
+        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`
       });
       
       ctx.drawImage(reflection, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);
