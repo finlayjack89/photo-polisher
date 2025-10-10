@@ -591,8 +591,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                         className="absolute pointer-events-none css-reflection-base"
                         style={{
                           left: `${placement.x * 100}%`,
-                          top: `${placement.y * 100}%`,
-                          transform: `translate(-50%, -50%) translateY(100%) scaleY(-1)`,
+                          top: `calc(${placement.y * 100}% + ${placement.scale * 50}%)`,
+                          transform: 'translate(-50%, 0%) scaleY(-1)',
                           width: `${placement.scale * 100}%`,
                           maxWidth: '100%',
                           height: 'auto',

@@ -140,39 +140,39 @@ All colors MUST be HSL.
 
 @layer utilities {
   /* Checkered background for transparency visualization */
-/* Professional CSS-based reflection for product photography */
+/* Realistic CSS-based reflection effect for product photography */
 .css-reflection-base {
-  /* Create fade-out gradient mask - exponential fade for realism */
+  /* Vertical gradient fade - most important for realism */
   mask-image: linear-gradient(
-    to bottom, 
-    rgba(0, 0, 0, 0.35) 0%,      /* 35% opacity at top (touching product) */
-    rgba(0, 0, 0, 0.25) 15%,     /* 25% at 15% */
-    rgba(0, 0, 0, 0.12) 35%,     /* 12% at 35% */
-    rgba(0, 0, 0, 0.05) 50%,     /* 5% at 50% */
-    transparent 65%              /* Fully transparent at 65% */
+    to bottom,
+    rgba(0, 0, 0, 0.6) 0%,      /* 60% visible at top (touching subject) */
+    rgba(0, 0, 0, 0.3) 30%,     /* 30% visible at 30% down */
+    rgba(0, 0, 0, 0.1) 60%,     /* 10% visible at 60% down */
+    rgba(0, 0, 0, 0) 100%       /* Fully transparent at bottom */
   );
   -webkit-mask-image: linear-gradient(
-    to bottom, 
-    rgba(0, 0, 0, 0.35) 0%, 
-    rgba(0, 0, 0, 0.25) 15%,
-    rgba(0, 0, 0, 0.12) 35%,
-    rgba(0, 0, 0, 0.05) 50%,
-    transparent 65%
+    to bottom,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.3) 30%,
+    rgba(0, 0, 0, 0.1) 60%,
+    rgba(0, 0, 0, 0) 100%
   );
   
-  /* Subtle blur for surface imperfection */
-  filter: blur(1.5px) brightness(0.88);
+  /* Soften and darken the reflection */
+  filter: brightness(0.85) blur(2px);
   
-  /* Overall reflection strength */
-  opacity: 0.75;
+  /* Base transparency for entire reflection */
+  opacity: 0.3;
   
-  /* Clip to show only top 35% of the flipped image (reflection height) */
-  clip-path: inset(0 0 65% 0);
+  /* Limit reflection height to 50% of subject for realistic proportions */
+  max-height: 50%;
+  object-fit: cover;
+  object-position: top;
   
-  /* Smooth transitions */
+  /* Smooth transitions for interactive dragging */
   transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out, transform 0.05s ease-out;
   
-  /* Prevent pointer events */
+  /* Prevent interaction */
   pointer-events: none;
 }
 
