@@ -150,7 +150,7 @@ All colors MUST be HSL.
   max-height: 60%;
   transform: scaleY(-1);
   transform-origin: top center;
-  opacity: 0.4;
+  opacity: 0.55;
   object-fit: contain;
   object-position: top;
   
@@ -173,7 +173,7 @@ All colors MUST be HSL.
     rgba(0, 0, 0, 0) 100%
   );
   
-  filter: blur(4px) brightness(0.75);
+  filter: blur(4px) brightness(0.85);
   pointer-events: none;
 }
 
