@@ -312,7 +312,7 @@ export const compositeLayers = async (
       
       // Check how much of the reflection fits within canvas bounds
       let availableHeightForReflection = canvas.height - reflectionDy;
-      const minimumVisiblePercent = 0.7; // Ensure at least 70% of reflection is visible
+      const minimumVisiblePercent = 0.5; // Ensure at least 50% of reflection is visible (matches CSS preview)
       
       // If less than 30% of the reflection would be visible, reposition it higher
       if (availableHeightForReflection < reflectionScaledHeight * (1 - minimumVisiblePercent)) {

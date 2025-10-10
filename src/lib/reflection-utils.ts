@@ -82,18 +82,47 @@ export const generateReflection = async (
         // Apply fade gradient to create realistic reflection fade
         const gradient = ctx.createLinearGradient(0, 0, 0, reflectionHeight);
 
-        // Use BLACK with alpha values for the mask (not white!)
-        // This preserves the reflection color while controlling opacity
-        gradient.addColorStop(0, `rgba(0, 0, 0, 0.25)`); // ⬆️ 75% visible at top (more color)
-        gradient.addColorStop(0.2, `rgba(0, 0, 0, 0.35)`); // Keep 65% at 20%
-        gradient.addColorStop(0.5, `rgba(0, 0, 0, 0.5)`); // ⬆️ Changed from 0.15 to 0.5 (50% at midpoint - more detail)
-        gradient.addColorStop(0.8, `rgba(0, 0, 0, 0.8)`); // ⬆️ Changed from 0.05 to 0.8 (20% at 80% - keeps features visible)
-        gradient.addColorStop(1, `rgba(0, 0, 0, 0.95)`); // ⬆️ Changed from 0 to 0.95 (5% at bottom - soft fade)
+        // Match CSS preview gradient: mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)
+        // destination-in uses inverse: 0.5 opacity = 50% visible
+        gradient.addColorStop(0, `rgba(0, 0, 0, 0.5)`);     // 50% visible at top
+        gradient.addColorStop(0.2, `rgba(0, 0, 0, 0.65)`);  // 35% visible
+        gradient.addColorStop(0.5, `rgba(0, 0, 0, 0.85)`);  // 15% visible
+        gradient.addColorStop(0.8, `rgba(0, 0, 0, 0.95)`);  // 5% visible
+        gradient.addColorStop(1, `rgba(0, 0, 0, 1)`);       // 0% visible (fully transparent)
 
         // Change this to "destination-in" to PRESERVE color while masking
         ctx.globalCompositeOperation = "destination-in";
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, reflectionHeight);
+
+        // Apply CSS-matching filters: brightness(1.3) contrast(1.7) saturate(1.6)
+        const imageData = ctx.getImageData(0, 0, canvas.width, reflectionHeight);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          // Apply brightness: multiply RGB by 1.3
+          let r = data[i] * 1.3;
+          let g = data[i + 1] * 1.3;
+          let b = data[i + 2] * 1.3;
+          
+          // Apply contrast: (value - 128) * 1.7 + 128
+          r = (r - 128) * 1.7 + 128;
+          g = (g - 128) * 1.7 + 128;
+          b = (b - 128) * 1.7 + 128;
+          
+          // Apply saturation using luminance-based approach
+          const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+          r = luminance + (r - luminance) * 1.6;
+          g = luminance + (g - luminance) * 1.6;
+          b = luminance + (b - luminance) * 1.6;
+          
+          // Clamp values to 0-255
+          data[i] = Math.max(0, Math.min(255, r));
+          data[i + 1] = Math.max(0, Math.min(255, g));
+          data[i + 2] = Math.max(0, Math.min(255, b));
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
 
         // Apply blur to reflection for realism
         if (opts.blur > 0) {
