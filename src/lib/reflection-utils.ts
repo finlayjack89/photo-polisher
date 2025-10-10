@@ -84,11 +84,11 @@ export const generateReflection = async (
 
         // Use BLACK with alpha values for the mask (not white!)
         // This preserves the reflection color while controlling opacity
-        gradient.addColorStop(0, `rgba(0, 0, 0, 0.5)`); // 50% visible at top
-        gradient.addColorStop(0.2, `rgba(0, 0, 0, 0.35)`); // 35% at 20%
-        gradient.addColorStop(0.5, `rgba(0, 0, 0, 0.15)`); // 15% at midpoint
-        gradient.addColorStop(0.8, `rgba(0, 0, 0, 0.05)`); // 5% at 80%
-        gradient.addColorStop(1, `rgba(0, 0, 0, 0)`); // 0% at bottom
+        gradient.addColorStop(0, `rgba(0, 0, 0, 0.25)`); // ⬆️ 75% visible at top (more color)
+        gradient.addColorStop(0.2, `rgba(0, 0, 0, 0.35)`); // Keep 65% at 20%
+        gradient.addColorStop(0.5, `rgba(0, 0, 0, 0.5)`); // ⬆️ Changed from 0.15 to 0.5 (50% at midpoint - more detail)
+        gradient.addColorStop(0.8, `rgba(0, 0, 0, 0.8)`); // ⬆️ Changed from 0.05 to 0.8 (20% at 80% - keeps features visible)
+        gradient.addColorStop(1, `rgba(0, 0, 0, 0.95)`); // ⬆️ Changed from 0 to 0.95 (5% at bottom - soft fade)
 
         // Change this to "destination-in" to PRESERVE color while masking
         ctx.globalCompositeOperation = "destination-in";
