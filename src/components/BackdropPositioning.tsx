@@ -581,33 +581,44 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                     onMouseUp={() => setIsDragging(false)}
                     onMouseLeave={() => setIsDragging(false)}
                   >
-                    {/* CSS Reflection Layer (clean subject, hidden from screen readers) */}
-                    {firstCleanSubject && (
-                      <img
-                        ref={reflectionRef}
-                        src={firstCleanSubject}
-                        alt=""
-                        aria-hidden="true"
-                        className="absolute pointer-events-none css-reflection-base"
-                        style={{
-                          left: `${placement.x * 100}%`,
-                          top: `calc(${placement.y * 100}% + ${placement.scale * 50}%)`,
-                          transform: 'translate(-50%, 0%) scaleY(-1)',
-                          width: `${placement.scale * 100}%`,
-                          maxWidth: '100%',
-                          height: 'auto',
-                          transformOrigin: 'top center',
-                          zIndex: 1
-                        }}
-                      />
-                    )}
-                    
                     {/* Main Subject with Shadow (draggable) */}
-                    <img
-                      ref={subjectRef}
-                      src={firstSubject}
-                      alt="Product with shadow"
+                    <div
                       className="absolute cursor-move select-none"
+                      style={{
+                        left: `${placement.x * 100}%`,
+                        top: `${placement.y * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: `${placement.scale * 100}%`,
+                        maxWidth: '100%',
+                        zIndex: 2,
+                        position: 'relative'
+                      }}
+                    >
+                      {/* Subject */}
+                      <img
+                        ref={subjectRef}
+                        src={firstSubject}
+                        alt="Product with shadow"
+                        className="w-full h-auto select-none"
+                        draggable={false}
+                      />
+                      
+                      {/* CSS Reflection (positioned relative to subject) */}
+                      {firstCleanSubject && (
+                        <img
+                          ref={reflectionRef}
+                          src={firstCleanSubject}
+                          alt=""
+                          aria-hidden="true"
+                          className="css-reflection-base"
+                          draggable={false}
+                        />
+                      )}
+                    </div>
+                    
+                    {/* Drag hint (for accessibility) */}
+                    <div
+                      className="absolute"
                       style={{
                         left: `${placement.x * 100}%`,
                         top: `${placement.y * 100}%`,

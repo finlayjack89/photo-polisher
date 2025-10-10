@@ -142,37 +142,34 @@ All colors MUST be HSL.
   /* Checkered background for transparency visualization */
 /* Realistic CSS-based reflection effect for product photography */
 .css-reflection-base {
-  /* Vertical gradient fade - most important for realism */
-  mask-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.9) 0%,      /* 90% visible at top (touching subject) */
-    rgba(0, 0, 0, 0.5) 35%,     /* 50% visible at 35% down */
-    rgba(0, 0, 0, 0.2) 65%,     /* 20% visible at 65% down */
-    rgba(0, 0, 0, 0) 100%       /* Fully transparent at bottom */
-  );
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  transform: scaleY(-1);
+  opacity: 0.4;
+  
+  /* Critical: The gradient mask that creates the fade */
   -webkit-mask-image: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.5) 35%,
-    rgba(0, 0, 0, 0.2) 65%,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.35) 20%,
+    rgba(0, 0, 0, 0.15) 50%,
+    rgba(0, 0, 0, 0.05) 80%,
     rgba(0, 0, 0, 0) 100%
   );
   
-  /* Soften and darken the reflection */
-  filter: brightness(0.88) blur(1.5px);
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.35) 20%,
+    rgba(0, 0, 0, 0.15) 50%,
+    rgba(0, 0, 0, 0.05) 80%,
+    rgba(0, 0, 0, 0) 100%
+  );
   
-  /* Base transparency for entire reflection - matched to reference image */
-  opacity: 0.5;
-  
-  /* Limit reflection height to 50% of subject for realistic proportions */
-  max-height: 50%;
-  object-fit: cover;
-  object-position: top;
-  
-  /* Smooth transitions for interactive dragging */
-  transition: left 0.05s ease-out, top 0.05s ease-out, width 0.1s ease-out, transform 0.05s ease-out;
-  
-  /* Prevent interaction */
+  filter: blur(4px) brightness(0.75);
   pointer-events: none;
 }
 
