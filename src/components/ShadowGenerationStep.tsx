@@ -120,22 +120,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
     try {
       console.log(`Starting shadow generation for ${images.length} images with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
-      // Step 1: Generate reflections BEFORE sending to Cloudinary
-      console.log('🪞 Step 1: Generating mirror reflections from transparent subjects...');
-      const generatedReflections = await generateReflections(images, {
-        intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
-        height: 0.6,       // 60% of subject height (matches CSS max-height)
-        blur: 4,           // Match CSS blur
-        fadeStrength: 0.8, // Strong fade
-        offset: 0          // No gap
-      });
-      
-      console.log(`✅ Generated ${generatedReflections.length} mirror reflections`);
-      setReflections(generatedReflections);
-      setProgress(30);
-
-      // Step 2: Send to Cloudinary for shadow generation
-      console.log('☁️ Step 2: Sending to Cloudinary for shadow generation...');
+      // Step 1: Send to Cloudinary for shadow generation FIRST
+      console.log('☁️ Step 1: Sending to Cloudinary for shadow generation...');
       const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
         body: { 
           images,
@@ -146,9 +132,31 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       });
 
       if (error) throw error;
+      setProgress(40);
 
       if (data?.images) {
         const shadowedImages = data.images;
+        
+        // Step 2: Generate reflections from SHADOWED subjects (not clean subjects)
+        console.log('🪞 Step 2: Generating mirror reflections from shadowed subjects...');
+        
+        // Convert shadowedData to format expected by generateReflections
+        const shadowedForReflection = shadowedImages.map((img: any) => ({
+          name: img.name,
+          data: img.shadowedData
+        }));
+
+        const generatedReflections = await generateReflections(shadowedForReflection, {
+          intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
+          height: 0.6,       // 60% of subject height (matches CSS max-height)
+          blur: 4,           // Match CSS blur
+          fadeStrength: 0.8, // Strong fade
+          offset: 0          // No gap
+        });
+        
+        console.log(`✅ Generated ${generatedReflections.length} mirror reflections from shadowed subjects`);
+        setReflections(generatedReflections);
+        setProgress(80);
         
         // Show preview of first result
         if (shadowedImages.length > 0 && shadowedImages[0].shadowedData) {

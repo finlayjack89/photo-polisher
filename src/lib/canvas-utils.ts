@@ -281,74 +281,44 @@ export const compositeLayers = async (
     if (reflection) {
       console.log('Drawing reflection below subject...');
       
-      // CRITICAL FIX: The shadowedData has 1.5x padding from Cloudinary's drop shadow transformation
-      // The actual subject within the shadowedData takes up 1/1.5 = 66.7% of the image
-      // and is centered, so we need to adjust the reflection position accordingly
-      const paddingMultiplier = 1.5; // Matches add-drop-shadow edge function
-      const subjectRatio = 1 / paddingMultiplier; // 0.667
-      const paddingRatio = (1 - subjectRatio) / 2; // 0.167 (padding on each side)
+      // Since reflection was generated from the shadowed subject, dimensions match perfectly
+      const reflectionScaledWidth = scaledWidth; // Same width as subject
+      const reflectionScaledHeight = (reflection.naturalHeight / subject.naturalHeight) * scaledHeight;
       
-      // Calculate the actual subject dimensions within the padded shadowedData
-      const actualSubjectHeight = scaledHeight * subjectRatio;
-      const paddingTop = scaledHeight * paddingRatio;
+      // Position reflection at bottom of subject
+      const reflectionDx = dx;
+      const reflectionDy = dy + scaledHeight; // Directly below subject
       
-      // Reflection must match the ACTUAL subject's width (accounting for padding)
-      const actualSubjectWidth = scaledWidth * subjectRatio;
-      const paddingLeft = scaledWidth * paddingRatio;
-      const reflectionScaledWidth = actualSubjectWidth;
+      // Handle canvas clipping
+      const availableHeight = Math.max(0, canvas.height - reflectionDy);
+      const heightToDraw = Math.min(reflectionScaledHeight, availableHeight);
       
-      // Calculate reflection height as proportion of actual subject height
-      // CRITICAL: The reflection was generated from the clean subject (before 1.5x padding was added)
-      // So we must compare it to the clean subject dimensions, not the padded shadowedData dimensions
-      const cleanSubjectHeight = subject.naturalHeight * subjectRatio; // Remove the 1.5x padding
-      const reflectionHeightRatio = reflection.naturalHeight / cleanSubjectHeight;
-      const reflectionScaledHeight = actualSubjectHeight * reflectionHeightRatio;
-      
-      // Position reflection at the bottom of the ACTUAL subject (not the padded image)
-      const actualSubjectDx = dx + paddingLeft;
-      const actualSubjectDy = dy + paddingTop;
-      const reflectionDx = actualSubjectDx;
-      let reflectionDy = actualSubjectDy + actualSubjectHeight; // No gap for surface reflection
-      
-      // Calculate how much of the reflection fits within canvas bounds
-      // No repositioning - reflection stays at natural position (directly below subject)
-      const availableHeightForReflection = canvas.height - reflectionDy;
-      
-      console.log('Reflection positioning (accounting for 1.5x padding):', {
-        shadowedDataSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
-        actualSubjectSize: `${Math.round(actualSubjectWidth)}x${Math.round(actualSubjectHeight)}`,
-        cleanSubjectHeight: Math.round(cleanSubjectHeight),
-        reflectionNaturalHeight: reflection.naturalHeight,
-        paddingOffset: `${Math.round(paddingLeft)}, ${Math.round(paddingTop)}`,
+      console.log('Reflection positioning:', {
+        subjectSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
         reflectionSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
-        reflectionPosition: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
-        canvasHeight: canvas.height,
-        availableHeight: Math.round(availableHeightForReflection),
-        visiblePercent: `${((availableHeightForReflection / reflectionScaledHeight) * 100).toFixed(1)}%`,
-        willBeClipped: reflectionScaledHeight > availableHeightForReflection,
-        heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}% (comparing to clean subject, not padded)`
+        position: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
+        availableHeight: Math.round(availableHeight),
+        heightToDraw: Math.round(heightToDraw),
+        willBeClipped: heightToDraw < reflectionScaledHeight
       });
       
-      // Only draw the portion of the reflection that fits within the canvas
-      if (availableHeightForReflection > 0) {
-        const reflectionHeightToDraw = Math.min(reflectionScaledHeight, availableHeightForReflection);
-        const reflectionSourceHeightRatio = reflectionHeightToDraw / reflectionScaledHeight;
+      if (heightToDraw > 0) {
+        const sourceHeightRatio = heightToDraw / reflectionScaledHeight;
         
-        // Use 9-parameter drawImage to clip the source image
+        // Draw the pre-processed reflection AS-IS (already has gradient, blur, filters)
         ctx.drawImage(
           reflection,
-          0, 0, // source x, y (start from top of reflection)
-          reflection.naturalWidth, // source width (full width)
-          reflection.naturalHeight * reflectionSourceHeightRatio, // source height (clipped proportion)
-          reflectionDx, reflectionDy, // destination x, y
-          reflectionScaledWidth, // destination width
-          reflectionHeightToDraw // destination height (clipped to canvas bounds)
+          0, 0,
+          reflection.naturalWidth,
+          reflection.naturalHeight * sourceHeightRatio,
+          reflectionDx, reflectionDy,
+          reflectionScaledWidth,
+          heightToDraw
         );
         
-        console.log('Reflection drawn with clipping:', {
-          sourceHeight: `${reflection.naturalHeight} -> ${Math.round(reflection.naturalHeight * reflectionSourceHeightRatio)}`,
-          destHeight: `${Math.round(reflectionScaledHeight)} -> ${Math.round(reflectionHeightToDraw)}`,
-          clippedPercent: `${((1 - reflectionSourceHeightRatio) * 100).toFixed(1)}%`
+        console.log('Reflection drawn successfully:', {
+          sourceClipped: `${reflection.naturalHeight} -> ${Math.round(reflection.naturalHeight * sourceHeightRatio)}`,
+          clippedPercent: `${((1 - sourceHeightRatio) * 100).toFixed(1)}%`
         });
       } else {
         console.warn('Reflection completely outside canvas bounds - not drawn');
