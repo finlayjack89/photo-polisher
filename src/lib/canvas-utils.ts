@@ -305,10 +305,19 @@ export const compositeLayers = async (
       const actualSubjectDx = dx + paddingLeft;
       const actualSubjectDy = dy + paddingTop;
       const reflectionDx = actualSubjectDx;
-      const reflectionDy = actualSubjectDy + actualSubjectHeight; // No gap for surface reflection
+      let reflectionDy = actualSubjectDy + actualSubjectHeight; // No gap for surface reflection
       
       // Check how much of the reflection fits within canvas bounds
-      const availableHeightForReflection = canvas.height - reflectionDy;
+      let availableHeightForReflection = canvas.height - reflectionDy;
+      const minimumVisiblePercent = 0.7; // Ensure at least 70% of reflection is visible
+      
+      // If less than 30% of the reflection would be visible, reposition it higher
+      if (availableHeightForReflection < reflectionScaledHeight * (1 - minimumVisiblePercent)) {
+        // Position reflection so that 70% is visible, overlapping with lower part of subject if needed
+        reflectionDy = canvas.height - (reflectionScaledHeight * minimumVisiblePercent);
+        availableHeightForReflection = canvas.height - reflectionDy;
+        console.log('⚠️ Reflection repositioned higher to ensure visibility (subject positioned too low)');
+      }
       
       console.log('Reflection positioning (accounting for 1.5x padding):', {
         shadowedDataSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
@@ -318,6 +327,7 @@ export const compositeLayers = async (
         reflectionPosition: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
         canvasHeight: canvas.height,
         availableHeight: Math.round(availableHeightForReflection),
+        visiblePercent: `${((availableHeightForReflection / reflectionScaledHeight) * 100).toFixed(1)}%`,
         willBeClipped: reflectionScaledHeight > availableHeightForReflection,
         heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`
       });
