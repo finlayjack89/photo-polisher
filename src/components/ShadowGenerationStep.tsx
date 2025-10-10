@@ -17,7 +17,6 @@ interface ShadowGenerationStepProps {
   }>;
   onComplete: (
     shadowedImages: Array<{ name: string; shadowedData: string }>,
-    reflections: Array<{ name: string; reflectionData: string }>,
     cleanSubjects: Array<{ name: string; cleanData: string }>
   ) => void;
   onSkip: (cleanSubjects: Array<{ name: string; cleanData: string }>) => void;
@@ -36,7 +35,6 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
   const [previewBefore, setPreviewBefore] = useState<string>('');
   const [previewAfter, setPreviewAfter] = useState<string>('');
   const [shadowedResults, setShadowedResults] = useState<Array<{ name: string; shadowedData: string }>>([]);
-  const [reflections, setReflections] = useState<Array<{ name: string; reflectionData: string }>>([]);
   const { toast } = useToast();
   
   // Shadow parameters
@@ -121,7 +119,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       console.log(`Starting shadow generation for ${images.length} images with params: azimuth=${azimuth}, elevation=${elevation}, spread=${spread}`);
 
       // Step 1: Send to Cloudinary for shadow generation FIRST
-      console.log('☁️ Step 1: Sending to Cloudinary for shadow generation...');
+      console.log('☁️ Sending to Cloudinary for shadow generation...');
       const { data, error } = await supabase.functions.invoke('add-drop-shadow', {
         body: { 
           images,
@@ -132,30 +130,10 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       });
 
       if (error) throw error;
-      setProgress(40);
-
-      if (data?.images) {
-        const shadowedImages = data.images;
-        
-        // Step 2: Generate reflections from SHADOWED subjects (not clean subjects)
-        console.log('🪞 Step 2: Generating mirror reflections from shadowed subjects...');
-        
-        // Convert shadowedData to format expected by generateReflections
-        const shadowedForReflection = shadowedImages.map((img: any) => ({
-          name: img.name,
-          data: img.shadowedData
-        }));
-
-        const generatedReflections = await generateReflections(shadowedForReflection, {
-          intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
-          height: 0.6,       // 60% of subject height (matches CSS max-height)
-          blur: 4,           // Match CSS blur
-          fadeStrength: 0.8, // Strong fade
-          offset: 0          // No gap
-        });
-        
-        console.log(`✅ Generated ${generatedReflections.length} mirror reflections from shadowed subjects`);
-        setReflections(generatedReflections);
+      
+      const shadowedImages = data.images;
+      
+      if (shadowedImages) {
         setProgress(80);
         
         // Show preview of first result
@@ -177,8 +155,8 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
           });
         } else {
           toast({
-            title: "✓ Shadows & Mirror Reflections Generated",
-            description: `Successfully added drop shadows and realistic mirror reflections to ${shadowedImages.length} images.`,
+            title: "✓ Shadows Generated",
+            description: `Successfully added drop shadows to ${shadowedImages.length} images.`,
           });
         }
 
@@ -192,7 +170,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
         }));
         
         // Auto-continue with all data
-        onComplete(shadowedImages, generatedReflections, cleanSubjects);
+        onComplete(shadowedImages, cleanSubjects);
       } else {
         throw new Error('No data returned from shadow generation');
       }
@@ -208,47 +186,20 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
     }
   };
 
-  const handleSkip = async () => {
-    console.log('🪞 Generating mirror reflections even though shadows are skipped...');
-    try {
-      const generatedReflections = await generateReflections(images, {
-        intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
-        height: 0.6,       // 60% of subject height (matches CSS max-height)
-        blur: 4,           // Match CSS blur
-        fadeStrength: 0.8, // Strong fade
-        offset: 0          // No gap
-      });
-      
-      console.log(`✅ Generated ${generatedReflections.length} mirror reflections without shadows`);
-      setReflections(generatedReflections);
-      
-      // Prepare clean subjects for CSS reflection
-      const cleanSubjects = images.map(img => ({
-        name: img.name,
-        cleanData: img.data
-      }));
-      
-      toast({
-        title: "🪞 Mirror Reflections Generated",
-        description: "Continuing with realistic reflections but no shadows",
-      });
-      onSkip(cleanSubjects);
-    } catch (error) {
-      console.error('Error generating reflections:', error);
-      
-      // Still pass clean subjects even if reflection generation fails
-      const cleanSubjects = images.map(img => ({
-        name: img.name,
-        cleanData: img.data
-      }));
-      
-      toast({
-        title: "Warning",
-        description: "Continuing without reflections or shadows",
-        variant: "default"
-      });
-      onSkip(cleanSubjects);
-    }
+  const handleSkip = () => {
+    console.log('⏭️ Shadows skipped - continuing with transparent subjects only');
+    
+    const cleanSubjects = images.map(img => ({
+      name: img.name,
+      cleanData: img.data
+    }));
+    
+    toast({
+      title: "Shadows skipped",
+      description: "Continuing with transparent subjects only",
+    });
+    
+    onSkip(cleanSubjects);
   };
 
   return (
@@ -487,7 +438,7 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
                         name: img.name,
                         cleanData: img.data
                       }));
-                      onComplete(shadowedResults, reflections, cleanSubjects);
+                      onComplete(shadowedResults, cleanSubjects);
                     }}
                     className="flex-1"
                     size="lg"
