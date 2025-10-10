@@ -123,9 +123,9 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
       // Step 1: Generate reflections BEFORE sending to Cloudinary
       console.log('🪞 Step 1: Generating mirror reflections from transparent subjects...');
       const generatedReflections = await generateReflections(images, {
-        intensity: 0.25,   // Subtle 25% opacity
-        height: 0.4,       // 40% of subject height
-        blur: 5,           // Realistic blur
+        intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
+        height: 0.6,       // 60% of subject height (matches CSS max-height)
+        blur: 4,           // Match CSS blur
         fadeStrength: 0.8, // Strong fade
         offset: 0          // No gap
       });
@@ -204,9 +204,9 @@ export const ShadowGenerationStep: React.FC<ShadowGenerationStepProps> = ({
     console.log('🪞 Generating mirror reflections even though shadows are skipped...');
     try {
       const generatedReflections = await generateReflections(images, {
-        intensity: 0.25,   // Subtle 25% opacity
-        height: 0.4,       // 40% of subject height
-        blur: 5,           // Realistic blur
+        intensity: 0.65,   // Match CSS preview opacity (0.55) + brightness adjustment
+        height: 0.6,       // 60% of subject height (matches CSS max-height)
+        blur: 4,           // Match CSS blur
         fadeStrength: 0.8, // Strong fade
         offset: 0          // No gap
       });
