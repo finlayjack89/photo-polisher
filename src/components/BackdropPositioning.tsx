@@ -592,7 +592,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
                         style={{
                           left: `${placement.x * 100}%`,
                           top: `${placement.y * 100}%`,
-                          transform: `translate(-50%, -50%) translateY(${placement.scale * 50}%) scaleY(-1)`,
+                          transform: `translate(-50%, -50%) translateY(100%) scaleY(-1)`,
                           width: `${placement.scale * 100}%`,
                           maxWidth: '100%',
                           height: 'auto',
