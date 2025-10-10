@@ -307,16 +307,45 @@ export const compositeLayers = async (
       const reflectionDx = actualSubjectDx;
       const reflectionDy = actualSubjectDy + actualSubjectHeight; // No gap for surface reflection
       
+      // Check how much of the reflection fits within canvas bounds
+      const availableHeightForReflection = canvas.height - reflectionDy;
+      
       console.log('Reflection positioning (accounting for 1.5x padding):', {
         shadowedDataSize: `${Math.round(scaledWidth)}x${Math.round(scaledHeight)}`,
         actualSubjectSize: `${Math.round(actualSubjectWidth)}x${Math.round(actualSubjectHeight)}`,
         paddingOffset: `${Math.round(paddingLeft)}, ${Math.round(paddingTop)}`,
         reflectionSize: `${Math.round(reflectionScaledWidth)}x${Math.round(reflectionScaledHeight)}`,
         reflectionPosition: `${Math.round(reflectionDx)}, ${Math.round(reflectionDy)}`,
+        canvasHeight: canvas.height,
+        availableHeight: Math.round(availableHeightForReflection),
+        willBeClipped: reflectionScaledHeight > availableHeightForReflection,
         heightRatio: `${(reflectionHeightRatio * 100).toFixed(1)}%`
       });
       
-      ctx.drawImage(reflection, reflectionDx, reflectionDy, reflectionScaledWidth, reflectionScaledHeight);
+      // Only draw the portion of the reflection that fits within the canvas
+      if (availableHeightForReflection > 0) {
+        const reflectionHeightToDraw = Math.min(reflectionScaledHeight, availableHeightForReflection);
+        const reflectionSourceHeightRatio = reflectionHeightToDraw / reflectionScaledHeight;
+        
+        // Use 9-parameter drawImage to clip the source image
+        ctx.drawImage(
+          reflection,
+          0, 0, // source x, y (start from top of reflection)
+          reflection.naturalWidth, // source width (full width)
+          reflection.naturalHeight * reflectionSourceHeightRatio, // source height (clipped proportion)
+          reflectionDx, reflectionDy, // destination x, y
+          reflectionScaledWidth, // destination width
+          reflectionHeightToDraw // destination height (clipped to canvas bounds)
+        );
+        
+        console.log('Reflection drawn with clipping:', {
+          sourceHeight: `${reflection.naturalHeight} -> ${Math.round(reflection.naturalHeight * reflectionSourceHeightRatio)}`,
+          destHeight: `${Math.round(reflectionScaledHeight)} -> ${Math.round(reflectionHeightToDraw)}`,
+          clippedPercent: `${((1 - reflectionSourceHeightRatio) * 100).toFixed(1)}%`
+        });
+      } else {
+        console.warn('Reflection completely outside canvas bounds - not drawn');
+      }
     }
     
     // Draw subject WITH shadow on top of reflection
