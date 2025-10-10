@@ -22,7 +22,7 @@ All colors MUST be HSL.
     /* Professional navy primary with electric blue accents */
     --primary: 220 25% 15%;
     --primary-foreground: 0 0% 100%;
-    
+
     /* Electric blue for actions and highlights */
     --electric: 210 100% 60%;
     --electric-foreground: 0 0% 100%;
@@ -42,7 +42,7 @@ All colors MUST be HSL.
     /* Status colors */
     --destructive: 0 85% 60%;
     --destructive-foreground: 0 0% 100%;
-    
+
     --success: 142 70% 45%;
     --success-foreground: 0 0% 100%;
 
@@ -53,21 +53,21 @@ All colors MUST be HSL.
 
     /* Design system variables */
     --radius: 0.75rem;
-    
+
     /* Custom gradients for studio feel */
     --gradient-primary: linear-gradient(135deg, hsl(220, 25%, 15%) 0%, hsl(220, 30%, 25%) 100%);
     --gradient-electric: linear-gradient(135deg, hsl(210, 100%, 60%) 0%, hsl(250, 100%, 65%) 100%);
     --gradient-glass: linear-gradient(135deg, hsla(0, 0%, 100%, 0.1) 0%, hsla(0, 0%, 100%, 0.05) 100%);
-    
+
     /* Shadows for depth */
     --shadow-soft: 0 2px 20px hsla(220, 25%, 15%, 0.08);
     --shadow-medium: 0 8px 30px hsla(220, 25%, 15%, 0.12);
     --shadow-strong: 0 20px 40px hsla(220, 25%, 15%, 0.18);
-    
+
     /* Glass morphism effect */
     --glass-backdrop: hsla(0, 0%, 100%, 0.8);
     --glass-border: hsla(0, 0%, 100%, 0.2);
-    
+
     /* Smooth transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -140,50 +140,54 @@ All colors MUST be HSL.
 
 @layer utilities {
   /* Checkered background for transparency visualization */
-/* Realistic CSS-based reflection effect for product photography */
-.css-reflection-base {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  height: auto;
-  max-height: 60%;
-  transform: scaleY(-1);
-  transform-origin: top center;
-  opacity: 0.55;
-  object-fit: contain;
-  object-position: top;
-  
-  /* Critical: The gradient mask that creates the fade */
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(0, 0, 0, 0.35) 20%,
-    rgba(0, 0, 0, 0.15) 50%,
-    rgba(0, 0, 0, 0.05) 80%,
-    rgba(0, 0, 0, 0) 100%
-  );
-  
-  mask-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(0, 0, 0, 0.35) 20%,
-    rgba(0, 0, 0, 0.15) 50%,
-    rgba(0, 0, 0, 0.05) 80%,
-    rgba(0, 0, 0, 0) 100%
-  );
-  
-  filter: blur(4px) brightness(0.85);
-  pointer-events: none;
-}
+  /* Realistic CSS-based reflection effect for product photography */
+  .css-reflection-base {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: auto;
+    max-height: 60%;
+    transform: scaleY(-1);
+    transform-origin: top center;
+    opacity: 0.9;
+    object-fit: contain;
+    object-position: top;
 
-.bg-checkered {
-    background-image: 
-      linear-gradient(45deg, hsl(var(--muted)) 25%, transparent 25%), 
-      linear-gradient(-45deg, hsl(var(--muted)) 25%, transparent 25%), 
-      linear-gradient(45deg, transparent 75%, hsl(var(--muted)) 75%), 
+    /* Critical: The gradient mask that creates the fade */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.5) 0%,
+      rgba(0, 0, 0, 0.35) 20%,
+      rgba(0, 0, 0, 0.15) 50%,
+      rgba(0, 0, 0, 0.05) 80%,
+      rgba(0, 0, 0, 0) 100%
+    );
+
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.5) 0%,
+      rgba(0, 0, 0, 0.35) 20%,
+      rgba(0, 0, 0, 0.15) 50%,
+      rgba(0, 0, 0, 0.05) 80%,
+      rgba(0, 0, 0, 0) 100%
+    );
+
+    filter: blur(4px) brightness(0.85);
+    pointer-events: none;
+  }
+
+  .bg-checkered {
+    background-image:
+      linear-gradient(45deg, hsl(var(--muted)) 25%, transparent 25%),
+      linear-gradient(-45deg, hsl(var(--muted)) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, hsl(var(--muted)) 75%),
       linear-gradient(-45deg, transparent 75%, hsl(var(--muted)) 75%);
     background-size: 20px 20px;
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    background-position:
+      0 0,
+      0 10px,
+      10px -10px,
+      -10px 0px;
   }
 }
