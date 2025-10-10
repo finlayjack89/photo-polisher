@@ -12,11 +12,11 @@ export interface ReflectionOptions {
 }
 
 const DEFAULT_OPTIONS: ReflectionOptions = {
-  intensity: 0.4, // Changed from 0.9 to 0.4 (40% opacity overall)
-  height: 0.6, // Changed from 0.35 to 0.6 (60% of subject height)
-  blur: 4, // Changed from 2 to 4 (more blur for smoothness)
-  fadeStrength: 0.8, // Changed from 0.95 to 0.8 (softer fade point)
-  offset: 0, // Keep at 0 (seamless contact)
+  intensity: 0.65, // ⬆️ Increased from 0.4 to 0.65 (more visible reflection)
+  height: 0.6, // Keep at 0.6
+  blur: 4, // Keep at 4
+  fadeStrength: 0.8, // Keep at 0.8
+  offset: 0, // Keep at 0
 };
 
 /**
