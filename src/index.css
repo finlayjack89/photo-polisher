@@ -145,24 +145,24 @@ All colors MUST be HSL.
   /* Vertical gradient fade - most important for realism */
   mask-image: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.6) 0%,      /* 60% visible at top (touching subject) */
-    rgba(0, 0, 0, 0.3) 30%,     /* 30% visible at 30% down */
-    rgba(0, 0, 0, 0.1) 60%,     /* 10% visible at 60% down */
+    rgba(0, 0, 0, 0.9) 0%,      /* 90% visible at top (touching subject) */
+    rgba(0, 0, 0, 0.5) 35%,     /* 50% visible at 35% down */
+    rgba(0, 0, 0, 0.2) 65%,     /* 20% visible at 65% down */
     rgba(0, 0, 0, 0) 100%       /* Fully transparent at bottom */
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0.3) 30%,
-    rgba(0, 0, 0, 0.1) 60%,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.5) 35%,
+    rgba(0, 0, 0, 0.2) 65%,
     rgba(0, 0, 0, 0) 100%
   );
   
   /* Soften and darken the reflection */
-  filter: brightness(0.85) blur(2px);
+  filter: brightness(0.88) blur(1.5px);
   
-  /* Base transparency for entire reflection */
-  opacity: 0.3;
+  /* Base transparency for entire reflection - matched to reference image */
+  opacity: 0.5;
   
   /* Limit reflection height to 50% of subject for realistic proportions */
   max-height: 50%;
