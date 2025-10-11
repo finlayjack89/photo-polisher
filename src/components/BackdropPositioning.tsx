@@ -15,21 +15,18 @@ import { rotateImageClockwise, rotateImageCounterClockwise } from "@/lib/image-r
 
 interface BackdropPositioningProps {
   cutoutImages: string[]; // Data URLs of cut-out subjects (with shadows)
-  reflections?: string[]; // Data URLs of reflections (for canvas-based final compositing)
   cleanSubjects?: string[]; // Data URLs of clean subjects (for CSS reflection preview)
   onPositioningComplete: (
     backdrop: string, 
     placement: SubjectPlacement, 
     addBlur: boolean, 
-    rotatedSubjects?: string[],
-    rotatedReflections?: string[]
+    rotatedSubjects?: string[]
   ) => void;
   onBack: () => void;
 }
 
 export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   cutoutImages,
-  reflections = [],
   cleanSubjects = [],
   onPositioningComplete,
   onBack
@@ -51,7 +48,6 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
     scale: 0.8 // 80% of backdrop width
   });
   const [rotatedSubjects, setRotatedSubjects] = useState<string[]>(cutoutImages);
-  const [rotatedReflections, setRotatedReflections] = useState<string[]>(reflections);
   const [rotatedCleanSubjects, setRotatedCleanSubjects] = useState<string[]>(cleanSubjects);
   const [isRotating, setIsRotating] = useState(false);
   
@@ -143,7 +139,7 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
   useEffect(() => {
     // Canvas is now only used for backward compatibility and final compositing
     // Real-time preview is handled by CSS-based approach
-  }, [backdrop, firstSubject, placement, rotatedReflections]);
+  }, [backdrop, firstSubject, placement]);
 
   const handleBackdropUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -206,18 +202,6 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       const allRotatedSubjects = await Promise.all(rotatedDataPromises);
       setRotatedSubjects(allRotatedSubjects);
       
-      // Also rotate ALL reflections
-      if (rotatedReflections.length > 0) {
-        const rotatedReflectionPromises = rotatedReflections.map(async (reflectionData) => {
-          return direction === 'clockwise' 
-            ? await rotateImageClockwise(reflectionData)
-            : await rotateImageCounterClockwise(reflectionData);
-        });
-
-        const allRotatedReflections = await Promise.all(rotatedReflectionPromises);
-        setRotatedReflections(allRotatedReflections);
-      }
-      
       // Also rotate ALL clean subjects for CSS reflection
       if (rotatedCleanSubjects.length > 0) {
         const rotatedCleanPromises = rotatedCleanSubjects.map(async (cleanData) => {
@@ -231,8 +215,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
       }
       
       toast({
-        title: "All subjects & reflections rotated",
-        description: `Rotated ${rotatedSubjects.length} subjects and ${rotatedReflections.length} reflections ${direction}`,
+        title: "All subjects rotated",
+        description: `Rotated ${rotatedSubjects.length} subjects ${direction}`,
       });
     } catch (error) {
       console.error('Error rotating subjects:', error);
@@ -260,12 +244,8 @@ export const BackdropPositioning: React.FC<BackdropPositioningProps> = ({
         isDataUrl: backdrop.startsWith('data:image/'),
         backdropType: backdrop.split(';')[0]
       });
-      console.log('🪞 Reflections:', {
-        count: rotatedReflections.length,
-        hasReflections: rotatedReflections.length > 0
-      });
-      console.log('✅ VERIFIED: Passing backdrop, subjects, and reflections');
-      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects, rotatedReflections);
+      console.log('✅ VERIFIED: Passing backdrop and subjects');
+      onPositioningComplete(backdrop, placement, addBlur, rotatedSubjects);
     }
   };
 
